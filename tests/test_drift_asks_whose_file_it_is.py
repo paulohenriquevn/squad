@@ -16,7 +16,6 @@ whichever fired.
 """
 from __future__ import annotations
 
-import subprocess
 import sys
 from pathlib import Path
 
@@ -24,7 +23,13 @@ _ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_ROOT))
 sys.path.insert(0, str(_ROOT / "mechanisms" / "gates"))
 
-from check_install_drift import Drift, classify_file  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from check_install_drift import (  # noqa: E402 — post-bootstrap import
+    Drift,
+    classify_file,
+)
 
 
 def _pair(tmp_path: Path, rel: str, install: str, kit: str) -> tuple[Path, Path]:

@@ -43,16 +43,22 @@ Turn a stopped `AWAITING_REVIEW` into a decision, by the only party that can mak
    `python3 skills/sign/scripts/sign_document.py --list`.
    An empty listing means nothing was FOUND waiting; it does not mean everything is
    signed.
-2. **Read the preview** — `… <path> --as <you>`. It writes nothing. It shows the
-   section verbatim, who git says wrote the file, and what your signature asserts.
+2. **Read the preview** — `… <path> --as <you>`. It writes nothing. It names the
+   document (title, its own section headings, length), shows the sign-off section
+   verbatim, says who git records as the author, and states what your signature asserts.
+   Everything in the summary is extracted from the file — nothing is generated, so
+   nothing in it needs checking against anything but the file itself.
 3. **Read the document itself.** The preview shows the checklist, not the work. A
    signature over an unread document is the failure this whole gate exists to prevent.
 4. **Sign** — add `--confirm`. If you also authored the document, add
    `--despite-authorship "<why>"`; the reason goes into the file.
-5. **Run the gate.** This tool wrote a signature and computed nothing:
+5. **Or take the batch** — `--all` in place of a path runs steps 2 and 4 over every
+   document `--list` reports, previewing each one in full. Step 3 does not get a batch
+   form and cannot: reading four documents takes as long as reading four documents.
+6. **Run the gate.** This tool wrote a signature and computed nothing:
    - item brief → `python3 skills/plan-alignment/scripts/score_alignment.py <brief>`
    - product → `python3 skills/brainstorm-pieces/scripts/score_product_alignment.py`
-6. **Read the new verdict.** `ALIGNED` / `PRODUCT_ALIGNED` means the chain may move.
+7. **Read the new verdict.** `ALIGNED` / `PRODUCT_ALIGNED` means the chain may move.
    Anything else means the signature was not what was blocking it.
 
 ## What your signature claims, and what it does not

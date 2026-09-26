@@ -1,0 +1,58 @@
+# rule-id: SQ-CFG-06
+# Session injection — how much the kit says without being asked
+#
+# The kit speaks three times per turn on its own initiative: the chain summary at
+# session start, the parsimony ladder in front of every prompt, and the advisory
+# half of the Stop validation at the end of a turn. Measured in a consumer on
+# 2026-09-18: 1835 bytes, 1249 bytes, and 602 bytes respectively.
+#
+# WHY THIS FILE EXISTS
+# --------------------
+# The ladder's own docstring argues the injection must be unconditional — "a rule
+# read at session start is a rule forgotten by the fortieth prompt" — and the
+# argument is good for a session writing code. It is false for one that is not.
+# Asking what time it is gets the ladder in front of it, and a reader who sees
+# doctrine attached to every question learns to skip doctrine. A rule injected into
+# a turn it has nothing to do with is not a rule being remembered, it is a rule
+# being spent.
+#
+# WHAT THIS CANNOT TURN OFF, AND WHY IT IS BY CONSTRUCTION
+# --------------------------------------------------------
+# `PreToolUse` — `boundary-check` and `validate-command` — still refuses. Neither
+# hook imports `squad.injection` at all, and a test refuses one that does: a guard
+# a config can silence is a guard that gets silenced on the day it would have
+# mattered, by somebody who only wanted less text.
+#
+# `Stop`'s BLOCKERS still block. Only the WARN half is advisory, and the
+# suppression happens at the REPORT rather than at the checks — `--json` and every
+# caller reading structured output still receive what was found. A volume control
+# that stopped MEASURING would be a kill switch under a quieter name.
+#
+# `PostToolUse` lints are already silent when they have nothing to say.
+#
+# THE OTHER AXIS, WHICH IS NOT A ROUTE TO THIS ONE
+# ------------------------------------------------
+# `STOP_VALIDATION_WARN_ONLY=1` downgrades blockers to warnings. This suppresses
+# warnings and never reaches blockers. Neither reaches the other's half.
+#
+# PROVENANCE
+# ----------
+# Designed, measured and built inside a consumer's installed `.claude/` — where the
+# next `install.sh --force` would have erased it, which is the shape
+# `squad/boundaries.violation` names. Filed as kit#164 and adopted 2026-09-22.
+#
+# FORMAT
+# ------
+#   quiet = true | false
+#
+# Absent, unreadable or undecidable text means SPEAKING. Silence is never the answer
+# to a question that could not be read: a parse failure that quieted the kit would
+# remove the doctrine AND the report that something is wrong.
+#
+# `SQUAD_QUIET=1` / `SQUAD_QUIET=0` overrides this file for one session, in BOTH
+# directions. Turning it back on matters as much as turning it off — a project quiet
+# by default is one where somebody eventually needs the doctrine back, and editing a
+# versioned file to get it for an afternoon is a change that gets committed by
+# accident.
+
+quiet = false

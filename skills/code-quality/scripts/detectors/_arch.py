@@ -27,7 +27,7 @@ Two measurements, both from this ecosystem:
 2. a TypeScript monorepo, 2026-08-06. Its `.dependency-cruiser.cjs` records the same class
    in prose: dissolving `tui/lib` into seven capability folders would leave a `forbidden` rule
    written against the old literal path matching nothing — *"a `forbidden` rule that matches
-   nada produz ZERO violacoes, ou seja, VERDE. O invariante evaporaria em silencio."*
+   nada produz ZERO violacoes, ou seja, VERDE. O invariante evaporaria em silencio."*  # english-only: verbatim quote of the consumer's .dependency-cruiser.cjs
 
 The shape is identical in both: the rule names a directory, the directory moves, the gate goes
 quiet instead of red. D5 asserts the directories a rule names still exist.

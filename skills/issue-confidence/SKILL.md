@@ -112,6 +112,8 @@ When you have one. Never binding on whoever takes it.
 ### Score it before filing
 
 ```bash
+ECO=$([ -d .claude/skills ] && echo .claude || echo .)
+
 python3 "$ECO/skills/issue-confidence/scripts/score_issue.py" draft.md
 ```
 

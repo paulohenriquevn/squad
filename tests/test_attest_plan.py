@@ -35,8 +35,7 @@ from pathlib import Path
 _s.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from squad.layout import resolve
 from squad.paths import ATTESTATIONS, write_state_dir
-from squad.plan import attestation
-from squad.plan import resolve as resolve_plan
+from squad.plan import attestation, resolve as resolve_plan
 
 _REPO = Path(__file__).resolve().parents[1]
 _SCRIPT = _REPO / "mechanisms" / "cycle" / "attest_plan.sh"
@@ -211,10 +210,10 @@ def test_a_project_with_no_kit_says_so_instead_of_writing_somewhere(
     (project / "records" / "plans" / "demo-plan.md").write_text(_PLAN, encoding="utf-8")
     env = {**os.environ, "CLAUDE_PROJECT_DIR": str(project),
            "CLAUDE_PLUGIN_ROOT": str(tmp_path / "nowhere")}
-    done = subprocess.run(  # noqa: PLW1510
+    done = subprocess.run(
         ["bash", str(_SCRIPT), "demo"],
         capture_output=True, text=True, cwd=str(project), env=env,
-    )
+     check=False)
 
     assert done.returncode != 0
     assert not write_state_dir(project, ATTESTATIONS).exists()

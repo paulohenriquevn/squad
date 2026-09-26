@@ -94,12 +94,14 @@ It will report `INVALID` — `trd.md` and `technical-pieces.md` do not exist yet
 **Run it anyway and read the objectives criteria**: fixing a missing metric now
 costs a sentence, and fixing it after the TRD cites the objective costs the TRD too.
 
-Then emit the event and hand off:
+**Do not emit a phase end here.** `brainstorm` is ONE declared phase in
+`rules/cycle-phases.txt`, opened by `/brainstorm-vision` and closed by
+`/brainstorm-pieces` with the gate's verdict. A step that closes it mid-cascade
+reports the phase finished three times before it did, and a stream holding four
+closes against one open tells nobody how long the session took or whether one is
+running right now. Until phase 4 emits its end, this scope is correctly WIP.
 
-```bash
-python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" end \
-    --cycle brainstorm --slug {scope} --verdict AWAITING_REVIEW
-```
+Hand off to `/brainstorm-trd` instead.
 
 ## Anti-patterns
 

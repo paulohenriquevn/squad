@@ -51,9 +51,9 @@ def run_hook(name: str, payload: dict, *, cwd: Path | None = None,
     hook = hook_path(name, root)
     where = cwd or REPO
     base = {"PATH": os.environ["PATH"], "HOME": str(where), "CLAUDE_PROJECT_DIR": str(where)}
-    return subprocess.run(  # noqa: PLW1510
+    return subprocess.run(
         command_for(hook), input=json.dumps(payload), capture_output=True,
-        text=True, cwd=where, env={**base, **(env or {})})
+        text=True, cwd=where, env={**base, **(env or {})}, check=False)
 
 
 def pre_tool_use(tool_name: str, **tool_input) -> dict:

@@ -46,7 +46,10 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "mechanisms" / "cycle"))
 
-from cycle_events import (  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from cycle_events import (  # noqa: E402 — post-bootstrap import
     EVENTS_FILENAME,
     emit_phase_end,
     emit_phase_start,
@@ -330,6 +333,42 @@ def test_a_file_is_resolved_from_its_directory(tmp_path: Path) -> None:
     criteria.write_text("{}", encoding="utf-8")
 
     assert project_root_for(criteria) == tmp_path
+
+
+
+def test_a_path_inside_the_write_root_resolves_to_the_project_that_owns_it(
+    tmp_path: Path,
+) -> None:
+    """The write root keeps its trail at `.squad/records/`, and `records` is also a legacy
+    root name — so `.squad` itself passed the legacy test and was taken for a project.
+
+    Measured on a consumer 2026-09-25: a `review` phase handed its findings directory under
+    `.squad/records/reviews/` wrote its events to `.squad/.squad/records/`, a stream no
+    reader resolves — 39 events there against 763 in the real one. The tree below is
+    clean: the nested directory is the consequence, not the trigger.
+    """
+    from cycle_events import project_root_for
+
+    findings = tmp_path / ".squad" / "records" / "reviews"
+    findings.mkdir(parents=True)
+
+    assert project_root_for(findings) == tmp_path
+
+
+
+def test_a_nested_write_root_already_on_disk_does_not_capture_the_writer(
+    tmp_path: Path,
+) -> None:
+    """The consumer that reported the defect already HAS `.squad/.squad/`. Skipping only
+    the legacy test would leave it writing there forever: the write-root test fires on the
+    nested copy just as well."""
+    from cycle_events import project_root_for
+
+    findings = tmp_path / ".squad" / "records" / "reviews"
+    findings.mkdir(parents=True)
+    (tmp_path / ".squad" / ".squad" / "records").mkdir(parents=True)
+
+    assert project_root_for(findings) == tmp_path
 
 
 # ── the CLI normalises the root, like every Python caller does ────────────────

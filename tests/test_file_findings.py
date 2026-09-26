@@ -20,7 +20,10 @@ _FLEET = Path(__file__).resolve().parents[1] / "mechanisms" / "fleet"
 if str(_FLEET) not in sys.path:
     sys.path.insert(0, str(_FLEET))
 
-import file_findings  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+import file_findings  # noqa: E402 — post-bootstrap import
 
 
 def _finding(**over: object) -> dict:
@@ -116,3 +119,32 @@ def test_the_body_says_the_finding_survived_refutation() -> None:
     body = file_findings.body(_finding(), repo_hint="the kit")
     assert "refut" in body.lower(), (
         "a reader needs to know an agent tried to kill this and could not")
+
+
+def test_a_duplicate_check_that_could_not_run_blocks_the_comment(monkeypatch) -> None:
+    """The guard failed OPEN while its comment claimed it failed closed.
+
+    `already_commented` returned `False` when `gh` was missing or the call raised —
+    justified inline as "don't spam on error" — and False is exactly the value that lets
+    the comment through. The one thing between a re-detected finding and a comment on
+    every single run stopped standing there precisely when the tracker was unreachable.
+    """
+    import file_findings as ff
+
+    monkeypatch.setattr(ff, "already_commented", lambda *_a, **_k: None)
+
+    posted, why = ff.comment_duplicate("owner/name", 7, "a.py:1", apply=True)
+
+    assert posted is False, "a comment was posted on the strength of a check that did not run"
+    assert "could not ask" in why
+
+
+def test_an_issue_that_already_carries_the_comment_is_still_suppressed(monkeypatch) -> None:
+    import file_findings as ff
+
+    monkeypatch.setattr(ff, "already_commented", lambda *_a, **_k: True)
+
+    posted, why = ff.comment_duplicate("owner/name", 7, "a.py:1", apply=True)
+
+    assert posted is True
+    assert "already commented" in why

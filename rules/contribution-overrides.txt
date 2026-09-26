@@ -1,3 +1,4 @@
+# rule-id: SQ-CFG-03
 # THIS PROJECT's contribution conventions, overriding the kit's defaults.
 #
 # `rules/contribution-conventions.md` is the kit's contract and a reinstall overwrites
@@ -9,9 +10,19 @@
 # Keys:
 #   commit_types    = comma-separated. REPLACES the kit's set
 #   commit_scopes   = comma-separated. When set, a scope outside it is refused
-#   subject_max     = integer. Default 72
+#   subject_max     = integer. Default 85 — DERIVED from this repository's own
+#                  history, not from the 72 convention. See the sixteen lines of
+#                  reasoning at check_contribution_conventions.py:64. This line read
+#                  72 while the gate applied 85, so a project setting 72 to match the
+#                  'default' was tightening it without meaning to.
 #   body_required   = comma-separated types. Default: feat,fix
-#   branch_trunk    = the trunk's name, when it is not detected from origin/HEAD
+#
+# `branch_trunk` was listed here until 2026-09-17 and reached nothing: the checker
+# that reads this file grades COMMITS and never looked at a branch name. Which
+# branch is the trunk is `hooks/validate-command.py`'s business — it derives the
+# name from `origin/HEAD` and refuses work on it — and a key that parses, validates
+# and applies to nothing is worse than an absent one: the project believes it
+# declared something.
 #
 # TWO THINGS CANNOT BE OVERRIDDEN and an attempt is refused rather than ignored:
 #
@@ -24,3 +35,23 @@
 # Example:
 #   commit_types = fix,feat,docs,test,chore,perf,build,ci,revert,refactor,deps
 #   subject_max  = 80
+
+# ── this project's declarations ──────────────────────────────────────────────
+#
+# `change` — for a commit that alters an existing contract without fixing a defect
+# and without adding a capability. `change(phases): DISCOVER is conditional, and the
+# evidence guard is not` is the shape: nothing was broken and nothing is new, a
+# declaration now says something different. `fix` would claim a defect that did not
+# exist and `refactor` promises behaviour did not move, which is the opposite of what
+# such a commit does.
+#
+# REPLACES the kit's set, so every default is restated here. Dropping one silently
+# would refuse commits this project has always written.
+commit_types = fix,feat,docs,test,refactor,chore,perf,build,ci,revert,style,merge,change
+
+# A finding on a commit already on the upstream. Honoured only while that is true:
+# `check_contribution_conventions` reports `exemption_is_fixable` for a declaration
+# covering a commit an amend can still reach, so this can record a rule that was
+# broken and can never excuse breaking one.
+pushed_exemptions = 4b7c6377ec5c7c0febf745db797c761b35eedaba header reads `fix(panel, install)` and the convention says comma-separated with no space; pushed before the finding was read, and this repository forbids force-pushing a shared branch
+pushed_exemptions = 337bd49d62f3eb57fcb9c807650d8806bd8fe73a header reads `fix(backlog, gates)` and the convention says comma-separated with no space; pushed before the finding was read, and this repository forbids force-pushing a shared branch

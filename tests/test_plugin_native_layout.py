@@ -68,12 +68,16 @@ def test_manifest_is_the_single_source_of_the_plugin_identity():
     """Two divergent manifests is worse than one in the wrong place."""
     root = REPO / "plugin.json"
     if not root.is_file():
-        return  # removido — nada a conciliar
+        # No root manifest is the WANTED state, and asserting it is the point: this
+        # branch used to `return`, which pytest reports as a pass — so on the day a
+        # second manifest appeared, the test would have gone green without reading it.
+        assert not root.exists(), root
+        return
     a = json.loads(root.read_text(encoding="utf-8"))
     b = json.loads(MANIFEST.read_text(encoding="utf-8"))
     for field in ("name", "version"):
         assert a.get(field) == b.get(field), (
-            f"plugin.json e .claude-plugin/plugin.json divergem em `{field}`: "
+            f"plugin.json and .claude-plugin/plugin.json disagree on `{field}`: "
             f"{a.get(field)!r} != {b.get(field)!r}"
         )
 
@@ -135,7 +139,7 @@ def test_native_and_copy_layouts_wire_the_same_events():
     native = json.loads(HOOKS_JSON.read_text(encoding="utf-8"))["hooks"]
     legacy = json.loads(LEGACY_SETTINGS.read_text(encoding="utf-8"))["hooks"]
     assert set(native) == set(legacy), (
-        "eventos divergentes entre hooks.json (nativo) e settings.plugin.json "
+        "events diverge between hooks.json (native) and settings.plugin.json "
         f"(copy): native only={set(native) - set(legacy)}, "
         f"copy only={set(legacy) - set(native)}"
     )
@@ -163,10 +167,10 @@ def _resolve(project_dir: Path, env: dict | None = None) -> tuple[str, str, str]
     full_env.pop("CLAUDE_PLUGIN_ROOT", None)
     if env:
         full_env.update(env)
-    proc = subprocess.run(  # noqa: PLW1510
+    proc = subprocess.run(
         [sys.executable, "-c", script], capture_output=True, text=True, env=full_env,
         cwd=project_dir,
-    )
+     check=False)
     kit = eco = ""
     for line in proc.stdout.splitlines():
         if line.startswith("KIT="):

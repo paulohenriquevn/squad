@@ -24,6 +24,11 @@
 #   1  the lane is not at a prompt, or the text stayed in the composer
 #   2  no such lane
 #   3  the composer could not be read — delivery is UNKNOWN, not confirmed
+#  64  the invocation itself is wrong: unknown argument, no --lane, no prompt, or a
+#      --prompt-file that is not there. NOT a delivery failure — nothing was attempted.
+#      `fleet_router.dispatch()` branches on this code, and reporting a typo as
+#      "<unit> was NOT delivered (exit 64)" sends the reader to look at a lane that is
+#      fine. 64 is `EX_USAGE` from sysexits(3), which is what it means here.
 
 set -uo pipefail
 _here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

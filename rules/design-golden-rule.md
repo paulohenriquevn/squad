@@ -1,4 +1,5 @@
 # Golden rule — what a technical drawing set must satisfy
+<!-- rule-id: SQ-GLD-03 -->
 
 The contract a DESIGN panel audits against. `check_design_completeness.py` computes the
 structural half — files present, mermaid parses, kinds match, every `PIECE-N` placed.

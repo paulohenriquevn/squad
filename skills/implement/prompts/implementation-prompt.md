@@ -140,11 +140,13 @@ Standard commit instructions (apply whether routed or inline):
   ```
   {type}({scope}): {one-line description}
 
+  Plan: {PLAN_SLUG}
   T{N.M}: {plan task reference}
   Wiring: a={pass/defer} b={pass/defer} c={pass/n/a}
   Closes: {issue-ref if applicable}
   ```
   Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`
+- The `Plan: {PLAN_SLUG}` line is what `check_checkpoint_consistency.py` reads to attribute the commit to this item. A task id alone cannot: every plan starts at `T1.1`, and a bare `T4.1` in another item's commit was read as this item's.
 - NEVER `git commit --no-verify` — if pre-commit hook fails, fix the underlying issue (Unbreakable Rule)
 - Capture the commit SHA from `git rev-parse HEAD`
 

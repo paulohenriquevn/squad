@@ -209,3 +209,34 @@ def test_a_claude_plugin_manifest_is_a_declared_version_site(tmp_path: Path) -> 
     written = (plugin / "plugin.json").read_text(encoding="utf-8")
     assert f'"version": "{NEW}"' in written
     assert OLD not in written
+
+
+def test_a_stray_scan_that_could_not_run_refuses_the_bump(tmp_path) -> None:
+    """`_tracked_files` returned `[]` for a git failure and for a repo tracking nothing.
+
+    `_strays` iterates that list, so on any git failure — not a repository, git missing,
+    a corrupt index — it found no stray, `main` printed nothing, and the bump proceeded.
+    The scan whose whole purpose is to refuse a bump that would miss a version string
+    reported "nothing to worry about" exactly when it had not run.
+    """
+    import bump_version
+
+    not_a_repo = tmp_path / "plain"
+    not_a_repo.mkdir()
+
+    assert bump_version._tracked_files(not_a_repo) is None
+    assert bump_version._strays(not_a_repo, "0.1.0", ()) is None
+
+
+def test_a_repository_tracking_nothing_is_still_an_empty_stray_list(tmp_path) -> None:
+    """The refusal must be about git failing, not about an empty repository."""
+    import subprocess as sp
+
+    import bump_version
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    sp.run(["git", "-C", str(repo), "init", "-q"], check=True)
+
+    assert bump_version._tracked_files(repo) == []
+    assert bump_version._strays(repo, "0.1.0", ()) == []

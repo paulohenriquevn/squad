@@ -176,9 +176,17 @@ def main(argv: list[str] | None = None) -> int:
         "findings": findings,
         "status": status,
     }
+    # The exit code is decided from the STATUS, once, before the output format is
+    # chosen. It was decided twice: the `--json` branch answered `nothing_scanned` with
+    # CONTAINED while the prose branch three lines down answered the same status with
+    # UNCHECKED. The sentinel was serialised into the payload and thrown away by the
+    # code — and `--json` is the form a machine reads, so the half that lied is the half
+    # nothing checks by eye.
+    code = {"leaked": LEAKED, "nothing_scanned": UNCHECKED, "contained": CONTAINED}[status]
+
     if args.json:
         print(json.dumps(body, indent=2))
-        return CONTAINED if not findings else LEAKED
+        return code
 
     if status == "nothing_scanned":
         # Not a pass. An empty tree and a broken glob produce the same silence, and
@@ -186,12 +194,12 @@ def main(argv: list[str] | None = None) -> int:
         # about its own reach is one whose next broken glob nobody notices.
         print(f"write containment: NOTHING SCANNED — 0 files read under {root}. "
               f"That is not containment; it is an unexamined tree.", file=sys.stderr)
-        return UNCHECKED
+        return code
 
     if not findings:
         print(f"write containment: CONTAINED — {examined} file(s) examined, every "
               f"data root spelled only in {OWNER}")
-        return CONTAINED
+        return code
 
     print(f"write containment: LEAKED — {len(findings)} literal(s) outside {OWNER} "
           f"across {examined} file(s) examined", file=sys.stderr)
@@ -200,7 +208,7 @@ def main(argv: list[str] | None = None) -> int:
     print("\nA second module that can spell a root is how six lists in four different "
           "orders happened, and\nwith a copy in play no scan can prove where the "
           "writers write. Call `squad.paths` instead.", file=sys.stderr)
-    return LEAKED
+    return code
 
 
 if __name__ == "__main__":

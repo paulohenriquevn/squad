@@ -54,18 +54,22 @@ deadcode-output/
 
 # Study material, kept local (not part of the shipped cycle)
 specs/
-# The write root. Run data never travels; the OKF bundle does, because this kit's
-# durable knowledge IS its source.
+# The write root, ignored WHOLE. Nothing this kit produces at runtime travels, and as
+# of 2026-09-21 nothing the kit AUTHORS lives here either.
 #
-# `.squad/*` and not `.squad/`: git does not descend into an excluded DIRECTORY, so a
-# negation under one never fires. Excluding the CONTENTS leaves the directory visible
-# and lets `!.squad/wiki/` re-include the bundle.
+# It used to be `.squad/*` with `!.squad/wiki/` re-including the OKF bundle, on the
+# argument that "this kit's durable knowledge IS its source". The argument was true and
+# the location was the problem: `records-location.md` declares `.squad/` the write root
+# OF THE PROJECT BEING MAINTAINED, and the kit kept its own eleven ADRs and SOPs in the
+# very directory every consumer fills with run output. One path meant two things —
+# product here, run data in a consumer — and the ambiguity taught by example that
+# writing into `.squad/` inside this repository was normal.
 #
-# Without this, a new ADR here is ignored and `git status` says nothing. The bundle's 11
-# files survived the move only because they were already tracked — luck, not a rule, and
-# `tests/test_write_root_is_versioned_correctly.py` is what turns it into one.
-.squad/*
-!.squad/wiki/
+# The bundle moved to `docs/wiki/`, which is versioned like the rest of the product.
+# `.squad/` in this repository now means exactly what it means in a consumer: one
+# machine's run data, ignored. `tests/test_write_root_is_versioned_correctly.py` holds
+# both halves.
+.squad/
 # Nested repository with its own remote — never a submodule of the cycle
 codex-plugin-cc/
 
@@ -76,7 +80,10 @@ codex-plugin-cc/
 # is scaffolded in each consumer by install.sh; it is never carried in the index.
 records/
 
-study-material/**
+# The study zone moved INTO the write root on 2026-09-21 and needs no entry of its
+# own: `.squad/` above ignores it whole. That is the point of the move — a literal
+# copy of third-party material carries its licence into whatever tree holds it, and
+# a top-level zone had to be kept out of the index by a rule somebody could delete.
 # The phase-transition stream. Per-session and per-machine by nature: what this
 # repository's cycles did here says nothing to whoever clones it, and committing
 # it would put one machine's run history in everyone's diff.
@@ -137,3 +144,13 @@ agents/*.md
 !agents/leonardo-researcher.md
 !agents/metis-oracle.md
 !agents/clio-historian.md
+
+# Output of the loop-code-review plugin — a tool artifact, never the project.
+code-review-output/
+
+# Personal working documents. `ANALISE.md` is a session analysis written FOR the
+# maintainer, in the language he reads — which is the one language rule this repository
+# does not apply to prose only he sees. Versioning it would put pt-BR in a tree whose
+# contract is English, and `check_english_only.py` scans TRACKED files, so tracking it is
+# also what would make that gate start failing. The same reason `BACKLOG.md` never travels.
+ANALISE.md

@@ -12,6 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from scripts._detector_contract import Finding
+from scripts.detectors import _mutation, _wiring
 
 
 class BaseDetector:
@@ -83,8 +84,15 @@ class BaseDetector:
 
         SOFT_CAP per golden rule. Skips test files, barrel files, declared
         entry points.
+
+        IMPLEMENTED here, not abstract. This body was copied character for character
+        into all four subclasses, and neither it nor `detect_mutation_score` below
+        touches anything language-specific — both read only `self.language` and
+        `self.threshold`, which this class already supplies. A fifth language meant
+        copying them a fifth time, and a threshold key meant editing four files with
+        nothing to catch the one that was missed.
         """
-        raise NotImplementedError
+        return _wiring.detect_orphan_exports(self.language, repo_root, repo_root)
 
     def detect_mutation_score(self, manifest_dir: Path) -> list:
         """Run D4 — mutation testing, scoped by the project's own mutation config.
@@ -98,8 +106,19 @@ class BaseDetector:
         (`[mutmut] source_paths`, `stryker.config.json`) — so the list was built,
         passed, and dropped. Handing the runner the directory it actually resolves
         from removes a parameter that documented a scoping that never happened.
+
+        IMPLEMENTED here, for the reason `detect_orphan_exports` above records.
         """
-        raise NotImplementedError
+        return _mutation.detect_mutation_score(
+            self.language,
+            manifest_dir,
+            floor_low=self.threshold("mutation.score_floor_low", _mutation.DEFAULT_FLOOR_LOW),
+            floor_high=self.threshold("mutation.score_floor_high", _mutation.DEFAULT_FLOOR_HIGH),
+            timeout_minutes=self.threshold(
+                "mutation.timeout_minutes", _mutation.DEFAULT_TIMEOUT_MINUTES),
+            max_report_age_minutes=self.threshold(
+                "mutation.max_report_age_minutes", _mutation.DEFAULT_MAX_REPORT_AGE_MINUTES),
+        )
 
     def detect_architecture_violations(self, manifest_dir: Path) -> list:
         """Run D5 — declared architecture rules, plus the meta-gate on the rules themselves.

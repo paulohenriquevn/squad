@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -52,10 +53,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "conventions"))
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from installed_plugins import Plugin
-from installed_plugins import load as load_plugins
+from installed_plugins import Plugin, load as load_plugins
 
-from squad.paths import write_records_dir
+from squad.paths import (
+    UnsafeSegment,
+    confined,
+    rules_dir,
+    safe_segment,
+    write_records_dir,
+)
 
 OK, INVALID, UNREADABLE, NOT_INSTALLED = 0, 1, 2, 3
 
@@ -77,15 +83,25 @@ class Auditor:
     diff_mode: str
     report_glob: str = DEFAULT_REPORT_GLOB
 
-    def output_dir(self, project: Path) -> Path:
-        """Where this auditor's report must land.
+    def output_dir(self, project: Path, slug: str) -> Path:
+        """Where this auditor's report for THIS item must land.
 
         DERIVED, not declared. The registry used to carry each plugin's own default
         (`code-review-output/`, `security-output/`), which put a third party's output at
         the project root — outside the one write root, on the kit's own instruction.
         A tool the kit tells where to write is a tool the kit is responsible for.
+
+        KEYED BY ITEM, then plugin. It was `audits/<plugin>`, shared by every item: the
+        plugins' databases are append-only across runs (loop-code-review's `init_db` is
+        ten `CREATE TABLE IF NOT EXISTS` and drops nothing), so the next item's audit
+        reused the previous item's database and findings, and the coverage gate binds a
+        report to its assignment by mtime only. A directory per item removes the shared
+        state instead of trying to detect it. `slug` is refused unless it is one safe
+        path segment, because it becomes part of this path.
         """
-        return write_records_dir(project, "audits") / self.plugin
+        audits = write_records_dir(project, "audits")
+        return confined(audits / safe_segment(slug, what="--slug") / self.plugin,
+                        audits, what="the auditor output directory")
 
 
 def registry_path(project: Path) -> Path:
@@ -94,10 +110,20 @@ def registry_path(project: Path) -> Path:
     `.squad/` holds only what the system produces; a rule the project configures is an
     input, and putting it there would make the one write root a mixed directory.
     """
-    for base in (project / ".claude" / "rules", project / "rules"):
+    # `squad.paths.rules_dir` owns the order; see it for which wins and why.
+    directory = rules_dir(project)
+    for base in ([directory] if directory else []):
         if (base / "review-auditors.txt").is_file():
             return base / "review-auditors.txt"
     return project / "rules" / "review-auditors.txt"
+
+
+#: What a plugin name may look like. `command_for` builds `/{plugin}:{plugin} {target} …` and
+#: that string is printed for an agent to run and written into the assignment record,
+#: so anything accepted here ends up in a command. Letters, digits, `-` and `_`, plus
+#: at most one `:` — the separator a namespaced skill uses (`judge-codex:final-judge`).
+#: Deliberately narrow: no whitespace, no `;`, no `$`, no `/`.
+_PLUGIN_NAME_RE = re.compile(r"[A-Za-z0-9_-]+(?::[A-Za-z0-9_-]+)?")
 
 
 def parse_registry(text: str) -> list[Auditor]:
@@ -118,6 +144,14 @@ def parse_registry(text: str) -> list[Auditor]:
             raise ValueError(
                 f"malformed auditor row: {raw.strip()!r} — expected `auditor = "
                 "<domain> | <plugin> | <diff-mode> | [report glob]`")
+        if not _PLUGIN_NAME_RE.fullmatch(parts[1]):
+            raise ValueError(
+                f"not a plugin name: {parts[1]!r} in {raw.strip()!r}. `command_for` "
+                f"splices this into `/{{plugin}} {{target}} …` — a string printed for "
+                f"an agent to RUN and persisted into the assignment JSON — and the only "
+                f"check was that it was non-empty, so a row could put a whole second "
+                f"command there. A plugin name is letters, digits, `-`, `_` and at most "
+                f"one `:` for a namespaced skill.")
         if parts[2] not in DIFF_MODES:
             raise ValueError(
                 f"unknown diff mode {parts[2]!r} in {raw.strip()!r}; the plugin "
@@ -127,6 +161,41 @@ def parse_registry(text: str) -> list[Auditor]:
                            diff_mode=parts[2],
                            report_glob=parts[3] if len(parts) == 4 else DEFAULT_REPORT_GLOB))
     return out
+
+
+#: One number, declared once. A per-auditor ceiling would be a judgement about each
+#: domain's depth that nobody here has the evidence to make; one floor a project raises
+#: when it wants a deeper audit is the honest shape.
+_CEILING_KEY = "max_iterations"
+
+
+def parse_ceiling(text: str) -> int | None:
+    """The declared iteration ceiling, or None when the project declared none.
+
+    Every `loop-*` plugin defaults to between 60 and 200 global iterations, and their
+    stop-hooks end the loop on `max_global_iterations` from the state file. Commissioning
+    three auditors therefore committed up to 220 halt-loop iterations per item at a
+    ceiling nobody in the chain chose and the assignment never recorded.
+
+    None is NOT zero and not a default: with no declaration the flag is omitted entirely
+    and each plugin keeps its own. Inventing a depth the project never chose would be the
+    same overreach as guessing a diff base.
+    """
+    for raw in text.splitlines():
+        line = raw.split("#", 1)[0].strip()
+        if not line.startswith(_CEILING_KEY):
+            continue
+        _, sep, value = line.partition("=")
+        if not sep:
+            continue
+        value = value.strip()
+        if not value.isdigit() or int(value) < 1:
+            raise ValueError(
+                f"{_CEILING_KEY} must be a positive integer, got {value!r}. A ceiling of "
+                "zero commissions an audit that cannot run a single pass, and a "
+                "non-numeric one reaches the plugin as an unparseable flag")
+        return int(value)
+    return None
 
 
 def required_for(auditors: list[Auditor], domains: list[str]) -> list[Auditor]:
@@ -160,10 +229,24 @@ def scope_flag(scope: dict) -> str:
     return ""
 
 
-def command_for(a: Auditor, *, target: str, scope: dict, project: Path) -> str:
+def invocation_name(plugin: str) -> str:
+    """The namespaced command a plugin registers: `<plugin>:<command>`.
+
+    A `loop-*` plugin's command carries its own name (`commands/<plugin>.md`, true for
+    all seventeen installed on 2026-09-25), so the invocation is `plugin:plugin`. The
+    bare `/loop-code-review` this printed is not the name the Skill tool resolves, and
+    `/review` tells the agent to run the command exactly as printed. A row that already
+    names its namespace is taken as written.
+    """
+    return plugin if ":" in plugin else f"{plugin}:{plugin}"
+
+
+def command_for(a: Auditor, *, target: str, scope: dict, project: Path, slug: str,
+                max_iterations: int | None = None) -> str:
     """The exact invocation, so nobody has to reconstruct it from prose."""
-    return (f"/{a.plugin} {target} --output-dir {a.output_dir(project)}"
-            f"{scope_flag(scope)}")
+    ceiling = f" --max-iterations {max_iterations}" if max_iterations else ""
+    return (f"/{invocation_name(a.plugin)} {target} --output-dir {a.output_dir(project, slug)}"
+            f"{scope_flag(scope)}{ceiling}")
 
 
 def select(
@@ -177,6 +260,11 @@ def select(
     target: str = ".",
     config_dir: Path | None = None,
 ) -> tuple[int, dict]:
+    try:
+        safe_segment(slug, what="--slug")
+    except UnsafeSegment as exc:
+        return INVALID, {"status": "invalid", "detail": str(exc)}
+
     named = [n for n, v in (("--diff-base", diff_base), ("--pr", pr),
                             ("--commits", commits)) if v]
     if len(named) > 1:
@@ -189,7 +277,9 @@ def select(
 
     path = registry_path(project)
     try:
-        auditors = parse_registry(path.read_text(encoding="utf-8"))
+        registry_text = path.read_text(encoding="utf-8")
+        auditors = parse_registry(registry_text)
+        ceiling = parse_ceiling(registry_text)
     except OSError as exc:
         return UNREADABLE, {"status": "unreadable", "detail": f"{path}: {exc}"}
     except ValueError as exc:
@@ -211,13 +301,13 @@ def select(
     def row(a: Auditor, p: Plugin | None) -> dict:
         return {
             "plugin": a.plugin, "domain": a.domain, "diff_mode": a.diff_mode,
-            "output_dir": str(a.output_dir(project)),
+            "output_dir": str(a.output_dir(project, slug)),
             "report_glob": a.report_glob,
             "installed": p is not None,
             "install_path": str(p.install_path) if p else None,
             "version": p.version if p else None,
-            "command": command_for(a, target=target, scope=scope_spec,
-                                   project=project),
+            "command": command_for(a, target=target, scope=scope_spec, project=project,
+                                   slug=slug, max_iterations=ceiling),
         }
 
     rows = [row(a, installed.get(a.plugin)) for a in required]
@@ -233,8 +323,20 @@ def select(
 
     body = {
         "status": "selected", "slug": slug, "domains": sorted(set(domains)),
-        "scope": scope, "required": rows,
+        "scope": scope, "required": rows, "max_iterations": ceiling,
         "missing_plugins": missing,
+        # The commands carry an ABSOLUTE `--output-dir` under this project's write
+        # root, because that is where `check_auditor_coverage.py` will look. Every
+        # plugin confines `--output-dir` under its OWN working directory — a
+        # path-traversal fix in `scripts/lib/path_safety.py` — so an absolute path is
+        # refused unless the command runs from here.
+        #
+        # Both halves are right and the join only holds at this directory. Measured
+        # 2026-09-22: neither side said so, and the plugin's refusal names the flag
+        # (`--output-dir is unsafe`) rather than the directory the reader is standing
+        # in — which sends them to change the output path, the one thing that must not
+        # change, since this kit derived it and will look for the report there.
+        "run_from": str(project),
         "derived_by": "rules/review-auditors.txt — widening is allowed, narrowing is not",
     }
     if missing:
@@ -273,6 +375,23 @@ def main(argv: list[str] | None = None) -> int:
                           diff_base=args.diff_base, pr=args.pr, commits=args.commits,
                           target=args.target, config_dir=args.config_dir)
 
+    # FRESHNESS, asked here because this is the moment before any audit runs. An audit
+    # commissioned against a plugin whose install is behind its source runs code that
+    # predates the contract it is audited against — measured 2026-09-22, 17 of 18 installs
+    # behind, and the same 7 went from aligned to stale in sixty minutes because the
+    # session maintaining them was committing. It ADVISES rather than blocks: which
+    # revision a consumer chose to install is theirs, and a gate that refuses the audit
+    # over it would stop a review for something the reviewer cannot fix from here.
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "gates"))
+    try:
+        from check_plugin_freshness import check as check_freshness
+
+        _, freshness = check_freshness(project=args.project, config_dir=args.config_dir)
+    except Exception as exc:  # noqa: BLE001 — a premise that cannot be read is reported
+        freshness = {"state": "unmeasured", "detail": f"{type(exc).__name__}: {exc}"}
+    if freshness.get("stale") or freshness.get("state") == "unmeasured":
+        result["plugin_freshness"] = freshness
+
     if args.write and result["status"] in ("selected", "not_installed"):
         out = assignment_path(args.project, args.slug)
         out.parent.mkdir(parents=True, exist_ok=True)
@@ -288,6 +407,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{len(result['required'])} auditor(s) required for {args.slug} "
               f"[{', '.join(result['domains']) or 'no domain'}]")
         print(f"scope: {result['scope']['kind']} — {result['scope']['detail']}")
+        print(f"run from: {result['run_from']} — each plugin confines --output-dir "
+              f"under its own working directory, so these commands are refused "
+              f"anywhere else. Move the caller, never the --output-dir")
         for r in result["required"]:
             mark = "•" if r["installed"] else "✗"
             print(f"  {mark} {r['plugin']:<24} {r['diff_mode']:<16} {r['command']}")

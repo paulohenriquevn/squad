@@ -13,9 +13,11 @@ from pathlib import Path
 
 from scripts import _registry
 from scripts._detector_contract import Finding, safe_parse_json, sanitize_symbol, to_rel_path
-from scripts.check_symbol_fab import extract_imports_and_calls
+from scripts.check_symbol_fab import extract_checked
 
-from . import BaseDetector, _arch, _mutation, _wiring
+from . import BaseDetector, _arch
+from ._knip import knip_command, knip_locations
+from ._workspace import declared, find_workspace_roots, manifests_under, read_workspace_declaration
 
 _TS_NODE_BUILTINS = frozenset(
     {
@@ -39,34 +41,60 @@ class TypescriptDetector(BaseDetector):
     manifest_marker = "package.json"
 
     def detect_dead_code(self, manifest_dir: Path) -> list[Finding]:
-        """Run knip against `manifest_dir` and parse JSON into Findings.
+        """Run knip where the project declares it and parse its JSON into Findings.
 
         knip emits exit code 0 (no findings) or 1 (findings). Exit code > 1
         signals tool error and is treated as `auditor_unavailable_knip`.
+
+        Where and through what: `_knip.py`. Declared nowhere, knip is tried from the root as
+        before and a failure is `unavailable`. Declared, a failure to even start it is a
+        failure of THIS detector to reach an installed tool, and is reported as D1 not
+        measured under its own key — `auditor_unavailable_knip` would blame the project.
         """
-        cmd = ["npx", "--yes", "knip", "--reporter", "json"]
+        command = [*knip_command(manifest_dir), "--reporter", "json"]
+        locations = knip_locations(manifest_dir)
+        if not locations:
+            findings, failure = self._knip_in(command, manifest_dir, manifest_dir)
+            return [self._auditor_unavailable(failure[0])] if failure else findings
+
+        findings: list[Finding] = []
+        for location in locations:
+            found, failure = self._knip_in(command, location, manifest_dir)
+            if failure is None:
+                findings.extend(found)
+                continue
+            reason, unreachable = failure
+            if not unreachable:
+                return [self._auditor_unavailable(reason)]
+            return [self._knip_unresolved(self._rel(location, manifest_dir), command, reason)]
+        if locations != [manifest_dir]:
+            findings.append(self._knip_scope(
+                [self._rel(location, manifest_dir) for location in locations]))
+        return findings
+
+    def _knip_in(self, command: list[str], cwd: Path, root: Path
+                 ) -> tuple[list[Finding], tuple[str, bool] | None]:
+        """One knip run: its findings, or `(reason, could_not_start)` when it did not run."""
         try:
             result = subprocess.run(
-                cmd,
-                cwd=str(manifest_dir),
+                command,
+                cwd=str(cwd),
                 capture_output=True,
                 text=True,
                 timeout=_KNIP_TIMEOUT_SEC,
                 check=False,
             )
         except FileNotFoundError:
-            return [self._auditor_unavailable("knip not found in PATH (install via npm i -g knip)")]
+            return [], (f"{command[0]} not found in PATH (install knip, e.g. npm i -g knip)", True)
         except subprocess.TimeoutExpired:
-            return [self._auditor_unavailable(f"knip timed out after {_KNIP_TIMEOUT_SEC}s")]
+            return [], (f"knip timed out after {_KNIP_TIMEOUT_SEC}s", False)
         except (subprocess.SubprocessError, OSError) as e:
-            return [self._auditor_unavailable(f"knip invocation failed: {e}")]
+            return [], (f"knip invocation failed: {e}", False)
 
         if result.returncode > 1:
-            return [
-                self._auditor_unavailable(
-                    f"knip exit code {result.returncode}: {result.stderr.strip()[:200]}"
-                )
-            ]
+            # 127 is the shell's "command not found": the runner started, knip did not.
+            return [], (f"knip exit code {result.returncode}: {result.stderr.strip()[:200]}",
+                        result.returncode == 127)
 
         data, parse_finding = safe_parse_json(result.stdout, "knip")
         if parse_finding is not None:
@@ -81,8 +109,13 @@ class TypescriptDetector(BaseDetector):
                     message=f"knip JSON output failed to parse: {parse_finding.message}",
                     allowlist_key="typescript|.|dead_code|auditor_output_malformed_knip",
                 )
-            ]
-        return self._parse_knip_json(data, manifest_dir)
+            ], None
+        prefix = "" if cwd == root else f"{self._rel(cwd, root)}/"
+        return self._parse_knip_json(data, cwd, prefix), None
+
+    @staticmethod
+    def _rel(path: Path, root: Path) -> str:
+        return path.relative_to(root).as_posix() if path != root else "."
 
     def _find_self_package_name(self, changed_files: list[Path]) -> str | None:
         """Walk up from any changed file to find the repo's package.json#name.
@@ -118,36 +151,66 @@ class TypescriptDetector(BaseDetector):
         return self._cached_self_name
 
     def _find_workspace_package_names(self, changed_files: list[Path]) -> frozenset[str]:
-        """Every package name declared INSIDE this repo — not just the root's.
+        """Every package name the project DECLARES as a workspace member.
 
-        Patch 2026-08-03. `_find_self_package_name` resolves the OUTERMOST package.json#name,
-        which in a monorepo is the private root (`promptly`) that nobody imports. Every
-        sibling import (`@scope/promptly` from packages/api) therefore fell through to the
-        npm registry, took a 404 and was reported as `Fabricated npm package` — 60 HARD
-        findings on a repo whose build and tests are green. A workspace dependency declared
-        `workspace:*` resolves perfectly; it is simply not published, by design.
+        A workspace dependency declared `workspace:*` resolves perfectly; it is simply not
+        published, by design. Reported as a fabricated npm import it produces a HARD finding
+        on a repository whose build and tests are green — 98 of them in one consumer, measured
+        2026-09-19, one message shape, none of them in the change being audited. A gate that
+        returns the same verdict whatever the change does has stopped measuring.
 
-        Bounded walk: from each changed file up to the repo root, then one level down over the
-        declared workspace globs. Cached per detector instance.
+        WHY THE DECLARATION AND NOT A DEPTH
+        -----------------------------------
+        This collected names with two fixed globs — `*/package.json` and `*/*/package.json` —
+        while its own docstring claimed to walk "the declared workspace globs". It read no
+        globs. A consumer declaring `apps/*/packages/*` keeps its manifests at depth 4, so
+        every one of them fell through to the registry; and a `package.json` at depth 2 that
+        NO pattern names was collected anyway, so a genuinely fabricated import from such a
+        directory would never have been reported either. Wrong in both directions, from the
+        same cause.
+
+        `typescript.py`'s own note on three OTHER false-positive families in this file states
+        the rule: they shared the root of resolving names "without consulting what the project
+        itself declares (workspaces, exports, paths)", and the fix "reads the declaration
+        instead of guessing". Workspaces were named there and were the family still guessing.
+
+        THE DIALECT, AND WHY THE STANDARD LIBRARY CANNOT BE HANDED THESE PATTERNS
+        ------------------------------------------------------------------------
+        Measured on Python 3.10.12 against pnpm's four documented example patterns:
+
+            Path.glob("!**/test/**/package.json")  ValueError, uncaught -> the detector CRASHES
+            Path.glob("components/**/package.json")  descends node_modules
+            fnmatch("packages/a/node_modules/dep", "packages/*")  True — `*` crosses `/`
+            any negation, either matcher  a silent no-op
+
+        And negation is a property of the SET, so no per-pattern loop can express it whatever
+        it does per call. `pathspec` implements the dialect — and the GITIGNORE one,
+        last-match-wins, under which two of the four documented rows re-include; adopting it
+        would swap a matcher that crashes for one that silently disagrees, and it is not a
+        declared dependency of this kit besides.
+
+        So: one walk, pruning `node_modules`, then the collected set filtered by the declared
+        patterns — positives include, negations exclude, evaluated as a set. Order-independent,
+        which is what "as a set" means, verified against `tinyglobby` 0.2.17, the matcher the
+        `@manypkg/tools` resolver behind `changesets` actually uses.
         """
         if hasattr(self, "_cached_ws_names"):
             return self._cached_ws_names
         names: set[str] = set()
-        roots: set[Path] = set()
-        for src_file in changed_files:
-            try:
-                cur = src_file.resolve().parent if src_file.exists() else Path.cwd()
-            except OSError:
+        for root in find_workspace_roots(changed_files):
+            patterns = read_workspace_declaration(root)
+            if patterns is None:
+                # No declaration here: the pre-2026-09 behaviour, and the ONLY path that keeps
+                # it. A repository that declares nothing is not a repository we may guess about
+                # more confidently than before.
+                for pkg_json in root.glob("*/*/package.json"):
+                    self._read_pkg_name(pkg_json, names)
+                for pkg_json in root.glob("*/package.json"):
+                    self._read_pkg_name(pkg_json, names)
                 continue
-            for parent in [cur, *cur.parents]:
-                if (parent / ".git").exists() or (parent / "pnpm-workspace.yaml").is_file():
-                    roots.add(parent)
-                    break
-        for root in roots:
-            for pkg_json in root.glob("*/*/package.json"):
-                self._read_pkg_name(pkg_json, names)
-            for pkg_json in root.glob("*/package.json"):
-                self._read_pkg_name(pkg_json, names)
+            for pkg_json in manifests_under(root):
+                if declared(pkg_json.parent.relative_to(root).as_posix(), patterns):
+                    self._read_pkg_name(pkg_json, names)
         self._cached_ws_names = frozenset(names)
         return self._cached_ws_names
 
@@ -226,6 +289,13 @@ class TypescriptDetector(BaseDetector):
     def detect_symbol_fabrication(self, changed_files: list[Path]) -> list[Finding]:
         """T2.3 — Validate imports against npm. Skip relative + node: builtins + monorepo subpath (EC-16) + self-references (patch 2026-05-30)."""
         findings: list[Finding] = []
+        # Vacuity guard, the same one `rust.py` carries and for the same measured reason:
+        # `extract_checked` reports whether the parser RAN, and an empty symbol list from
+        # a parse that never happened reads to D2 as "this file imports nothing" — a
+        # silent false-green over an audit that did not run. Reported as unavailable,
+        # never as clean.
+        parsed_any = False
+        unparsed = 0
         self_name = self._find_self_package_name(changed_files)
         ws_names = self._find_workspace_package_names(changed_files)
         aliases = self._find_path_aliases(changed_files)
@@ -233,7 +303,10 @@ class TypescriptDetector(BaseDetector):
             if not src_file.exists():
                 continue
             rel = to_rel_path(src_file)
-            for sym in extract_imports_and_calls(src_file, "typescript"):
+            symbols, parsed = extract_checked(src_file, "typescript")
+            parsed_any = parsed_any or parsed
+            unparsed += 0 if parsed else 1
+            for sym in symbols:
                 if sym.kind != "import":
                     continue
                 module = sym.module
@@ -290,60 +363,61 @@ class TypescriptDetector(BaseDetector):
                             allowlist_key=f"typescript|{rel}|symbol_fab|symbol_fab_unverifiable_{sanitized}",
                         )
                     )
+        if unparsed and not parsed_any:
+            return [
+                Finding(
+                    detector="d2_symbol_fab",
+                    language="typescript",
+                    severity="SOFT_CAP",
+                    file_path=".",
+                    symbol_or_line="tree-sitter",
+                    message=(
+                        f"D2 parsed none of the {unparsed} TypeScript source(s) it was "
+                        f"given — the tree-sitter grammar is unavailable or failed to "
+                        f"load. The audit did not run; this is NOT evidence that no "
+                        f"symbol is fabricated."
+                    ),
+                    allowlist_key="typescript|.|symbol_fab|auditor_unavailable_tree-sitter",
+                )
+            ]
+
         return findings
-
-    def detect_orphan_exports(self, repo_root: Path) -> list[Finding]:
-        return _wiring.detect_orphan_exports(self.language, repo_root, repo_root)
-
-    def detect_mutation_score(self, manifest_dir: Path) -> list[Finding]:
-        return _mutation.detect_mutation_score(
-            self.language,
-            manifest_dir,
-            floor_low=self.threshold("mutation.score_floor_low", _mutation.DEFAULT_FLOOR_LOW),
-            floor_high=self.threshold("mutation.score_floor_high", _mutation.DEFAULT_FLOOR_HIGH),
-            timeout_minutes=self.threshold(
-                "mutation.timeout_minutes", _mutation.DEFAULT_TIMEOUT_MINUTES),
-            max_report_age_minutes=self.threshold(
-                "mutation.max_report_age_minutes", _mutation.DEFAULT_MAX_REPORT_AGE_MINUTES),
-        )
 
     # ------------------------------------------------------------------
     # internal helpers
     # ------------------------------------------------------------------
 
-    def _parse_knip_json(self, data: dict, repo_root: Path) -> list[Finding]:
+    def _parse_knip_json(self, data: dict, repo_root: Path, prefix: str = "") -> list[Finding]:
+        """`prefix` is the audited member's path from the repository root, so a finding
+        from `packages/ui` names `packages/ui/src/x.ts` and not a `src/x.ts` that is
+        somewhere else — or nowhere — from where the report is read."""
         findings: list[Finding] = []
 
+        def make(file_path: str, message: str, symbol: str) -> Finding:
+            return self._make_finding(file_path, message, symbol, repo_root, prefix)
+
         for file_path in data.get("files", []) or []:
-            findings.append(self._make_finding(file_path, "unimported file", "file", repo_root))
+            findings.append(make(file_path, "unimported file", "file"))
 
         for export in data.get("exports", []) or []:
             file_path = export.get("file", "<unknown>")
             name = export.get("name", "<unknown>")
-            findings.append(
-                self._make_finding(file_path, f"unused export '{name}'", name, repo_root)
-            )
+            findings.append(make(file_path, f"unused export '{name}'", name))
 
         for dep in data.get("dependencies", []) or []:
             name = dep.get("name") if isinstance(dep, dict) else str(dep)
-            findings.append(
-                self._make_finding("package.json", f"unused dependency '{name}'", name, repo_root)
-            )
+            findings.append(make("package.json", f"unused dependency '{name}'", name))
 
         for dep in data.get("devDependencies", []) or []:
             name = dep.get("name") if isinstance(dep, dict) else str(dep)
-            findings.append(
-                self._make_finding(
-                    "package.json", f"unused devDependency '{name}'", name, repo_root
-                )
-            )
+            findings.append(make("package.json", f"unused devDependency '{name}'", name))
 
         return findings
 
     def _make_finding(
-        self, file_path: str, message: str, symbol: str, repo_root: Path
+        self, file_path: str, message: str, symbol: str, repo_root: Path, prefix: str = ""
     ) -> Finding:
-        rel = self._safe_relative(file_path, repo_root)
+        rel = prefix + self._safe_relative(file_path, repo_root)
         sanitized = sanitize_symbol(symbol)
         return Finding(
             detector="d1_dead_code",
@@ -374,6 +448,40 @@ class TypescriptDetector(BaseDetector):
             symbol_or_line="knip",
             message=f"Knip auditor unavailable: {reason}",
             allowlist_key="typescript|.|dead_code|auditor_unavailable_knip",
+        )
+
+    @staticmethod
+    def _knip_unresolved(member: str, command: list[str], reason: str) -> Finding:
+        """Declared by the project, not reachable by the detector: D1 did not measure.
+
+        Still a SOFT_CAP — a dimension nobody measured must not read as a clean one — but
+        under its own key and message, so the report blames the resolution, not the tree.
+        """
+        return Finding(
+            detector="d1_dead_code",
+            language="typescript",
+            severity="SOFT_CAP",
+            file_path=".",
+            symbol_or_line="knip",
+            message=(f"D1 not measured: knip is declared in `{member}` but "
+                     f"`{' '.join(command[:-2])}` could not start it there ({reason}). "
+                     f"The tool is installed; the detector could not reach it."),
+            allowlist_key="typescript|.|dead_code|auditor_unresolved_knip",
+        )
+
+    @staticmethod
+    def _knip_scope(members: list[str]) -> Finding:
+        """Which directories D1 covered, when that is not the whole tree."""
+        return Finding(
+            detector="d1_dead_code",
+            language="typescript",
+            severity="INFO",
+            file_path=".",
+            symbol_or_line="knip",
+            message=(f"D1 scope: knip ran in {', '.join(members)} — the workspace "
+                     f"member(s) that declare it. Nothing outside them was audited for "
+                     f"dead code."),
+            allowlist_key="typescript|.|dead_code|knip_member_scope",
         )
 
     # ── D5 — architecture ───────────────────────────────────────────────────────────────────────

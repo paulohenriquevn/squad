@@ -11,7 +11,10 @@ _SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "mechanisms" / "conventi
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
-from ecosystem_utils import (  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from ecosystem_utils import (  # noqa: E402 — post-bootstrap import
     find_ecosystem_dir,
     is_ecosystem_layout,
     resolve_ecosystem_dir,
@@ -109,7 +112,9 @@ def test_resolve_ecosystem_dir_prefers_the_install_over_the_root(tmp_path: Path)
 
     The tie used to be broken by which candidate contained `records/`. That signal
     moved out with the write root, so the probe order carries it instead — the same
-    order `cycle_events._is_standalone` uses.
+    test `cycle_events._holds_the_kit` applies — whether a directory HOLDS the kit
+    trees, not whether it exists. (`_is_standalone` never existed; the comment that
+    cited it has been corrected.)
     """
     # Standalone-shaped layout at the root
     (tmp_path / "skills").mkdir()

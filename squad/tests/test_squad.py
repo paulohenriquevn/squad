@@ -93,6 +93,30 @@ def test_a_payload_that_cannot_be_read_blocks(payload, fragment, capsys) -> None
     assert fragment in err
 
 
+@pytest.mark.parametrize(("extra", "field"), [
+    ({"tool_name": "Bash", "tool_input": "a string, not a dict"}, "tool_input"),
+    ({"tool_name": 17, "tool_input": {"command": "ls"}}, "tool_name"),
+])
+def test_a_field_of_the_wrong_type_blocks(extra, field, capsys) -> None:
+    """`build_context` filtered the payload by field NAME and assigned straight in.
+
+    Every payload in this file is well-typed, so nothing here ever asked what happens
+    when the runtime sends `tool_input` as a string. Measured: it is accepted, and the
+    first hook doing `context.tool_input["command"]` raises TypeError — a traceback, exit
+    1, and for a PreToolUse hook exit 1 means THE ACTION PROCEEDS. A malformed payload
+    would have opened the guard rather than closing it.
+    """
+    payload = {**_BASE, "hook_event_name": "PreToolUse", **extra}
+
+    with pytest.raises(SystemExit) as exc:
+        create_context(PreToolUseContext, stream=_stdin(payload))
+
+    assert exc.value.code == BLOCK, "a wrongly-typed field must never proceed"
+    err = capsys.readouterr().err
+    assert field in err, f"the reason does not name the field: {err!r}"
+    assert "nothing was checked" in err
+
+
 def test_the_wrong_event_for_this_hook_blocks(capsys) -> None:
     """Registering a hook under the wrong event is a wiring bug, not a pass."""
     with pytest.raises(SystemExit) as exc:

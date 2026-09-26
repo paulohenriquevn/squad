@@ -43,7 +43,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import subprocess
 import sys
 from collections.abc import Callable
@@ -53,6 +52,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from squad.paths import records_dir
+from squad.remotes import owner_repo
 
 Runner = Callable[[list[str]], "tuple[int, str, str]"]
 
@@ -77,15 +77,20 @@ class Report:
 
 def _runner(root: Path, program: str) -> Runner:
     def run(argv: list[str]) -> tuple[int, str, str]:
-        done = subprocess.run(  # noqa: PLW1510
+        done = subprocess.run(
             [program, *argv], capture_output=True, text=True, cwd=root, timeout=120
-        )
+        , check=False)
         return done.returncode, done.stdout, done.stderr
 
     return run
 
 
-def _reviews_that_drifted(project: Path) -> tuple[list[str], int]:
+#: `reviews_examined` when the gate could not be loaded at all. Not a count, and
+#: deliberately not 0: zero is a measurement and this is the absence of one.
+UNCHECKED = -1
+
+
+def _reviews_that_drifted(project: Path) -> tuple[list[str], int, str]:
     """Slugs whose review examined files that changed after it ran.
 
     Empty when nothing drifted AND when nothing can be checked — an absent review
@@ -96,12 +101,16 @@ def _reviews_that_drifted(project: Path) -> tuple[list[str], int]:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "gates"))
     try:
         from check_review_binding import DRIFTED, check
-    except ImportError:  # pragma: no cover - environment, not logic
-        return [], 0
+    except ImportError as exc:  # pragma: no cover - environment, not logic
+        # `[], 0` here is indistinguishable from "there are no review records", and the
+        # caller prints a SPECIFIC and false cause for that zero: "no `*-review-*.json`
+        # on disk". The gate module failing to import is an inability to check, not a
+        # measurement that found nothing, and the two must not share a return value.
+        return [], UNCHECKED, f"the drift gate could not be loaded: {exc}"
 
     directory = records_dir(project, "reviews")
     if directory is None:
-        return [], 0
+        return [], 0, ""
     drifted: list[str] = []
     records = sorted(directory.glob("*-review-*.json"))
     for record in records:
@@ -111,7 +120,7 @@ def _reviews_that_drifted(project: Path) -> tuple[list[str], int]:
         code, _ = check(slug, project=project)
         if code == DRIFTED:
             drifted.append(slug)
-    return drifted, len(records)
+    return drifted, len(records), ""
 
 
 
@@ -130,18 +139,201 @@ def _owner_repo(call, git) -> str | None:
     result = call(git, ["remote", "get-url", "origin"])
     if result is None or result[0] != 0:
         return None
-    url = result[1].strip()
-    # The host part is everything before the first `/`. If it carries a `:`, the slug
-    # starts after it — that covers `git@host:owner/repo`, `host:owner/repo` (an alias
-    # with the user in ssh config, which is the shape measured on the consumer) and
-    # `ssh://host:22/owner/repo`. An `https://` URL has `:` in the scheme, so the scheme
-    # is stripped first or the parse would start after `//`.
-    stripped = re.sub(r"^[a-z][a-z0-9+.-]*://", "", url, flags=re.IGNORECASE)
-    head, _, rest = stripped.partition("/")
-    tail = (head.split(":", 1)[1] + "/" + rest) if ":" in head else stripped
-    tail = tail.rstrip("/").removesuffix(".git")
-    parts = [p for p in tail.split("/") if p]
-    return "/".join(parts[-2:]) if len(parts) >= 2 else None
+    # The shapes, and why a local path answers None, are in `squad.remotes` — the one
+    # parse this file and the board's issues panel share.
+    return owner_repo(result[1])
+
+
+def _refuse_on_review_drift(root: Path, report: "Report") -> bool:
+    """Does a review on record still describe the branch being promoted? Returns
+    True when the caller must stop.
+
+    Extracted from `promote`, which measured cyclomatic complexity 35 across 210 lines.
+    Pure code movement: the block below is the block that was there.
+
+    Promotion is where reviewed work leaves the branch, so it is where a review that no
+    longer describes it has to be caught — the approval was bound to a NAME, not to a
+    CONTENT, and a commit landing after consolidation would otherwise travel on it.
+    """
+    # `root`, not `Path.cwd()`. Every other check in this function is anchored on the
+    # repository being promoted — both runners take `cwd=root` — and this one read the
+    # process working directory instead. `squad.paths.records_dir` anchors at its
+    # argument and never walks up, so a promotion run from a subdirectory swept a
+    # records tree belonging to another project, or to none, and reported no drift
+    # either way. A gate that swept the wrong tree and said "clean" is the shape this
+    # kit exists to refuse.
+    drifted, reviews_examined, unchecked_because = _reviews_that_drifted(root)
+    if reviews_examined == UNCHECKED:
+        report.lines.append(
+            f"review drift: NOT CHECKED — {unchecked_because}. This is not 'no reviews "
+            f"on disk' and it is not a check that passed; nothing here looked.")
+    elif not reviews_examined:
+        # Say it rather than let silence read as "the reviews were fine".
+        report.lines.append(
+            "review drift: 0 record(s) examined — no `*-review-*.json` on disk, so no "
+            "review was bound to a commit. Not a refusal; the cycle does not require "
+            "one here. It is also not a check that passed.")
+    if drifted:
+        report.exit_code = REFUSED
+        report.lines.append(
+            f"{len(drifted)} review(s) no longer describe this branch: "
+            + ", ".join(drifted)
+        )
+        report.lines.append(
+            "Re-review the slice, or record a new review bound to the tip. Promoting "
+            "would carry an approval about a state that is not what ships."
+        )
+        return True
+
+    return False
+
+
+def _preflight(call, git, report: "Report", root: Path) -> bool:
+    """Branch, working tree and commits-ahead. Returns True when the caller must stop.
+
+    Extracted from `promote`, which measured cyclomatic complexity 35 across 210 lines.
+    Pure code movement: the three refusals below are the three that were there, in the
+    same order, writing to the same report.
+    """
+    branch = call(git, ["rev-parse", "--abbrev-ref", "HEAD"])
+    if branch is None or branch[0] != 0:
+        report.exit_code = UNMEASURED
+        report.lines.append("git could not report the current branch")
+        return True
+
+    current = branch[1].strip()
+    if current != SOURCE:
+        # `develop` integrates and never originates. Promoting from anywhere else would
+        # either author on the target or carry work that did not start where the flow says.
+        report.exit_code = REFUSED
+        report.lines.append(
+            f"on {current!r}, and only {SOURCE!r} is promotable — git-safety.md § 1"
+        )
+        return True
+
+    # `--untracked-files=no`. A promotion is a MERGE OF COMMITS, and an untracked file is
+    # in no commit — so it cannot affect what this gate guards, and counting it refuses on
+    # a condition that cannot occur.
+    #
+    # Measured on a consumer 2026-09-16, holding the first item ever to cross the whole
+    # chain: 12 entries from `git status --porcelain`, ALL of them `??`, and
+    # `--untracked-files=no` returning nothing. Among the twelve was
+    # `.squad/wiki/decisions/...` — and `.gitignore` un-ignores `.squad/wiki/` ON PURPOSE,
+    # because `records-location.md` calls it durable knowledge that should be versioned.
+    #
+    # So the kit's own designed output directory made the kit's own promotion gate refuse,
+    # and every consumer that has written one wiki document hits it on its first
+    # promotion, forever, told that their tree "promotes a state nobody reviewed".
+    status = call(git, ["status", "--porcelain", "--untracked-files=no"])
+    if status is None or status[0] != 0:
+        report.exit_code = UNMEASURED
+        report.lines.append("git could not report the working tree state")
+        return True
+    if status[1].strip():
+        n = len(status[1].strip().splitlines())
+        report.exit_code = REFUSED
+        report.lines.append(
+            f"{n} uncommitted change(s) to TRACKED files: a dirty tree promotes a state "
+            f"nobody reviewed"
+        )
+        return True
+
+    # Untracked files are still worth SAYING — one may be work somebody forgot to add —
+    # but a warning is what that is, not a refusal. The caution and the trigger are
+    # separate facts and the old message merged them.
+    untracked = call(git, ["ls-files", "--others", "--exclude-standard"])
+    if untracked is not None and untracked[0] == 0 and untracked[1].strip():
+        paths = untracked[1].strip().splitlines()
+        shown = ", ".join(paths[:4]) + ("…" if len(paths) > 4 else "")
+        report.lines.append(
+            f"WARNING: {len(paths)} untracked file(s) will not travel with this "
+            f"promotion — {shown}. Not a refusal: a merge carries commits, and these are "
+            f"in none. Check whether any is work you meant to add."
+        )
+
+    ahead = call(git, ["rev-list", "--count", f"origin/{TARGET}..HEAD"])
+    if ahead is None or ahead[0] != 0:
+        report.exit_code = UNMEASURED
+        report.lines.append(f"could not count commits ahead of origin/{TARGET}")
+        return True
+
+    count = ahead[1].strip()
+    report.detail["ahead"] = count
+    if count == "0":
+        # Not a failure: `develop` already carries everything. Saying so is the answer.
+        report.lines.append(f"nothing to promote — origin/{TARGET} already has this branch")
+        return True
+
+    # ── the count is local; the PR is about the remote ───────────────────────
+    #
+    # Everything above counts what THIS CHECKOUT has. A pull request carries what the
+    # REMOTE has, and nothing here compared the two — so the tool could print "33
+    # commit(s) ahead" and GitHub answer "No commits between develop and workspace",
+    # one state described from opposite sides by two sentences that cannot both be true.
+    # Routed by a consumer session on 2026-09-21, after living exactly that.
+    #
+    # Asked as `origin/<source>..HEAD` rather than by parsing `status -sb`: the porcelain
+    # line is localised and its shape has changed between git versions, and this reads a
+    # count the way every other check in this file does.
+    unpushed = call(git, ["rev-list", "--count", f"origin/{SOURCE}..HEAD"])
+    if unpushed is None or unpushed[0] != 0:
+        # No upstream yet is not the same as unpushed commits, and neither is a fetch
+        # that failed. Unmeasured, because opening the PR anyway is how the
+        # contradiction above got printed in the first place.
+        report.exit_code = UNMEASURED
+        report.lines.append(
+            f"could not compare HEAD with origin/{SOURCE}, so whether the remote has "
+            f"this work is unknown — `git fetch origin {SOURCE}` and re-run"
+        )
+        return True
+
+    held = unpushed[1].strip()
+    if held not in ("", "0"):
+        report.exit_code = REFUSED
+        report.lines.append(
+            f"{held} commit(s) are on this checkout and not on origin/{SOURCE}. A pull "
+            f"request carries what the remote has, so these would not travel — and the "
+            f"{count} counted above describe a branch GitHub cannot see. "
+            f"Run `git push origin {SOURCE}` first."
+        )
+        return True
+
+    report.lines.append(f"{count} commit(s) ahead of origin/{TARGET}")
+
+    # WAS THIS TREE VERIFIED, and does the answer still apply? Asked here because this is
+    # the last moment before work leaves the branch it was written on, and because the
+    # answer is a file read rather than a fifteen-minute suite — the property that made
+    # the question go unasked. Measured 2026-09-22: one session ran the suite four times
+    # in a day to answer it, and two of the four answered about a tree that had moved.
+    #
+    # It ADVISES and does not refuse. Whether to promote unverified work is the caller's
+    # call — a documentation-only branch is a real case — and a promotion that blocked on
+    # a record nobody had written yet would fail every consumer that has not run the suite
+    # since this record existed. What it refuses is silence: `stale` and `unattributable`
+    # both mean the green a reader remembers is about a different tree.
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "gates"))
+    try:
+        from check_verification_freshness import check as _verification
+
+        _code, _v = _verification(root)
+        if _v.get("state") != "verified":
+            report.lines.append(f"verification: {_v['state'].upper()} — {_v['detail']}")
+    except Exception as exc:  # noqa: BLE001 — a premise we cannot read is reported, not hidden
+        # TWO facts, and they printed identically until 2026-09-23. `UNCHECKED` is what a
+        # consumer sees when no record exists — expected, harmless, common. This branch also
+        # fired for `NameError: name 'root' is not defined`, because `_preflight` took no
+        # `root` and none existed at module level: the check had never run ONCE in any tree
+        # since it was wired in (#176). The fail-safe worked and concealed the defect at the
+        # same time, because a broken mechanism reported in the vocabulary of a normal state.
+        #
+        # So a failure of the MECHANISM is now named as one. `BROKEN` cannot be mistaken for a
+        # tree that simply has no record yet.
+        report.lines.append(
+            f"verification: BROKEN — the freshness check itself raised "
+            f"{type(exc).__name__}: {exc}. This is a defect in the promoter, not a state of "
+            f"this repository.")
+
+    return False
 
 
 def promote(
@@ -163,98 +355,10 @@ def promote(
             report.lines.append(f"could not run {argv[0] if argv else '?'}: {exc}")
             return None
 
-    branch = call(git, ["rev-parse", "--abbrev-ref", "HEAD"])
-    if branch is None or branch[0] != 0:
-        report.exit_code = UNMEASURED
-        report.lines.append("git could not report the current branch")
+    if _preflight(call, git, report, root):
         return report
 
-    current = branch[1].strip()
-    if current != SOURCE:
-        # `develop` integrates and never originates. Promoting from anywhere else would
-        # either author on the target or carry work that did not start where the flow says.
-        report.exit_code = REFUSED
-        report.lines.append(
-            f"on {current!r}, and only {SOURCE!r} is promotable — git-safety.md § 1"
-        )
-        return report
-
-    # `--untracked-files=no`. A promotion is a MERGE OF COMMITS, and an untracked file is
-    # in no commit — so it cannot affect what this gate guards, and counting it refuses on
-    # a condition that cannot occur.
-    #
-    # Measured on a consumer 2026-09-16, holding the first item ever to cross the whole
-    # chain: 12 entries from `git status --porcelain`, ALL of them `??`, and
-    # `--untracked-files=no` returning nothing. Among the twelve was
-    # `.squad/wiki/decisions/...` — and `.gitignore` un-ignores `.squad/wiki/` ON PURPOSE,
-    # because `records-location.md` calls it durable knowledge that should be versioned.
-    #
-    # So the kit's own designed output directory made the kit's own promotion gate refuse,
-    # and every consumer that has written one wiki document hits it on its first
-    # promotion, forever, told that their tree "promotes a state nobody reviewed".
-    status = call(git, ["status", "--porcelain", "--untracked-files=no"])
-    if status is None or status[0] != 0:
-        report.exit_code = UNMEASURED
-        report.lines.append("git could not report the working tree state")
-        return report
-    if status[1].strip():
-        n = len(status[1].strip().splitlines())
-        report.exit_code = REFUSED
-        report.lines.append(
-            f"{n} uncommitted change(s) to TRACKED files: a dirty tree promotes a state "
-            f"nobody reviewed"
-        )
-        return report
-
-    # Untracked files are still worth SAYING — one may be work somebody forgot to add —
-    # but a warning is what that is, not a refusal. The caution and the trigger are
-    # separate facts and the old message merged them.
-    untracked = call(git, ["ls-files", "--others", "--exclude-standard"])
-    if untracked is not None and untracked[0] == 0 and untracked[1].strip():
-        paths = untracked[1].strip().splitlines()
-        shown = ", ".join(paths[:4]) + ("…" if len(paths) > 4 else "")
-        report.lines.append(
-            f"WARNING: {len(paths)} untracked file(s) will not travel with this "
-            f"promotion — {shown}. Not a refusal: a merge carries commits, and these are "
-            f"in none. Check whether any is work you meant to add."
-        )
-
-    ahead = call(git, ["rev-list", "--count", f"origin/{TARGET}..HEAD"])
-    if ahead is None or ahead[0] != 0:
-        report.exit_code = UNMEASURED
-        report.lines.append(f"could not count commits ahead of origin/{TARGET}")
-        return report
-
-    count = ahead[1].strip()
-    report.detail["ahead"] = count
-    if count == "0":
-        # Not a failure: `develop` already carries everything. Saying so is the answer.
-        report.lines.append(f"nothing to promote — origin/{TARGET} already has this branch")
-        return report
-
-    report.lines.append(f"{count} commit(s) ahead of origin/{TARGET}")
-
-    # Promotion is where reviewed work leaves the branch, so it is where a review that
-    # no longer describes the branch has to be caught. A commit landing after
-    # consolidation would otherwise travel to `develop` on an approval that never saw
-    # it — the approval was bound to a NAME, not to a CONTENT.
-    drifted, reviews_examined = _reviews_that_drifted(Path.cwd())
-    if not reviews_examined:
-        # Say it rather than let silence read as "the reviews were fine".
-        report.lines.append(
-            "review drift: 0 record(s) examined — no `*-review-*.json` on disk, so no "
-            "review was bound to a commit. Not a refusal; the cycle does not require "
-            "one here. It is also not a check that passed.")
-    if drifted:
-        report.exit_code = REFUSED
-        report.lines.append(
-            f"{len(drifted)} review(s) no longer describe this branch: "
-            + ", ".join(drifted)
-        )
-        report.lines.append(
-            "Re-review the slice, or record a new review bound to the tip. Promoting "
-            "would carry an approval about a state that is not what ships."
-        )
+    if _refuse_on_review_drift(root, report):
         return report
 
     # `-R OWNER/NAME`, derived from the remote rather than inferred by `gh`.
@@ -303,7 +407,7 @@ def promote(
     else:
         created = call(gh, ["pr", "create", *scoped, "--base", TARGET, "--head", SOURCE,
                             "--title", f"promote: {SOURCE} → {TARGET}",
-                            "--body", f"Promotion of {count} commit(s). No version is cut "
+                            "--body", f"Promotion of {report.detail['ahead']} commit(s). No version is cut "
                                       f"here — see rules/cycle-release.md § Two cuts."])
         if created is None or created[0] != 0:
             report.exit_code = UNMEASURED
@@ -312,12 +416,30 @@ def promote(
             )
             return report
         url = created[1].strip().splitlines()[-1] if created[1].strip() else ""
-        number = url.rsplit("/", 1)[-1] if url else "?"
+        number = url.rsplit("/", 1)[-1] if url else ""
+        if not number.isdigit():
+            # `"?"` used to stand in here. It was written into `report.detail["pr"]` and
+            # handed to `gh pr merge ?`, whose failure lands in the AWAITING branch —
+            # which tells the operator to wait for checks on a PR whose number nothing
+            # knows. The PR EXISTS: `gh pr create` succeeded. What failed is reading its
+            # number, and that is what the operator needs to be told.
+            report.exit_code = UNMEASURED
+            report.lines.append(
+                f"the PR was created and its number could not be read from gh's output "
+                f"({created[1].strip()[:200] or 'no output'}). Nothing was merged. Find "
+                f"it with `gh pr list --head {SOURCE}` and merge it by hand.")
+            return report
         report.lines.append(f"opened PR #{number}  {url}")
 
     report.detail["pr"] = str(number)
 
-    merged = call(gh, ["pr", "merge", str(number), "--merge"])
+    # `*scoped` here too. It was built above and applied to `pr list` and `pr create` and
+    # not to this call, so behind an SSH host alias the promotion opened a PR it could not
+    # then merge — the one outcome the comment above calls "one flag away" from working.
+    # Observed twice on 2026-09-21 on a consumer behind such an alias: `opened PR #NNN` followed
+    # by "none of the git remotes configured for this repository point to a known GitHub
+    # host", and the operator merging by hand.
+    merged = call(gh, ["pr", "merge", *scoped, str(number), "--merge"])
     if merged is None:
         report.exit_code = UNMEASURED
         return report

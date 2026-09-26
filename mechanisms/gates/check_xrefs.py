@@ -39,8 +39,8 @@ import sys
 # four different orders, and `check_write_containment.py` refuses a second one.
 import sys as _sys_bootstrap
 from collections import defaultdict
-from pathlib import Path
-from pathlib import Path as _Path_bootstrap
+from dataclasses import dataclass
+from pathlib import Path, Path as _Path_bootstrap
 from typing import Any
 
 for _up in _Path_bootstrap(__file__).resolve().parents:
@@ -55,13 +55,20 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "conventions"))
 
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
 from ecosystem_utils import find_ecosystem_dir as _find_ecosystem_dir_impl  # noqa: E402
 
-from squad.paths import (  # noqa: E402
+from squad.markdown import prose_only  # noqa: E402 — post-bootstrap import
+from squad.paths import (  # noqa: E402 — post-bootstrap import
     DATA_DIRNAME,
+    LEGACY_ROUTING_ROOTS,
+    ROUTING_TABLE,
+    WIKI as WIKI_FALLBACK,
+    is_cycle_generated_skill,
     wiki_dir,
 )
-from squad.paths import WIKI as WIKI_FALLBACK  # noqa: E402
 
 # Skills documented as "auxiliary" (not bound to any cycle)
 # - ast-grep: structural search utility
@@ -80,7 +87,7 @@ from squad.paths import WIKI as WIKI_FALLBACK  # noqa: E402
 # - as-is-to-be: read-only projection of the registry into current state vs future state,
 #   invoked on demand by whoever has to explain what a quarter buys. Same shape as
 #   backlog-review: it reads the registry a cycle owns and is a phase of none.
-AUXILIARY_SKILLS = {"ast-grep", "honesty-gate", "backlog-init", "backlog-review", "session-goal", "quality-init", "skill-creator", "arch-check", "squad-fit", "sign", "panel", "issue-confidence", "critic", "as-is-to-be"}
+AUXILIARY_SKILLS = {"ast-grep", "honesty-gate", "backlog-init", "backlog-review", "quality-init", "skill-creator", "arch-check", "squad-fit", "sign", "panel", "issue-confidence", "critic", "as-is-to-be"}
 
 
 def _declared_auxiliary_skills(ecosystem_dir: Path) -> set[str]:
@@ -184,26 +191,6 @@ def _kit_shipped_paths(ecosystem_dir: Path) -> set[str] | None:
     return shipped or None
 
 
-def _is_auto_generated(skill: str) -> bool:
-    """Skills the cycles THEMSELVES write, not phases anyone maintains.
-
-    `/review` emits `review-{slug}-{dimension}-knowledge`: these are run artifacts.
-    Demanding a cycle contract or a reference in some cycle-*.md asks the output to
-    behave like an input.
-
-    `*-sepa-knowledge` is kept as BACKWARD COMPATIBILITY and has no producer any more.
-    `/implement` used to generate one per plan; on 2026-09-01 it stopped generating
-    agents and skills entirely and now routes to the project's own domain specialist.
-    The pattern stays because consumers still hold what was already written to their
-    disk, and dropping it would turn those files into orphans and fail the check in
-    repositories that did nothing wrong. Remove it once no consumer carries one.
-
-    It lives here rather than inline in a check because the first version exempted
-    only `no_orphan_skills` and left `skill_has_cycle_contract` still charging — a half
-    exemption that traded 26 WARN for 3 and looked like a fix. One definition, two
-    consumers: that is what stops the next half from escaping.
-    """
-    return skill.endswith("-knowledge") and (skill.startswith("review-") or "-sepa-" in skill)
 
 
 # Patterns to detect file references in markdown
@@ -223,9 +210,15 @@ BACKTICK_PATH_RE = re.compile(r"`(\.?[a-zA-Z0-9_./\-]+\.(?:md|py|sh|json|txt|yml
 CYCLE_REF_RE = re.compile(r"`?(?<![a-z0-9-])cycle-([a-z]+(?:-[a-z]+)*)`?")
 # Backticked spans — where a citation of a cycle is a reference, not prose.
 BACKTICK_SPAN_RE = re.compile(r"`([^`\n]+)`")
-# Kept in sync with detect_domains.UNREVIEWED_MARKER — duplicating the string is
-# acceptable here: importing cross-slice would couple the validator to a skill.
-UNREVIEWED_MARKER = "<!-- TO BE FILLED IN: only a human knows this -->"
+#: How a DERIVED specialist declares the sections a person still owes.
+#:
+#: This was `<!-- TO BE FILLED IN: only a human knows this -->`, kept "in sync with
+#: detect_domains.UNREVIEWED_MARKER" — and `detect_domains.render_specialist`, the only
+#: producer of that marker, was a second template reachable from nothing but its own
+#: tests. The LIVE renderer is `scaffold_specialists.render`, which marks the same three
+#: sections with a trailing `— OPEN` heading. So this gate keyed on a string no shipped
+#: writer emitted, and every derived specialist passed it by not being detectable.
+UNREVIEWED_SECTION = "— OPEN"
 # `cycle-<name>` inside a code span, with the .md suffix optional.
 #
 # The trailing lookahead excludes a NON-.md extension. `records/cycle-events.jsonl` is
@@ -261,6 +254,7 @@ RULES_REF_RE = re.compile(
 SKILLS_REF_RE = re.compile(
     r"(?<![A-Za-z0-9_/-])(?:\.claude/)?skills/([A-Za-z0-9_][A-Za-z0-9._/-]*\.(?:md|txt|py|sh|json))"
 )
+
 
 
 
@@ -345,13 +339,28 @@ def broken_markdown_links(ecosystem_dir: Path) -> list[tuple[str, str]]:
     wiki_root = wiki_dir(ecosystem_dir) or (ecosystem_dir / WIKI_FALLBACK)
     for md in sorted(ecosystem_dir.rglob("*.md")):
         rel = str(md.relative_to(ecosystem_dir))
-        if any(part in rel for part in (".git/", "study-material/", "__pycache__/")):
+        # `.install-backups/` holds the PREVIOUS install, snapshotted by `install.sh
+        # --force` before it replaced anything. Its links point at a tree that has since
+        # moved, so walking it reports broken cross-references in files nothing reads and
+        # nobody can fix — and under `--strict` that failed the post-install validation of
+        # a perfectly good install. A backup of an old ecosystem is not this ecosystem.
+        if is_excluded_tree(md.relative_to(ecosystem_dir)):
             continue
         try:
             text = md.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
-        for match in LINK_RE.finditer(text):
+        # Links inside a fenced block are SPECIMENS, not references. A skill teaching
+        # Marp image syntax writes `![bg](image.png)` four times in a ```markdown fence;
+        # this gate resolved all four against the skill's directory and reported four
+        # broken links in a file with none. Measured on one consumer: 44 of 46 findings
+        # were specimens in two skills that document a markup language, and a gate whose
+        # output is 96% noise is a gate somebody switches off.
+        #
+        # `squad.markdown` owns the fence regex — five checkers here saw only backticks
+        # while six also saw `~~~`, so the same document scored differently depending on
+        # which one asked.
+        for match in LINK_RE.finditer(prose_only(text)):
             url = match.group(2).strip()
             if url.startswith(_NOT_A_REPO_PATH) or not url:
                 continue
@@ -397,6 +406,39 @@ def _headings(path: Path) -> set[str]:
     return {h.strip().lower() for h in _HEADING_RE.findall(text)}
 
 
+#: Directories that are IN the tree and are not OF it.
+#:
+#: `.install-backups/` and `.patch-backups/` hold the PREVIOUS install, snapshotted by
+#: `install.sh --force` before it replaced anything. Their links point at a tree that has
+#: since moved, so walking them reports broken cross-references in files nothing reads and
+#: nobody can fix — and under `--strict` that failed the post-install validation of a
+#: perfectly good install. A backup of an old ecosystem is not this ecosystem.
+#:
+#: That argument was written once, above the markdown-link walk, and applied there alone.
+#: Two other passes searched the whole tree: `_resolve_cited_doc` below, and the
+#: `bare_rule_name_resolves` check. Measured 2026-09-22 against a real install —
+#:
+#:     rules/README.md cites `domain-routing.txt` as if it were in rules/;
+#:     the file is in .install-backups/20260829T121853/rules/
+#:
+#: — which is the worse of the two possible answers. The file is gone, and the message
+#: says it is misfiled, sending the reader into a snapshot.
+EXCLUDED_TREES = (".git", "study-material", "__pycache__",
+                  ".install-backups", ".patch-backups")
+
+
+def is_excluded_tree(relative: Path) -> bool:
+    """Does this path lie inside a directory that is in the tree but not of it?
+
+    Compared PART BY PART, never as a substring. A file whose own NAME contains one of
+    these words — a rule named `{something}-backups.md`, say — is a document ABOUT
+    backups rather than a backup, and a substring test would silently stop checking it.
+    The braces are this checker's own placeholder form (`:728`), used here so the
+    example does not read as a citation to the pass three functions below.
+    """
+    return any(part in EXCLUDED_TREES for part in relative.parts)
+
+
 def _resolve_cited_doc(name: str, citing: Path, ecosystem_dir: Path) -> Path | None:
     """The document a `§` citation points at, or None when it is not unambiguous.
 
@@ -410,7 +452,8 @@ def _resolve_cited_doc(name: str, citing: Path, ecosystem_dir: Path) -> Path | N
                       ecosystem_dir / "rules" / leaf, citing.parent / leaf):
         if candidate.is_file():
             return candidate
-    matches = [m for m in ecosystem_dir.rglob(leaf) if m.is_file()]
+    matches = [m for m in ecosystem_dir.rglob(leaf)
+               if m.is_file() and not is_excluded_tree(m.relative_to(ecosystem_dir))]
     return matches[0] if len(matches) == 1 else None
 
 
@@ -467,7 +510,7 @@ def _extract_cycle_contract_ref(
     """Find `cycle-{name}` referenced in a SKILL.md's Cycle contract section.
 
     `skill_names` disambiguates a namespace collision: a SKILL directory may itself
-    be named with the cycle- prefix (skills/session-goal/ is the one in this kit), and
+    be named with the cycle- prefix, and
     then every mention of that command in prose looks exactly like a reference to a
     cycle rule file that was never meant to exist. Names are written unbackticked
     throughout this docstring precisely because backticks are what the sibling
@@ -489,76 +532,140 @@ def _extract_cycle_contract_ref(
     return None
 
 
-def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
-    # In standalone layout, the "project root" IS the ecosystem dir; in plugin
-    # layout it is the parent. Use ecosystem_dir for path display so the report
-    # is unambiguous regardless of layout.
-    existing_skills = _list_existing_skills(ecosystem_dir)
-    cycle_rules = _list_cycle_rules(ecosystem_dir)
+@dataclass
+class _Xrefs:
+    """What the nine checks share: the inventories, the manifest, the auxiliary set.
 
-    findings: list[dict[str, Any]] = []
+    A MUTABLE record on purpose. Two of the checks build fields the later ones read —
+    `_check_skills_name_an_existing_cycle` fills `skill_to_cycle` and widens
+    `project_auxiliary` from the install manifest, and the summary reads both. In the
+    single 493-line function that happened through a shared scope, invisibly; here the
+    dependency is a field with a name, and the order the driver runs them in is the
+    order the fields become true.
+    """
 
-    # Markdown links, which this gate carried the machinery for and never ran.
-    # WARN rather than FAIL: a broken link misleads a reader and breaks nothing
-    # that executes, and a gate that blocks a release over a moved document is a
-    # gate somebody routes around.
-    for citing, target in broken_markdown_links(ecosystem_dir):
-        findings.append({
-            "severity": "WARN",
-            "check": "markdown_link_resolves",
-            "file": citing,
-            "target": target,
-            "message": f"{citing} links to `{target}`, which does not exist",
-        })
+    ecosystem_dir: Path
+    existing_skills: set[str]
+    cycle_rules: dict
+    project_auxiliary: set[str]
+    kit_owned: set[str] | None
+    kit_paths: set[str] | None
+    cycle_to_skills: dict
+    skill_to_cycle: dict
+    rules_dir: Path
+    #: Filled by `_check_referenced_rules_exist` and read by
+    #: `_check_bare_filenames_are_here`. Two checks, one listing of `rules/`.
+    existing_rule_files: set[str]
+    #: Filled by `_check_no_orphan_skills` and read by the summary. The summary
+    #: reported it as a fact about the run, and it is a result of one check.
+    orphan_skills: set[str]
 
-    def _rel(p: Path) -> str:
+    def rel(self, path: Path) -> str:
+        """`path` relative to the ecosystem, or unchanged when it lies outside."""
         try:
-            return str(p.relative_to(ecosystem_dir))
+            return str(path.relative_to(self.ecosystem_dir))
         except ValueError:
-            return str(p)
+            return str(path)
 
+
+    def kit_owns(self, path: Path) -> bool:
+        """True when the manifest claims this file, or when there is no manifest.
+
+        The guard is on `kit_paths` — does a manifest exist at all — and NOT on
+        `kit_owned`, which answers a narrower question: does the manifest list any
+        SKILLS. Guarding on the narrow one made a manifest without skill entries read
+        as no manifest, so every file in it came back as the kit's. Caught by a test
+        whose fixture happened to list only a rule.
+
+        A closure inside check 8 until check 11 turned out to need it too — which it
+        already did, by reading a name check 8 happened to leave in scope.
+        """
+        if self.kit_paths is None:
+            return True
+        relative = self.rel(path)
+        if relative.startswith("skills/"):
+            return relative.split("/")[1] in (self.kit_owned or set())
+        # `rules/` and the rest are listed per file, so the raw paths answer directly.
+        # Without this a consumer's own `rules/*.md` read as the kit's, and its broken
+        # references kept failing the kit's own install — measured on three of them.
+        return relative in self.kit_paths
+
+
+def _check_cycle_rules_name_existing_skills(ctx: "_Xrefs") -> list[dict[str, Any]]:
+    """Check 1: each cycle rule references skills that exist
+
+    Extracted from `validate_xrefs`, which measured cyclomatic complexity 91 across
+    493 lines holding nine independent checks. Pure code movement: the block below is
+    the block that was there.
+
+    `ctx` is what the checks SHARE — the skill and rule inventories, the install
+    manifest, the auxiliary set. They shared it by being in one scope, which is also
+    why the function could not be split; naming it makes the sharing visible and lets
+    each check say in its signature that it reads nothing else.
+    """
+    findings: list[dict[str, Any]] = []
     # Check 1: each cycle rule references skills that exist
-    cycle_to_skills: dict[str, set[str]] = {}
-    for cycle_name, cycle_path in cycle_rules.items():
+    # `ctx.cycle_to_skills` is filled in place below: `_check_no_orphan_skills`
+    # reads it, and in the single function it read it by being in the same scope.
+    for cycle_name, cycle_path in ctx.cycle_rules.items():
         content = cycle_path.read_text(encoding="utf-8-sig")
         skills_mentioned = _extract_cycle_phases(content)
-        cycle_to_skills[cycle_name] = skills_mentioned
+        ctx.cycle_to_skills[cycle_name] = skills_mentioned
 
         for skill in skills_mentioned:
-            if skill not in existing_skills:
+            if skill not in ctx.existing_skills:
                 findings.append({
                     "severity": "WARN",
                     "check": "cycle_rule_references_existing_skill",
                     "cycle": cycle_name,
                     "missing_skill": skill,
-                    "message": f"{_rel(cycle_path)} references skill `{skill}` which does not exist at skills/{skill}/",
+                    "message": f"{ctx.rel(cycle_path)} references skill `{skill}` which does not exist at skills/{skill}/",
                 })
+    return findings
 
+
+def _check_skills_name_an_existing_cycle(ctx: "_Xrefs") -> list[dict[str, Any]]:
+    """Check 2: each SKILL.md points to an existing cycle
+
+    Extracted from `validate_xrefs`, which measured cyclomatic complexity 91 across
+    493 lines holding nine independent checks. Pure code movement: the block below is
+    the block that was there.
+
+    `ctx` is what the checks SHARE — the skill and rule inventories, the install
+    manifest, the auxiliary set. They shared it by being in one scope, which is also
+    why the function could not be split; naming it makes the sharing visible and lets
+    each check say in its signature that it reads nothing else.
+    """
+    findings: list[dict[str, Any]] = []
     # Check 2: each SKILL.md points to an existing cycle
     # The exemption applies to BOTH checks. `_is_auto_generated`'s docstring records
     # why: the first version exempted only `no_orphan_skills` and left this one
     # enforcing — half an exemption, which traded 26 WARN for 3 and looked like a fix.
-    project_auxiliary = _declared_auxiliary_skills(ecosystem_dir)
+    # The auxiliary set is read once, when the record is built. This re-read it and
+    # threw the answer away; the widening below is what has to survive, and it does
+    # by landing on the record both this check and the orphan check consult. Half an
+    # exemption is how this went wrong before.
 
     # A skill the install manifest does not claim is the project's, and the kit has no
     # standing to demand a cycle contract from it. Folded into the SAME variable both
     # checks already read, for the reason the comment above records: the last time an
     # exemption reached one check and not the other, it traded 26 WARN for 3 and looked
     # like a fix.
-    kit_owned = _kit_owned_skills(ecosystem_dir)
-    kit_paths = _kit_manifest_paths(ecosystem_dir)
-    if kit_owned is not None:
-        project_auxiliary = project_auxiliary | (existing_skills - kit_owned)
+    # The manifest is read ONCE, when the record is built. These two lines re-read it
+    # and threw the answer away; the widening below is the part that had to survive,
+    # and it survives by landing on the record both this check and the orphan check
+    # read. Half an exemption is how this went wrong before.
+    if ctx.kit_owned is not None:
+        ctx.project_auxiliary = ctx.project_auxiliary | (ctx.existing_skills - ctx.kit_owned)
 
-    skill_to_cycle: dict[str, str | None] = {}
-    for skill in existing_skills:
-        skill_md = ecosystem_dir / "skills" / skill / "SKILL.md"
+    for skill in ctx.existing_skills:
+        skill_md = ctx.ecosystem_dir / "skills" / skill / "SKILL.md"
         content = skill_md.read_text(encoding="utf-8-sig")
-        cycle_ref = _extract_cycle_contract_ref(content, existing_skills)
-        skill_to_cycle[skill] = cycle_ref
+        cycle_ref = _extract_cycle_contract_ref(content, ctx.existing_skills)
+        ctx.skill_to_cycle[skill] = cycle_ref
 
         if (cycle_ref is None and skill not in AUXILIARY_SKILLS
-                and skill not in project_auxiliary and not _is_auto_generated(skill)):
+                and skill not in ctx.project_auxiliary and not is_cycle_generated_skill(skill)):
             findings.append({
                 "severity": "WARN",
                 "check": "skill_has_cycle_contract",
@@ -567,7 +674,7 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
             })
         elif cycle_ref is not None:
             expected_cycle = f"cycle-{cycle_ref}"
-            if expected_cycle not in cycle_rules:
+            if expected_cycle not in ctx.cycle_rules:
                 findings.append({
                     "severity": "FAIL",
                     "check": "skill_cycle_contract_resolves",
@@ -575,9 +682,24 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
                     "cycle_referenced": expected_cycle,
                     "message": f"skills/{skill}/SKILL.md references cycle-{cycle_ref}.md but it does not exist",
                 })
+    return findings
 
+
+def _check_cross_references_resolve(ctx: "_Xrefs") -> list[dict[str, Any]]:
+    """Check 3: cycle rule cross-references point to existing files
+
+    Extracted from `validate_xrefs`, which measured cyclomatic complexity 91 across
+    493 lines holding nine independent checks. Pure code movement: the block below is
+    the block that was there.
+
+    `ctx` is what the checks SHARE — the skill and rule inventories, the install
+    manifest, the auxiliary set. They shared it by being in one scope, which is also
+    why the function could not be split; naming it makes the sharing visible and lets
+    each check say in its signature that it reads nothing else.
+    """
+    findings: list[dict[str, Any]] = []
     # Check 3: cycle rule cross-references point to existing files
-    for cycle_name, cycle_path in cycle_rules.items():
+    for cycle_name, cycle_path in ctx.cycle_rules.items():
         content = cycle_path.read_text(encoding="utf-8-sig")
         # Cross-references section
         xref_match = re.search(r"## Cross-references.*?(?=^##\s+|\Z)", content, re.MULTILINE | re.DOTALL)
@@ -586,7 +708,7 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
                 "severity": "WARN",
                 "check": "cycle_has_xref_section",
                 "cycle": cycle_name,
-                "message": f"{_rel(cycle_path)} has no `Cross-references` section",
+                "message": f"{ctx.rel(cycle_path)} has no `Cross-references` section",
             })
             continue
 
@@ -609,11 +731,11 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
             else:
                 # Strip a leading .claude/ if present (plugin-style citation)
                 normalized = ref.removeprefix(".claude/")
-                candidates_to_try.append(ecosystem_dir / normalized)
+                candidates_to_try.append(ctx.ecosystem_dir / normalized)
                 # If path starts with a skill name (e.g., plan-confidence/templates/...), try skills/
                 first_segment = normalized.split("/", 1)[0]
-                if (ecosystem_dir / "skills" / first_segment).exists():
-                    candidates_to_try.append(ecosystem_dir / "skills" / normalized)
+                if (ctx.ecosystem_dir / "skills" / first_segment).exists():
+                    candidates_to_try.append(ctx.ecosystem_dir / "skills" / normalized)
 
             if not any(c.exists() for c in candidates_to_try):
                 findings.append({
@@ -621,9 +743,24 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
                     "check": "cycle_xref_file_exists",
                     "cycle": cycle_name,
                     "broken_ref": ref,
-                    "message": f"{_rel(cycle_path)} references `{ref}` which does not exist",
+                    "message": f"{ctx.rel(cycle_path)} references `{ref}` which does not exist",
                 })
+    return findings
 
+
+def _check_referenced_rules_exist(ctx: "_Xrefs") -> list[dict[str, Any]]:
+    """Check 7: rules referenced from SKILL.md bodies + scripts must exist on disk.
+
+    Extracted from `validate_xrefs`, which measured cyclomatic complexity 91 across
+    493 lines holding nine independent checks. Pure code movement: the block below is
+    the block that was there.
+
+    `ctx` is what the checks SHARE — the skill and rule inventories, the install
+    manifest, the auxiliary set. They shared it by being in one scope, which is also
+    why the function could not be split; naming it makes the sharing visible and lets
+    each check say in its signature that it reads nothing else.
+    """
+    findings: list[dict[str, Any]] = []
     # Check 7: rules referenced from SKILL.md bodies + scripts must exist on disk.
     #
     # `rules/` was the only rooted path this check knew, and on 2026-09-01 that
@@ -634,8 +771,23 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
     # Check 3 does resolve arbitrary paths — but only inside a cycle rule's
     # `## Cross-references` section. A path named anywhere else, in any SKILL.md,
     # was nobody's job.
-    rules_dir = ecosystem_dir / "rules"
-    existing_rule_files: set[str] = {p.name for p in rules_dir.glob("*")} if rules_dir.exists() else set()
+    ctx.rules_dir = ctx.ecosystem_dir / "rules"
+    ctx.existing_rule_files = ({p.name for p in ctx.rules_dir.glob("*")}
+                               if ctx.rules_dir.exists() else set())
+
+        #: Rule-shaped filenames a document may name without the file existing.
+    #:
+    #: `domain-routing.txt` lived under `rules/` until `squad.paths` moved the write
+    #: destination to the project's write root. The prose that explains the move names
+    #: the old path, and so do the fallback readers that keep a pre-move install
+    #: working — both history, neither a live pointer. Demanding the old path exist
+    #: forces the kit to keep SHIPPING a file nothing writes to, which is exactly what
+    #: it was still doing three weeks later.
+    #:
+    #: Derived from `squad.paths`, which owns where data lives and therefore owns which
+    #: places are former. A hand-kept second list here is the drift this kit keeps
+    #: finding in itself.
+    _RETIRED_RULE_PATHS = frozenset({ROUTING_TABLE}) if LEGACY_ROUTING_ROOTS else frozenset()
 
     def _scan_for_rule_refs(path: Path) -> None:
         try:
@@ -644,43 +796,69 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
             return
         for m in RULES_REF_RE.finditer(content):
             rule_name = m.group(1)
-            if rule_name in existing_rule_files:
+            if rule_name in ctx.existing_rule_files:
+                continue
+            if rule_name in _RETIRED_RULE_PATHS:
+                # A file that MOVED is still named in the prose that explains the move,
+                # and in the fallback readers that keep an old install working. Both are
+                # history, not a live pointer, and demanding the old path exist forces
+                # the kit to keep shipping a file nothing writes to — which is how
+                # `rules/domain-routing.txt` was still travelling to every consumer
+                # three weeks after `squad.paths` stopped writing there.
+                #
+                # The list is not this gate's to invent: `squad.paths` owns where data
+                # lives, so it owns which of those places are retired.
                 continue
             findings.append({
                 "severity": "FAIL",
                 "check": "rules_reference_resolves",
-                "source": _rel(path),
+                "source": ctx.rel(path),
                 "missing_rule": rule_name,
-                "message": f"{_rel(path)} references `rules/{rule_name}` which does not exist",
+                "message": f"{ctx.rel(path)} references `rules/{rule_name}` which does not exist",
             })
         for m in SKILLS_REF_RE.finditer(content):
-            target = ecosystem_dir / "skills" / m.group(1)
+            target = ctx.ecosystem_dir / "skills" / m.group(1)
             if target.exists():
                 continue
             findings.append({
                 "severity": "FAIL",
                 "check": "skills_reference_resolves",
-                "source": _rel(path),
+                "source": ctx.rel(path),
                 "missing_path": f"skills/{m.group(1)}",
-                "message": (f"{_rel(path)} references `skills/{m.group(1)}` "
+                "message": (f"{ctx.rel(path)} references `skills/{m.group(1)}` "
                             f"which does not exist"),
             })
 
-    for skill_md in (ecosystem_dir / "skills").rglob("SKILL.md"):
+    for skill_md in (ctx.ecosystem_dir / "skills").rglob("SKILL.md"):
         if skill_md.is_file():
             _scan_for_rule_refs(skill_md)
     # A rule citing another rule was the blind spot: the scan covered skills and
     # scripts and skipped all of `rules/`, which is where the normative anchors live.
-    for rule_md in rules_dir.glob("*.md") if rules_dir.exists() else []:
+    for rule_md in ctx.rules_dir.glob("*.md") if ctx.rules_dir.exists() else []:
         if rule_md.is_file():
             _scan_for_rule_refs(rule_md)
-    for py in (ecosystem_dir / "skills").rglob("*.py"):
+    for py in (ctx.ecosystem_dir / "skills").rglob("*.py"):
         if py.is_file() and "__pycache__" not in py.parts:
             _scan_for_rule_refs(py)
-    for py in (ecosystem_dir / "mechanisms").rglob("*.py"):
+    for py in (ctx.ecosystem_dir / "mechanisms").rglob("*.py"):
         if py.is_file() and "__pycache__" not in py.parts:
             _scan_for_rule_refs(py)
+    return findings
 
+
+def _check_cited_cycles_resolve(ctx: "_Xrefs") -> list[dict[str, Any]]:
+    """Check 8: `cycle-<name>` cited in code/rules must resolve to a cycle rule
+
+    Extracted from `validate_xrefs`, which measured cyclomatic complexity 91 across
+    493 lines holding nine independent checks. Pure code movement: the block below is
+    the block that was there.
+
+    `ctx` is what the checks SHARE — the skill and rule inventories, the install
+    manifest, the auxiliary set. They shared it by being in one scope, which is also
+    why the function could not be split; naming it makes the sharing visible and lets
+    each check say in its signature that it reads nothing else.
+    """
+    findings: list[dict[str, Any]] = []
     # Check 8: `cycle-<name>` cited in code/rules must resolve to a cycle rule
     # (`rules/cycle-<name>.md`) or to a skill (`skills/cycle-<name>/`).
     # Why: `rules/cycle-acceptance.md` and `rules/cycle-release.md` anchored the
@@ -690,28 +868,9 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
     # counts — loose prose ("a cycle-level decision") would produce noise while
     # naming nothing.
     # Existence on disk, not the cycle list: `cycle-rule-schema.md` is meta
-    # documentation and stays OUT of `cycle_rules` on purpose — but citing it is
+    # documentation and stays OUT of `ctx.cycle_rules` on purpose — but citing it is
     # legitimate, the file is there.
-    cycle_skill_names = {s for s in existing_skills if s.startswith("cycle-")}
-
-    def _kit_owned(path: Path) -> bool:
-        """True when the manifest claims this file, or when there is no manifest.
-
-        The guard is on `kit_paths` — does a manifest exist at all — and not on
-        `kit_owned`, which answers a narrower question: does the manifest list any
-        SKILLS. Guarding on the narrow one made a manifest without skill entries read
-        as no manifest, so every file in it came back as the kit's. Caught by a test
-        whose fixture happened to list only a rule.
-        """
-        if kit_paths is None:
-            return True
-        rel = _rel(path)
-        if rel.startswith("skills/"):
-            return rel.split("/")[1] in (kit_owned or set())
-        # `rules/` and the rest are listed per file, so the raw paths answer directly.
-        # Without this a consumer's own `rules/*.md` read as the kit's, and its broken
-        # references kept failing the kit's own install — measured on three of them.
-        return rel in kit_paths
+    cycle_skill_names = {s for s in ctx.existing_skills if s.startswith("cycle-")}
 
     def _scan_for_cycle_refs(path: Path) -> None:
         try:
@@ -721,7 +880,7 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
         for code_span in BACKTICK_SPAN_RE.findall(content):
             for name in CYCLE_NAME_RE.findall(code_span):
                 cycle_id = f"cycle-{name}"
-                if (rules_dir / f"{cycle_id}.md").exists() or cycle_id in cycle_skill_names:
+                if (ctx.rules_dir / f"{cycle_id}.md").exists() or cycle_id in cycle_skill_names:
                     continue
                 # A broken reference is a real defect wherever it sits, so it is
                 # always reported. But its SEVERITY depends on who wrote the file:
@@ -737,42 +896,57 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
                 # (The paths are described rather than quoted: this checker also
                 # verifies that a backticked path exists, and citing a consumer's
                 # file here would fail the kit's own sweep.)
-                own = _kit_owned(path)
+                own = ctx.kit_owns(path)
                 findings.append({
                     "severity": "FAIL" if own else "WARN",
                     "owner": "kit" if own else "project",
                     "check": "cycle_reference_resolves",
-                    "source": _rel(path),
+                    "source": ctx.rel(path),
                     "broken_ref": cycle_id,
-                    "message": (f"{_rel(path)} references `{cycle_id}` — no rules/{cycle_id}.md "
+                    "message": (f"{ctx.rel(path)} references `{cycle_id}` — no rules/{cycle_id}.md "
                                 f"and no skills/{cycle_id}/ exists"
                                 + ("" if own else ". This file is the project's, not the kit's; "
                                    "the reference may belong to the sibling kit")),
                 })
 
-    for rule_md in rules_dir.glob("*.md") if rules_dir.exists() else []:
+    for rule_md in ctx.rules_dir.glob("*.md") if ctx.rules_dir.exists() else []:
         if rule_md.is_file():
             _scan_for_cycle_refs(rule_md)
-    for skill_md in (ecosystem_dir / "skills").rglob("SKILL.md"):
+    for skill_md in (ctx.ecosystem_dir / "skills").rglob("SKILL.md"):
         if skill_md.is_file():
             _scan_for_cycle_refs(skill_md)
+    return findings
 
+
+def _check_derived_specialists_are_reviewed(ctx: "_Xrefs") -> list[dict[str, Any]]:
+    """Check 9: a DERIVED specialist nobody reviewed.
+
+    Extracted from `validate_xrefs`, which measured cyclomatic complexity 91 across
+    493 lines holding nine independent checks. Pure code movement: the block below is
+    the block that was there.
+
+    `ctx` is what the checks SHARE — the skill and rule inventories, the install
+    manifest, the auxiliary set. They shared it by being in one scope, which is also
+    why the function could not be split; naming it makes the sharing visible and lets
+    each check say in its signature that it reads nothing else.
+    """
+    findings: list[dict[str, Any]] = []
     # Check 9: a DERIVED specialist nobody reviewed.
     # `detect_domains.py` generates a skeleton so the route stops being BROKEN, with
     # the judgement sections (commands, real findings, false positives, invariants)
     # empty and marked. A silent skeleton is worse than a broken route: the broken
     # route warns, and this one looks like a finished specialist. WARN while the
     # marker exists — it disappears on its own when someone fills it in.
-    agents_dir = ecosystem_dir / "agents"
+    agents_dir = ctx.ecosystem_dir / "agents"
     if agents_dir.is_dir():
         for agent_md in sorted(agents_dir.glob("*.md")):
             try:
                 body = agent_md.read_text(encoding="utf-8-sig")
             except (OSError, UnicodeDecodeError):
                 continue
-            if UNREVIEWED_MARKER not in body:
+            if UNREVIEWED_SECTION not in body:
                 continue
-            pending = body.count(UNREVIEWED_MARKER)
+            pending = body.count(UNREVIEWED_SECTION)
             findings.append({
                 "severity": "WARN",
                 "check": "specialist_unreviewed",
@@ -780,7 +954,22 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
                 "message": f"agents/{agent_md.name} is a derived skeleton with {pending} "
                            "section(s) left to fill — the routing works, the judgement does not",
             })
+    return findings
 
+
+def _check_section_citations_resolve(ctx: "_Xrefs") -> list[dict[str, Any]]:
+    """Check 10: a `file.md § Section` citation resolves to a heading that exists.
+
+    Extracted from `validate_xrefs`, which measured cyclomatic complexity 91 across
+    493 lines holding nine independent checks. Pure code movement: the block below is
+    the block that was there.
+
+    `ctx` is what the checks SHARE — the skill and rule inventories, the install
+    manifest, the auxiliary set. They shared it by being in one scope, which is also
+    why the function could not be split; naming it makes the sharing visible and lets
+    each check say in its signature that it reads nothing else.
+    """
+    findings: list[dict[str, Any]] = []
     # Check 10: a `file.md § Section` citation resolves to a heading that exists.
     #
     # Checks 3 and 7 answer "does the FILE exist". Nothing asked whether the SECTION
@@ -800,8 +989,8 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
     # A citation that survives the rename of what it points at is worse than a
     # missing one: the reader goes looking, finds a document that plainly exists,
     # and concludes the section was removed on purpose.
-    for doc in sorted(list(ecosystem_dir.glob("skills/**/*.md"))
-                      + list(ecosystem_dir.glob("rules/*.md"))):
+    for doc in sorted(list(ctx.ecosystem_dir.glob("skills/**/*.md"))
+                      + list(ctx.ecosystem_dir.glob("rules/*.md"))):
         try:
             content = doc.read_text(encoding="utf-8", errors="replace")
         except OSError:
@@ -810,7 +999,7 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
             section = " ".join(cited_section.split()).strip().lower()
             if not section or len(section) < 3 or _NOT_A_SECTION.search(section):
                 continue
-            target = _resolve_cited_doc(cited_name, doc, ecosystem_dir)
+            target = _resolve_cited_doc(cited_name, doc, ctx.ecosystem_dir)
             if target is None:
                 continue
             headings = _headings(target)
@@ -819,13 +1008,28 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
             findings.append({
                 "severity": "WARN",
                 "check": "cited_section_does_not_exist",
-                "document": _rel(doc),
+                "document": ctx.rel(doc),
                 "target": cited_name,
                 "section": cited_section.strip(),
-                "message": (f"{_rel(doc)} cites `{cited_name} § {cited_section.strip()}` "
+                "message": (f"{ctx.rel(doc)} cites `{cited_name} § {cited_section.strip()}` "
                             f"and that document has no such heading"),
             })
+    return findings
 
+
+def _check_bare_filenames_are_here(ctx: "_Xrefs") -> list[dict[str, Any]]:
+    """Check 11: inside `rules/`, a bare filename is a claim that the file is HERE.
+
+    Extracted from `validate_xrefs`, which measured cyclomatic complexity 91 across
+    493 lines holding nine independent checks. Pure code movement: the block below is
+    the block that was there.
+
+    `ctx` is what the checks SHARE — the skill and rule inventories, the install
+    manifest, the auxiliary set. They shared it by being in one scope, which is also
+    why the function could not be split; naming it makes the sharing visible and lets
+    each check say in its signature that it reads nothing else.
+    """
+    findings: list[dict[str, Any]] = []
     # Check 11: inside `rules/`, a bare filename is a claim that the file is HERE.
     #
     # Check 7 needs the literal `rules/` prefix, and the one document that never uses
@@ -862,9 +1066,9 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
     _BARE_RULE_NAME_RE = re.compile(r"`([a-z0-9][a-z0-9._-]*\.(?:md|txt))`")
     #: What the installer says it brought. None in the kit's own checkout, where the
     #: whole tree is the kit's and a collision cannot be the consumer's.
-    kit_files = _kit_shipped_paths(ecosystem_dir)
-    if rules_dir.is_dir():
-        for rule_md in sorted(rules_dir.glob("*.md")):
+    kit_files = _kit_shipped_paths(ctx.ecosystem_dir)
+    if ctx.rules_dir.is_dir():
+        for rule_md in sorted(ctx.rules_dir.glob("*.md")):
             try:
                 body = rule_md.read_text(encoding="utf-8-sig")
             except (OSError, UnicodeDecodeError):
@@ -872,19 +1076,20 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
             is_inventory = rule_md.name == "README.md"
             for m in _BARE_RULE_NAME_RE.finditer(body):
                 name = m.group(1)
-                if name == rule_md.name or name in existing_rule_files:
+                if name == rule_md.name or name in ctx.existing_rule_files:
                     continue
                 # The document located it itself — no reader was misdirected.
                 if re.search(rf"[A-Za-z0-9_/-]+/{re.escape(name)}", body):
                     continue
-                elsewhere = [p for p in ecosystem_dir.rglob(name)
-                             if p.is_file() and "__pycache__" not in p.parts]
+                elsewhere = [p for p in ctx.ecosystem_dir.rglob(name)
+                             if p.is_file()
+                             and not is_excluded_tree(p.relative_to(ctx.ecosystem_dir))]
                 if not elsewhere and not is_inventory:
                     continue
                 # Same split as Check 8, for the reason measured there: a consumer may
                 # add rules of its own, and one of them citing a file the kit does not
                 # ship is worth reporting without calling the install broken.
-                own = _kit_owned(rule_md)
+                own = ctx.kit_owns(rule_md)
 
                 #: A NAME COLLISION IS NOT A MISDIRECTION, and a consumer's filename
                 #: must not fail a kit gate.
@@ -905,27 +1110,42 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
                 #: consumer's tree colliding with the kit's vocabulary — reported, and
                 #: reported as theirs, never as a failure of the install.
                 if elsewhere and own and kit_files is not None:
-                    if not any(_rel(match) in kit_files for match in elsewhere):
+                    if not any(ctx.rel(match) in kit_files for match in elsewhere):
                         own = False
                 message = (
-                    f"{_rel(rule_md)} cites `{name}` as if it were in rules/; "
-                    f"the file is in {(_rel(elsewhere[0].parent) or '.')}/"
+                    f"{ctx.rel(rule_md)} cites `{name}` as if it were in rules/; "
+                    f"the file is in {(ctx.rel(elsewhere[0].parent) or '.')}/"
                     if elsewhere else
-                    f"{_rel(rule_md)} inventories `{name}`, which exists nowhere "
+                    f"{ctx.rel(rule_md)} inventories `{name}`, which exists nowhere "
                     "in the ecosystem"
                 )
                 findings.append({
                     "severity": "FAIL" if own else "WARN",
                     "owner": "kit" if own else "project",
                     "check": "bare_rule_name_resolves",
-                    "source": _rel(rule_md),
+                    "source": ctx.rel(rule_md),
                     "missing_rule": name,
                     "message": message,
                 })
+    return findings
 
+
+def _check_no_orphan_skills(ctx: "_Xrefs") -> list[dict[str, Any]]:
+    """Check 4: orphan skills (not in any cycle, not auxiliary)
+
+    Extracted from `validate_xrefs`, which measured cyclomatic complexity 91 across
+    493 lines holding nine independent checks. Pure code movement: the block below is
+    the block that was there.
+
+    `ctx` is what the checks SHARE — the skill and rule inventories, the install
+    manifest, the auxiliary set. They shared it by being in one scope, which is also
+    why the function could not be split; naming it makes the sharing visible and lets
+    each check say in its signature that it reads nothing else.
+    """
+    findings: list[dict[str, Any]] = []
     # Check 4: orphan skills (not in any cycle, not auxiliary)
     skills_in_cycles: set[str] = set()
-    for skills_set in cycle_to_skills.values():
+    for skills_set in ctx.cycle_to_skills.values():
         skills_in_cycles.update(skills_set)
 
     # Skills AUTO-GENERATED by the cycles themselves are phases of no cycle: they are
@@ -936,10 +1156,10 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
     # started failing --strict, and the failure surfaced far from its cause.
     # Measured 2026-08-03: the three monitored consumers failed in exactly this way
     # after running review, with 26 WARN and no real defect.
-    auto_generated = {s for s in existing_skills if _is_auto_generated(s)}
-    orphan_skills = (existing_skills - skills_in_cycles - AUXILIARY_SKILLS
-                     - project_auxiliary - auto_generated)
-    for skill in sorted(orphan_skills):
+    auto_generated = {s for s in ctx.existing_skills if is_cycle_generated_skill(s)}
+    ctx.orphan_skills = (ctx.existing_skills - skills_in_cycles - AUXILIARY_SKILLS
+                         - ctx.project_auxiliary - auto_generated)
+    for skill in sorted(ctx.orphan_skills):
         findings.append({
             "severity": "WARN",
             "check": "no_orphan_skills",
@@ -948,6 +1168,54 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
         })
 
     # Aggregate
+    return findings
+
+
+def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
+    # In standalone layout, the "project root" IS the ecosystem dir; in plugin
+    # layout it is the parent. Use ecosystem_dir for path display so the report
+    # is unambiguous regardless of layout.
+    existing_skills = _list_existing_skills(ecosystem_dir)
+    cycle_rules = _list_cycle_rules(ecosystem_dir)
+
+    findings: list[dict[str, Any]] = []
+
+    # Markdown links, which this gate carried the machinery for and never ran.
+    # WARN rather than FAIL: a broken link misleads a reader and breaks nothing
+    # that executes, and a gate that blocks a release over a moved document is a
+    # gate somebody routes around.
+    for citing, target in broken_markdown_links(ecosystem_dir):
+        findings.append({
+            "severity": "WARN",
+            "check": "markdown_link_resolves",
+            "file": citing,
+            "target": target,
+            "message": f"{citing} links to `{target}`, which does not exist",
+        })
+
+    ctx = _Xrefs(
+        ecosystem_dir=ecosystem_dir,
+        existing_skills=existing_skills,
+        cycle_rules=cycle_rules,
+        project_auxiliary=_declared_auxiliary_skills(ecosystem_dir),
+        kit_owned=_kit_owned_skills(ecosystem_dir),
+        kit_paths=_kit_manifest_paths(ecosystem_dir),
+        cycle_to_skills={},
+        skill_to_cycle={},
+        rules_dir=ecosystem_dir / "rules",
+        existing_rule_files=set(),
+        orphan_skills=set(),
+    )
+
+    findings.extend(_check_cycle_rules_name_existing_skills(ctx))
+    findings.extend(_check_skills_name_an_existing_cycle(ctx))
+    findings.extend(_check_cross_references_resolve(ctx))
+    findings.extend(_check_referenced_rules_exist(ctx))
+    findings.extend(_check_cited_cycles_resolve(ctx))
+    findings.extend(_check_derived_specialists_are_reviewed(ctx))
+    findings.extend(_check_section_citations_resolve(ctx))
+    findings.extend(_check_bare_filenames_are_here(ctx))
+    findings.extend(_check_no_orphan_skills(ctx))
     severity_counts = defaultdict(int)
     for f in findings:
         severity_counts[f["severity"]] += 1
@@ -971,10 +1239,13 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
     return {
         "ecosystem_dir": str(ecosystem_dir),
         "skills_total": len(existing_skills),
-        "skills_auxiliary": sorted(AUXILIARY_SKILLS & existing_skills),
-        "skills_orphan": sorted(orphan_skills),
+        #: The other half of the population. `skills_total` alone cannot tell a tree with
+        #: no rules from one whose rules all resolve.
+        "cycle_rules_total": len(cycle_rules),
+        "skills_auxiliary": sorted(AUXILIARY_SKILLS & ctx.existing_skills),
+        "skills_orphan": sorted(ctx.orphan_skills),
         "cycle_rules": sorted(cycle_rules.keys()),
-        "skill_to_cycle": skill_to_cycle,
+        "skill_to_cycle": ctx.skill_to_cycle,
         "findings": findings,
         "severity_counts": dict(severity_counts),
         "overall": overall,
@@ -1004,11 +1275,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Validate cross-references in the planning ecosystem.")
     parser.add_argument("--strict", action="store_true", help="Exit 1 on WARN too (default: exit 1 only on FAIL)")
     parser.add_argument("--json", action="store_true", help="Output JSON instead of human-readable summary")
-    parser.add_argument("--ecosystem-dir", type=Path, default=None, help="Override ecosystem directory detection")
+    parser.add_argument(
+        "--root", "--ecosystem-dir", dest="root", type=Path, default=None, help="Override ecosystem directory detection")
     parser.add_argument("--claude-dir", type=Path, default=None, help="(deprecated alias for --ecosystem-dir)")
     args = parser.parse_args()
 
-    override = args.ecosystem_dir or args.claude_dir
+    override = args.root or args.claude_dir
     if override:
         ecosystem_dir = override.resolve()
     else:
@@ -1021,8 +1293,7 @@ def main() -> int:
         # 3, 0 and 11 findings -- the PASS was the kit's own repo validating itself.
         # A validator that audits the wrong target is worse than none, because it
         # produces unfounded confidence. The script's own path is the only anchor
-        # that does not
-        # depende de quem chamou.
+        # that does not depend on who called it.
         ecosystem_dir = _find_ecosystem_dir(Path(__file__).resolve().parents[2])
         if ecosystem_dir is None:
             ecosystem_dir = _find_ecosystem_dir(Path.cwd())
@@ -1040,6 +1311,17 @@ def main() -> int:
         print(json.dumps(result, indent=2, default=str))
     else:
         print(_render_summary(result))
+
+    # `_list_existing_skills` returns an empty set when `skills/` is absent and
+    # `_list_cycle_rules` an empty dict when `rules/` is. Every check in `validate_xrefs`
+    # then iterates an empty population, `severity_counts` stays empty, `overall` computes
+    # to PASS and this returned 0 — a cross-reference validator reporting that every
+    # reference resolves, over a tree holding no references at all.
+    if not result["skills_total"] and not result.get("cycle_rules_total"):
+        print("UNCHECKED: this tree has no skills/ and no rules/, so there was nothing "
+              "to cross-reference. An ecosystem this validator cannot see is not an "
+              "ecosystem it can vouch for.", file=sys.stderr)
+        return 2
 
     return 0 if result["overall"] == "PASS" else 1
 

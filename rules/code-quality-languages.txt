@@ -1,3 +1,4 @@
+# rule-id: SQ-CFG-02
 # Languages enabled for /code-quality and post-edit-check.py.
 #
 # Format:  LANGUAGE | MANIFEST-MARKER | STATUS | NOTES

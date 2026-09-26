@@ -50,7 +50,7 @@ def _steps() -> list[dict]:
 def _step_running(fragment: str) -> dict:
     matches = [s for s in _steps() if fragment in (s.get("run") or "")]
     assert matches, f"no CI step runs {fragment!r} — the gate left the workflow"
-    assert len(matches) == 1, f"{fragment!r} aparece em {len(matches)} passos; esperado 1"
+    assert len(matches) == 1, f"{fragment!r} appears in {len(matches)} steps; expected 1"
     return matches[0]
 
 
@@ -75,7 +75,7 @@ def broken_kit(versioned_kit: Path, tmp_path: Path) -> Path:
 def test_ci_xref_step_rejects_a_broken_reference(broken_kit: Path):
     """CI's cross-reference command, run against a broken tree, must fail."""
     run = _step_running("check_xrefs.py")["run"].strip()
-    proc = subprocess.run(run, shell=True, cwd=broken_kit, capture_output=True, text=True)  # noqa: PLW1510
+    proc = subprocess.run(run, shell=True, cwd=broken_kit, capture_output=True, text=True, check=False)
     assert proc.returncode != 0, (
         "CI's cross-reference step approved a broken reference.\n"
         f"command: {run}\n"
@@ -86,7 +86,7 @@ def test_ci_xref_step_rejects_a_broken_reference(broken_kit: Path):
 def test_ci_xref_step_accepts_the_healthy_kit(versioned_kit: Path):
     """And it must approve the intact tree — otherwise the test above would pass by accident."""
     run = _step_running("check_xrefs.py")["run"].strip()
-    proc = subprocess.run(run, shell=True, cwd=versioned_kit, capture_output=True, text=True)  # noqa: PLW1510
+    proc = subprocess.run(run, shell=True, cwd=versioned_kit, capture_output=True, text=True, check=False)
     assert proc.returncode == 0, (
         f"CI fails the intact kit:\n{proc.stdout}\n{proc.stderr}"
     )
@@ -177,8 +177,8 @@ def test_the_documented_dispatch_passes_what_the_scheduler_can_use() -> None:
     workflow = (Path(__file__).resolve().parents[1] / "mechanisms" / "fleet"
                 / "pipeline_workflow.js").read_text(encoding="utf-8")
 
-    assert "args: {selection:" in skill, \
-        "the documented dispatch still names a single key of the selection"
+    assert "args: {selection:" in skill, (  # prose-test: an operator copies this dispatch verbatim; the literal IS what ships
+        "the documented dispatch still names a single key of the selection")
     for key in ("awaiting_plan", "in_flight"):
         assert key in workflow, f"the workflow cannot read {key}, so nothing can pass it"
         assert key in skill, f"the procedure does not mention {key}"
@@ -208,3 +208,84 @@ def test_the_dispatch_does_not_promise_a_file_it_cannot_check() -> None:
         "the dispatch still asserts a file nothing checked"
     assert "STOP and report" in dispatch, \
         "the agent is not told what to do when the file is absent"
+
+
+# ── the jobs that answer a question the others do not ────────────────────────
+#
+# Three findings, one shape: the pipeline ran analysis and never asked a security
+# question, never checked formatting, and produced nothing a machine could read.
+# `ruff check` with this repository's rule set and `shellcheck --severity=warning`
+# are correctness tools — neither looks for a hardcoded credential, an unpinned
+# action or a dependency with a known CVE.
+
+
+def _jobs() -> dict:
+    import yaml
+    return yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
+
+
+def _job_text(job: str) -> str:
+    """Every `run:` and `uses:` in ONE job, as one searchable string.
+
+    Named apart from `_steps()` above, which returns the steps of the whole workflow.
+    """
+    parts: list[str] = []
+    for step in _jobs()[job].get("steps", []):
+        parts.append(str(step.get("run", "")))
+        parts.append(str(step.get("uses", "")))
+        parts.append(str(step.get("name", "")))
+    return "\n".join(parts)
+
+
+def test_a_dedicated_security_job_exists() -> None:
+    assert "security" in _jobs(), (
+        "no job asks a security question; the analysis steps check correctness")
+
+
+def test_the_security_job_scans_code_and_dependencies() -> None:
+    steps = _job_text("security")
+
+    assert "bandit" in steps, "no static security review"
+    assert "pip-audit" in steps, "no dependency audit"
+    assert "--select S" in steps, "ruff's security rule family is not run on its own"
+
+
+def test_the_security_job_can_see_history() -> None:
+    """A credential removed in the last commit is still in the pack."""
+    checkout = next(s for s in _jobs()["security"]["steps"]
+                    if str(s.get("uses", "")).startswith("actions/checkout"))
+
+    assert checkout.get("with", {}).get("fetch-depth") == 0
+
+
+def test_the_pipeline_produces_a_machine_readable_report() -> None:
+    steps = _job_text("security")
+
+    assert "upload-artifact" in steps, (
+        "every question of the form 'did the finding count go up' means re-reading a "
+        "log by eye")
+
+
+def test_formatting_is_checked_separately_from_the_lint() -> None:
+    """A job failing for an import order and one failing for a missing space are
+    different problems and should be different lines in the summary."""
+    assert "formatting" in _jobs()
+
+    steps = _job_text("formatting")
+    assert "ruff format" in steps
+    assert "--diff" in steps, "CI must not rewrite the tree it is measuring"
+
+
+def test_the_rule_set_declares_an_owner() -> None:
+    """A change to `rules/` changes every consumer's behaviour without touching a line
+    of their code, and nothing named who reviews it."""
+    codeowners = REPO / ".github" / "CODEOWNERS"
+
+    assert codeowners.is_file(), "no CODEOWNERS anywhere in this repository"
+
+    body = codeowners.read_text(encoding="utf-8")
+    owned = {line.split()[0] for line in body.splitlines()
+             if line.strip() and not line.lstrip().startswith("#")}
+
+    for path in ("/rules/", "/mechanisms/gates/", "/hooks/", "/.github/"):
+        assert path in owned, f"{path} has no declared owner"

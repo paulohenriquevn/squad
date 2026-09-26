@@ -69,7 +69,7 @@ def _reached_the_end(result: subprocess.CompletedProcess) -> bool:
 def _run(root: Path, *flags: str) -> subprocess.CompletedProcess:
     return subprocess.run(
         [sys.executable, str(_RUN), "--repo-root", str(root), "--no-audit-write", *flags],
-        capture_output=True, text=True, timeout=900, cwd=str(root))
+        capture_output=True, text=True, timeout=900, cwd=str(root), check=False)
 
 
 def test_a_run_naming_no_item_writes_no_event(tmp_path: Path) -> None:

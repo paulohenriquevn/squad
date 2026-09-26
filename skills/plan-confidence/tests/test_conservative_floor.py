@@ -3,7 +3,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from run_structural import run_structural  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from run_structural import run_structural  # noqa: E402 — post-bootstrap import
 
 SKILL_ROOT = Path(__file__).parent.parent
 RUBRIC = SKILL_ROOT / "templates" / "rubric-v1.md"
@@ -20,7 +23,7 @@ def test_high_smell_density_caps_at_89(tmp_path: Path) -> None:
     smell_text = "should " * 35  # 35 weak imperatives in prose
     plan = tmp_path / "smelly.md"
     plan.write_text(
-        f"# Plan\n\n## ADRs\n### D1 — toy\n- Rationale: alternativa rejeitada.\n\n"
+        f"# Plan\n\n## ADRs\n### D1 — toy\n- Rationale: the alternative was rejected.\n\n"
         f"{smell_text}\n\n"
         f"## Coverage Matrix\n\n"
         f"| # | Gap | Task(s) | Resolution |\n"
@@ -34,24 +37,23 @@ def test_high_smell_density_caps_at_89(tmp_path: Path) -> None:
     )
 
 
-def test_soft_floor_marker_fires_when_floor_binds(tmp_path: Path) -> None:
-    """When weighted_avg WOULD exceed 89 but smell density is high, soft_floor marker appears.
+def test_a_capped_plan_names_the_soft_floor_that_capped_it(tmp_path: Path) -> None:
+    """The MARKER, not only the number.
 
-    Construct a plan with very high completeness (100) but exactly 30 smells in prose:
-    weighted = 0.6*100 + 0.4*70 = 88 — too low. Need smells light enough that
-    completeness * 0.6 alone reaches >89... but threshold is 30 hits = cap fires.
-    Use a synthetic scenario where the cap CAN bind.
+    This was called `test_soft_floor_marker_fires_when_floor_binds` and asserted only
+    `final_score_after_caps <= 89` — the identical assertion `test_high_smell_density_
+    caps_at_89` makes on a near-identical fixture, one function above. The marker the
+    name promised was read by no line, so a release that stopped emitting markers
+    entirely would have left both tests green.
+
+    A score of 89 with no marker is the failure that matters here: the author is told
+    their plan is capped and not told by what, which is the one thing they need to fix
+    it. So the marker is what gets asserted, and the score is the corroboration.
     """
-    # Build a plan with high completeness AND exactly 30 weak imperatives spread thin
-    # (so structural_risk floors at 100 + 30*(-3) = 10, but soft_floor not relevant — completeness
-    # at 100 dominates: 0.6*100 + 0.4*10 = 64 — below 89).
-    # The soft_floor cannot mathematically bind on a clean plan because smells reduce
-    # structural_risk directly. The marker is design-safety, fires only on extreme synthesized cases.
-    # This test documents that behavior is correct: marker absence here is expected.
     smell_text = "should " * 30
     plan = tmp_path / "edge.md"
     plan.write_text(
-        f"# Plan\n\n## ADRs\n### D1 — toy\n- Rationale: alternativa rejeitada.\n\n"
+        f"# Plan\n\n## ADRs\n### D1 — toy\n- Rationale: the alternative was rejected.\n\n"
         f"{smell_text}\n\n"
         f"## Coverage Matrix\n\n"
         f"| # | Gap | Task(s) | Resolution |\n"
@@ -60,8 +62,13 @@ def test_soft_floor_marker_fires_when_floor_binds(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     report = run_structural(plan, RUBRIC, THRESHOLDS, structural_only=True)
-    # Either soft_floor fires OR composite already pushed below 89 — both are valid
+
     assert report.final_score_after_caps <= 89
+    floors = [c for c in report.hard_caps_triggered if c.startswith("soft_floor_")]
+    assert floors, (
+        f"capped at {report.final_score_after_caps} and named no soft floor; the "
+        f"author is told the plan is held and not told by what. "
+        f"caps: {report.hard_caps_triggered}")
 
 
 def test_high_deferred_ratio_caps_at_89(tmp_path: Path) -> None:
@@ -75,7 +82,7 @@ def test_high_deferred_ratio_caps_at_89(tmp_path: Path) -> None:
     ])
     plan = tmp_path / "deferred.md"
     plan.write_text(
-        "# Plan\n\n## ADRs\n### D1 — toy\n- Rationale: alternativa rejeitada.\n\n"
+        "# Plan\n\n## ADRs\n### D1 — toy\n- Rationale: the alternative was rejected.\n\n"
         "## Coverage Matrix\n\n"
         "| # | Gap | Task(s) | Resolution |\n"
         "|---|-----|---------|------------|\n"
@@ -93,7 +100,7 @@ def test_clean_plan_can_still_score_high(tmp_path: Path) -> None:
     plan = tmp_path / "clean.md"
     plan.write_text(
         "# Plan\n\nPlain prose.\n\n"
-        "## ADRs\n### D1 — toy\n- Rationale: alternativa rejeitada.\n\n"
+        "## ADRs\n### D1 — toy\n- Rationale: the alternative was rejected.\n\n"
         "## Coverage Matrix\n\n"
         "| # | Gap | Task(s) | Resolution |\n"
         "|---|-----|---------|------------|\n"
@@ -110,7 +117,7 @@ def test_borderline_deferred_does_not_cap(tmp_path: Path) -> None:
     rows.append("| 10 | g9 | N/A — D9 out-of-scope | deferred |")
     plan = tmp_path / "ok-deferred.md"
     plan.write_text(
-        "# Plan\n\n## ADRs\n### D1 — toy\n- Rationale: alternativa rejeitada.\n\n"
+        "# Plan\n\n## ADRs\n### D1 — toy\n- Rationale: the alternative was rejected.\n\n"
         "## Coverage Matrix\n\n"
         "| # | Gap | Task(s) | Resolution |\n"
         "|---|-----|---------|------------|\n"

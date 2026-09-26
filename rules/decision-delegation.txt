@@ -1,3 +1,4 @@
+# rule-id: SQ-CFG-05
 # Decision delegation — what the sponsor handed to the system, and what stayed
 #
 # A backlog item whose `blocked_by` names no other item is AWAITING_HUMAN: the
@@ -22,6 +23,13 @@
 #   threshold    Where a floor or target is set, when evidence bounds the range.
 #   binary       A choice the item states as one-or-the-other.
 #   option       A choice among alternatives the item enumerates.
+#
+# ASKED AND DECLINED, 2026-09-22: moving `governance` to this list so that new backlog
+# items could be signed by default. Declined by the sponsor, and the reason is scope
+# rather than caution — `governance` names more than backlog entries, so delegating the
+# CLASS would delegate everything it covers to buy one case. An item that needs a
+# signature is brought as the concrete case it is. Recorded here because a question
+# answered in conversation is one the next session asks again.
 #
 # RETAINED (stays AWAITING_HUMAN regardless of delegation)
 #

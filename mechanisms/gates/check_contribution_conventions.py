@@ -77,12 +77,41 @@ DEFAULT_BODY_REQUIRED = ("feat", "fix")
 COAUTHOR_RE = re.compile(r"^\s*co[-_ ]?authored[-_ ]?by\s*:", re.IGNORECASE | re.MULTILINE)
 
 #: `<type>(<scope>): <subject>` — scope optional, `!` allowed for a breaking change.
-HEADER_RE = re.compile(r"^(?P<type>[a-z]+)(?:\((?P<scope>[a-z0-9][a-z0-9-]*)\))?(?P<bang>!)?: (?P<subject>.+)$")
+#:
+#: A scope may name MORE THAN ONE AREA, comma-separated and no space: `fix(gates,board):`.
+#: The single-segment pattern refused those as `header_shape` — not for the scope's
+#: content but for the comma — which left a change genuinely touching two areas with
+#: three bad options: name one and be incomplete, invent a portmanteau nobody greps for,
+#: or drop the scope. All three lose what the field exists to carry. Each segment is
+#: still lowercase kebab-case, so the rule about a scope did not loosen; there may now
+#: be more than one of them.
+#: A SEGMENT MAY ALSO NAME A PATH. The argument above is the whole of this one: measured
+#: 2026-09-23 on a consumer, five commits scoped `infra/tests` — a directory and its tests
+#: — were refused as `header_shape`, and reachable by no override, because `commit_scopes`
+#: is consulted only after this pattern matches. The three options left were the same
+#: three: name `infra` and be incomplete, write `infra-tests` and invent a portmanteau
+#: that stops matching the path it names, or drop the scope.
+#:
+#: The segment rule did NOT loosen. Each part is still lowercase kebab-case; what changed
+#: is that a scope may be several of them separated by `/`, the way the comma made it
+#: several separated by `,`. `infra//tests`, `infra/` and `Infra/tests` still fail.
+_SCOPE_PART = r"[a-z0-9][a-z0-9-]*"
+_SCOPE_SEGMENT = rf"{_SCOPE_PART}(?:/{_SCOPE_PART})*"
+HEADER_RE = re.compile(
+    rf"^(?P<type>[a-z]+)"
+    rf"(?:\((?P<scope>{_SCOPE_SEGMENT}(?:,{_SCOPE_SEGMENT})*)\))?"
+    rf"(?P<bang>!)?: (?P<subject>.+)$")
 
 #: Overrides a project may set. An unknown key is refused: a typo that is ignored is a
 #: convention the project thinks it declared and did not.
+#: `branch_trunk` was here and is not: this checker's subject is COMMITS — header shape,
+#: subject length, body — and it never read a branch name at all. Accepting the key made
+#: `rules/contribution-overrides.txt` document a setting a project could write, have
+#: parsed, have validated as known, and have applied to nothing. Which branch is the trunk
+#: matters to `hooks/validate-command.py`, which refuses work on it; that is where such a
+#: key belongs if it is ever wanted.
 KNOWN_KEYS = {"commit_types", "commit_scopes", "subject_max", "body_required",
-              "branch_trunk"}
+              "pushed_exemptions"}
 #: Keys that would reach a rule the contract says cannot be overridden.
 FORBIDDEN_KEYS = {"allow_coauthor", "coauthor", "allow_secrets", "secrets"}
 
@@ -94,6 +123,11 @@ class Conventions:
     subject_max: int = DEFAULT_SUBJECT_MAX
     body_required: tuple[str, ...] = DEFAULT_BODY_REQUIRED
     source: str = "kit defaults"
+    #: `sha -> reason`, from `pushed_exemptions`. Honoured ONLY for a commit already
+    #: reachable from the upstream — see `check`. A declaration for a commit an amend can
+    #: still reach is a finding, not a pass, because otherwise this is a way to skip the
+    #: rule on the way in rather than a record of a rule that was already broken.
+    exemptions: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass
@@ -116,6 +150,9 @@ class Report:
     #: The range as RESOLVED, so a report never claims to have graded a range the caller
     #: only asked for.
     resolved_range: str = ""
+    #: Findings dropped because a declaration covered them, rendered for the reader. An
+    #: exemption nobody can see is indistinguishable from a rule nobody checks.
+    exempted: tuple[str, ...] = ()
 
 
 def load_conventions(overrides: Path) -> Conventions:
@@ -125,6 +162,7 @@ def load_conventions(overrides: Path) -> Conventions:
         return conv
 
     declared: dict[str, str] = {}
+    exemptions: list[tuple[str, str]] = []
     for lineno, raw in enumerate(overrides.read_text(encoding="utf-8-sig").splitlines(), 1):
         line = raw.split("#", 1)[0].strip()
         if not line:
@@ -144,6 +182,19 @@ def load_conventions(overrides: Path) -> Conventions:
                 f"{overrides}:{lineno}: unknown key `{key}`. Known: "
                 f"{', '.join(sorted(KNOWN_KEYS))}. A typo that is ignored is a "
                 "convention the project thinks it declared and did not")
+        if key == "pushed_exemptions":
+            # Repeatable, unlike every other key: a project can be stuck with more than
+            # one, and `declared[key] = value` would keep the last line and silently
+            # discard the rest — an override the project thinks it declared and did not.
+            sha, _, reason = value.partition(" ")
+            if not reason.strip():
+                raise ValueError(
+                    f"{overrides}:{lineno}: `pushed_exemptions` needs `<sha> <reason>`. A "
+                    "bare sha records that somebody waived a finding, not why, and the "
+                    "reason is the only part a later reader can weigh")
+            exemptions.append((sha.strip(), reason.strip()))
+            declared[key] = value
+            continue
         declared[key] = value
 
     if "commit_types" in declared:
@@ -154,6 +205,7 @@ def load_conventions(overrides: Path) -> Conventions:
         conv.subject_max = int(declared["subject_max"])
     if "body_required" in declared:
         conv.body_required = tuple(t.strip() for t in declared["body_required"].split(",") if t.strip())
+    conv.exemptions = tuple(exemptions)
     if declared:
         conv.source = f"{overrides} ({len(declared)} override(s))"
     return conv
@@ -192,9 +244,14 @@ def check_message(sha: str, message: str, conv: Conventions) -> list[Finding]:
                            f"`{ctype}` is not a declared type. Declared: "
                            f"{', '.join(conv.types)}. Add it to "
                            "`rules/contribution-overrides.txt` if this project uses it"))
-    if conv.scopes and scope and scope not in conv.scopes:
+    # Segment by segment, because a scope may name two areas. Comparing the whole
+    # string would make a declared scope list stop applying the moment a commit named
+    # two of them — the check would pass `gates,ghost` while refusing `ghost`.
+    undeclared = [s for s in (scope or "").split(",") if s and s not in conv.scopes]
+    if conv.scopes and undeclared:
         out.append(Finding(sha, "unknown_scope",
-                           f"`{scope}` is not in the declared scopes: {', '.join(conv.scopes)}"))
+                           f"`{', '.join(undeclared)}` is not in the declared scopes: "
+                           f"{', '.join(conv.scopes)}"))
     if len(subject) > conv.subject_max:
         out.append(Finding(sha, "subject_too_long",
                            f"{len(subject)} characters; the declared limit is {conv.subject_max}"))
@@ -243,14 +300,20 @@ def _resolve_range(repo: Path, rev_range: str) -> str:
 
 
 def _pushed_shas(repo: Path) -> set[str]:
-    """Short shas reachable from the upstream — the commits an amend cannot reach."""
+    """Short shas already on the remote — the commits an amend cannot reach.
+
+    The upstream when there is one. Without it, every remote-tracking branch: CI checks
+    out a detached HEAD, and reading "no upstream" as "nothing is pushed" turned both
+    declared exemptions into `exemption_is_fixable` on the first CI run in eleven days,
+    while the same commits were CLEAN locally. A commit on any `origin/*` changes only
+    by force-push, which is the property an exemption rests on.
+    """
     out = subprocess.run(
         ["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"],
         cwd=repo, capture_output=True, text=True, check=False)
     upstream = out.stdout.strip()
-    if out.returncode != 0 or not upstream:
-        return set()
-    log = subprocess.run(["git", "log", "--format=%H", upstream],
+    reachable = [upstream] if out.returncode == 0 and upstream else ["--remotes"]
+    log = subprocess.run(["git", "log", "--format=%H", *reachable],
                          cwd=repo, capture_output=True, text=True, check=False)
     if log.returncode != 0:
         return set()
@@ -306,7 +369,54 @@ def check(repo: Path, rev_range: str, message_file: Path | None = None) -> Repor
         rep.findings.extend(check_message(sha, message, rep.conventions))
     pushed = _pushed_shas(repo)
     rep.already_pushed = {sha for sha, _ in commits if sha in pushed}
+    # The FULL pushed set, not the range-scoped one. `already_pushed` answers a different
+    # question — which of the findings in front of this author an amend can reach — and
+    # under `--introduced` on a synced branch it is empty, so using it here made every
+    # exemption read as covering fixable work.
+    _apply_exemptions(rep, pushed)
     return rep
+
+
+def _match(declared: str, sha: str) -> bool:
+    """Either spelling of the same commit — the file may hold a full sha, findings carry
+    an abbreviated one, and refusing to match across lengths would make the declaration
+    depend on how the reader happened to copy it."""
+    a, b = declared.strip().lower(), sha.strip().lower()
+    return bool(a) and bool(b) and (a.startswith(b) or b.startswith(a))
+
+
+def _apply_exemptions(rep: Report, pushed: set[str]) -> None:
+    """Drop what a declaration covers, and REPORT a declaration that covers too much.
+
+    The safety property is the only reason this is safe to have: an exemption holds only
+    for a commit already reachable from the upstream, which is precisely the set no
+    permitted action can change. Applied to a commit an amend could still reach, it would
+    be a way to skip the rule while writing it, so that case yields its own finding AND
+    keeps the original — replacing one with the other would hide the violation behind the
+    complaint about how it was waived.
+    """
+    if not rep.conventions.exemptions:
+        return
+    kept: list[Finding] = []
+    exempted: list[str] = []
+    for finding in rep.findings:
+        covered = next((r for sha, r in rep.conventions.exemptions
+                        if _match(sha, finding.sha)), None)
+        is_pushed = any(_match(finding.sha, p) for p in pushed)
+        if covered is not None and is_pushed:
+            exempted.append(f"{finding.sha} {finding.code} — declared: {covered}")
+            continue
+        kept.append(finding)
+    for sha, reason in rep.conventions.exemptions:
+        if not any(_match(sha, p) for p in pushed):
+            kept.append(Finding(sha, "exemption_is_fixable",
+                                f"is declared in `pushed_exemptions` ({reason}) and is not "
+                                "on the upstream. An amend still reaches it, so the "
+                                "declaration excuses work somebody can fix — which is the "
+                                "one thing it must never do. Fix the commit or remove the "
+                                "line"))
+    rep.findings = kept
+    rep.exempted = tuple(exempted)
 
 
 NOT_CHECKED = (
@@ -337,6 +447,13 @@ def render(rep: Report) -> str:
     out.append(f"  {'CLEAN' if not rep.findings else 'VIOLATIONS'} — "
                f"{len(rep.findings)} finding(s) over {rep.commits_checked} commit(s)")
 
+    if rep.exempted:
+        out.append("")
+        out.append(f"  DECLARED — {len(rep.exempted)} finding(s) waived by "
+                   "`pushed_exemptions`, on commits no permitted action can change:")
+        for line in rep.exempted:
+            out.append(f"    {line}")
+
     stuck = sorted({f.sha for f in rep.findings} & rep.already_pushed)
     if stuck:
         out.append("")
@@ -356,7 +473,8 @@ def render(rep: Report) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--repo", type=Path, default=Path("."))
+    ap.add_argument(
+        "--root", "--repo", dest="root", type=Path, default=Path("."))
     ap.add_argument("--range", dest="rev_range", default="-40",
                     help="a git range, or -N for the last N commits (default: -40)")
     # Registered AFTER `--range` on purpose: argparse applies a default only when the
@@ -373,7 +491,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
 
-    rep = check(args.repo.resolve(), args.rev_range, args.message_file)
+    rep = check(args.root.resolve(), args.rev_range, args.message_file)
     if args.json:
         print(json.dumps({**rep.__dict__,
                           "conventions": rep.conventions.__dict__,

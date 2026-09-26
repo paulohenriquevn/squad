@@ -15,14 +15,16 @@ import re
 # four different orders, and `check_write_containment.py` refuses a second one.
 import sys as _sys_bootstrap
 from dataclasses import dataclass
-from pathlib import Path
-from pathlib import Path as _Path_bootstrap
+from pathlib import Path, Path as _Path_bootstrap
 
 for _up in _Path_bootstrap(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _sys_bootstrap.path.insert(0, str(_up))
         break
-from squad.paths import (  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import (  # noqa: E402 — post-bootstrap import
     ATTESTATIONS,
     active_plan_pointer,
     write_records_dir,
@@ -96,6 +98,10 @@ def goal_line(plan_path: Path) -> str | None:
 class Attestation:
     expected: str | None
     actual: str | None
+    #: The plan is attested and its file could not be READ. Neither `tampered` nor
+    #: clean: nobody knows, and the one state where an approval is worth checking is
+    #: the one where it silently was not.
+    unreadable: bool = False
 
     @property
     def tampered(self) -> bool:
@@ -115,9 +121,14 @@ def attestation(eco: Path, plan: ActivePlan) -> Attestation:
     if record.is_file():
         expected = record.read_text(encoding="utf-8", errors="replace").strip() or None
     actual = None
+    unreadable = False
     if expected:
         try:
             actual = hashlib.sha256(plan.path.read_bytes()).hexdigest()
         except OSError:
-            actual = None
-    return Attestation(expected, actual)
+            # `actual = None` alone made `tampered` False — so an attested plan whose
+            # file could not be read produced no warning, which reads as "the contents
+            # still match the approval". They may or may not; the point is that nothing
+            # checked, and a silent pass is the answer least useful here.
+            unreadable = True
+    return Attestation(expected, actual, unreadable)

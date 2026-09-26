@@ -86,11 +86,11 @@ def test_the_root_comes_from_the_script_and_not_from_the_cwd(tmp_path: Path) -> 
 
 def test_an_explicit_ecosystem_dir_still_wins(tmp_path: Path) -> None:
     """`--ecosystem-dir` is the only way to point at another target, and it wins."""
-    outro = tmp_path / "outro"
-    eco_outro = _make_ecosystem(outro, skill="implement", missing_rule=True)
+    other_project = tmp_path / "other-project"
+    eco_other_project = _make_ecosystem(other_project, skill="implement", missing_rule=True)
 
     proc = subprocess.run(
-        [sys.executable, str(_SCRIPT), "--json", "--ecosystem-dir", str(eco_outro)],
+        [sys.executable, str(_SCRIPT), "--json", "--ecosystem-dir", str(eco_other_project)],
         cwd=str(_REPO), capture_output=True, text=True, check=False,
     )
     findings = json.loads(proc.stdout)["findings"]

@@ -171,12 +171,31 @@ def _json_slice(text: str) -> str:
     return text[start:end + 1]
 
 
+class DiffUnavailable(RuntimeError):
+    """The diff command failed, so there is no change set to review.
+
+    `branch_diff` used to return `""` for this — an unknown branch, a missing
+    `origin/workspace`, a repository that is not there — and `review()` reads an empty
+    string as "no diff to review", which `main` prints as the result. The module's own
+    docstring names this exact pattern as the first on its list: "a lens that did not run
+    and a lens that ran clean are the same output otherwise". It applied to the diff too.
+    """
+
+
 def branch_diff(repo: Path, branch: str, *, base: str = "origin/workspace",
                 timeout: int = 120) -> str:
-    done = subprocess.run(  # noqa: PLW1510
-        ["git", "-C", str(repo), "diff", f"{base}...{branch}"],
-        capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL)
-    return done.stdout if done.returncode == 0 else ""
+    try:
+        done = subprocess.run(
+            ["git", "-C", str(repo), "diff", f"{base}...{branch}"],
+            capture_output=True, text=True, timeout=timeout,
+            stdin=subprocess.DEVNULL, check=False)
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise DiffUnavailable(f"`git diff {base}...{branch}` could not be run: {exc}") from exc
+    if done.returncode != 0:
+        raise DiffUnavailable(
+            f"`git diff {base}...{branch}` exited {done.returncode}: "
+            f"{(done.stderr or '').strip()[:300]}")
+    return done.stdout
 
 
 def _cli_ask(repo: Path) -> Callable[[str], str]:
@@ -203,7 +222,11 @@ def main(argv: list[str] | None = None) -> int:
         print(str(exc), file=sys.stderr)
         return 1
 
-    diff = branch_diff(repo, args.branch, base=args.base)
+    try:
+        diff = branch_diff(repo, args.branch, base=args.base)
+    except DiffUnavailable as exc:
+        print(f"did not run: {exc}", file=sys.stderr)
+        return 2
     found, note = review(diff, lenses=the_lenses, ask=_cli_ask(repo))
     print(f"reviewed {args.branch} against {len(the_lenses)} lens(es): "
           f"{len(found)} finding(s)")

@@ -1,8 +1,9 @@
 # Cycle: DESIGN
+<!-- rule-id: SQ-CYC-06 -->
 
 Draw the system before any item is filed against it.
 
-## Why this cycle exists
+## Purpose
 
 `cycle-brainstorm` ends with `technical-pieces.md`, which names PIECE-N as *"a
 responsibility with a boundary"* and states its own limit: *"A piece may map to a repo,
@@ -123,6 +124,30 @@ The contract the reviewers are asked against is
 - **Whether a drawing is correct.** No mechanism can. The signature is the claim.
 - **How one item will be built.** That is `/plan-alignment`, per item, after DISCOVER
   has evidence — the same instrument at a different level.
+
+## Anti-patterns
+
+Concrete failure modes a reviewer should flag here. This section was absent until
+2026-09-17, together with `## Purpose` — the heading above was spelled
+`## Why this cycle exists`, the only one of fourteen cycle rules that was. Neither gap
+was a decision: `verify_ecosystem.check_cycle_rules` graded six cycles from a hardcoded
+tuple, and this file was not in it.
+
+- **Drawing after the items are filed.** The whole point is that both decisions below
+  change every component under them. Filed items pin a shape, and the drawing then
+  documents what was already assumed instead of deciding it.
+- **A drawing with no owner of state.** "Who owns state, and what survives what" is one
+  of the two questions this cycle exists to force. A diagram of boxes that does not
+  answer it has drawn the parts and skipped the decision.
+- **A trust boundary implied rather than drawn.** "Where untrusted code stops" must be a
+  line on the drawing. A boundary stated in prose beside the picture is a boundary the
+  next reader places somewhere else.
+- **Signing a drawing nobody can be wrong about.** `VALID` here means a person put their
+  name to a claim. A drawing vague enough that no future state could contradict it costs
+  the signature its meaning.
+- **Treating DESIGN as per-item.** One item's technical path is `/plan-alignment`. Using
+  this cycle for it produces a system drawing scoped to one change, which is not a system
+  drawing.
 
 ## Cross-references
 

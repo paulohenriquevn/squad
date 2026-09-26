@@ -7,6 +7,8 @@
 **Source plan:** `.squad/records/discoveries/plans/{slug}-plan.md`
 **Generated:** {YYYY-MM-DD} via `/discover-execute`
 **Confidence verdict:** PROVISIONAL (awaiting `/discover-confidence`)
+<!-- `**Mode:** bug` REQUIRES the next line; every other mode omits it. -->
+**Failing test:** `{path/to/test_file.py::test_name}`
 
 <!--
   Every header line above is checked by check_opportunity_completeness.py. `Mode` must be
@@ -17,6 +19,11 @@
   Shipping placeholders shaped like valid values would let a forgotten `B-000` pass the
   gate and point the opportunity at an item that does not exist — a silent wrong answer
   instead of a loud missing one.
+
+  `**Failing test:**` is the floor `cycle-discover.md` sets for `bug` in four words —
+  no failing test, no bug — and gate G-M resolves the file on disk. Delete the line for
+  any other mode; leaving the placeholder there names a test nobody wrote, which the
+  gate reports as the fabricated-evidence shape one field along.
 
   If the measurement reclassified the mode, record BOTH: put the final mode on the line
   above and explain the change under Context. The filer's guess at intake is not binding,

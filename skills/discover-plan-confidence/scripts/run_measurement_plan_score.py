@@ -35,7 +35,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 import sys as _sys_bootstrap
 from pathlib import Path as _Path_bootstrap
 
-from check_corner_coverage import check_corner_coverage
+from check_corners_questioned import check_corners_questioned
 from check_measurement_targets import check_measurement_targets
 from check_plan_completeness import check_plan_completeness
 from check_spec_smells import check_spec_smells
@@ -44,9 +44,29 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _sys_bootstrap.path.insert(0, str(_up))
         break
-from squad.paths import write_records_dir  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import write_records_dir  # noqa: E402 — post-bootstrap import
 
 SKILL_ROOT = Path(__file__).parent.parent
+
+
+def _citation_score(targets: dict) -> float:
+    """The reference_citations dimension, 0-100.
+
+    A plan that cites NOTHING scores 0, not 100. `total == 0` used to be awarded a flat
+    100 — 0.30 of the weighted score — and no cap fired for it, so a measurement plan
+    whose `## Measurement targets` section named no path and no live URL was rewarded
+    exactly like one whose every citation resolved.
+
+    The one honest 100 is the LIVE-TARGET-ONLY plan: a plan measuring a running system
+    cites hosts rather than paths, and there is nothing on disk to verify. That is the
+    same exception `run_opportunity_score` makes.
+    """
+    if targets["total"] == 0:
+        return 100.0 if targets["live_targets"] else 0.0
+    return 100.0 * targets["verified"] / targets["total"]
 
 
 def _plan_version(text: str) -> str:
@@ -151,7 +171,7 @@ def main() -> int:
     text = plan_path.read_text(encoding="utf-8-sig")
 
     # Run all four checkers
-    coverage = check_corner_coverage(plan_path)
+    coverage = check_corners_questioned(plan_path)
     targets = check_measurement_targets(plan_path)
     completeness = check_plan_completeness(plan_path)
     smells = check_spec_smells(plan_path, rubric_path)
@@ -159,10 +179,17 @@ def main() -> int:
     # Compute per-dimension scores (0-100)
     rc_score = 100.0 * coverage["corners_populated"] / coverage["corners_total"]
 
-    if targets["total"] == 0:
-        rcit_score = 100.0
-    else:
-        rcit_score = 100.0 * targets["verified"] / targets["total"]
+    # A plan that cites NOTHING scores 0 on this dimension, not 100. `total == 0` used to
+    # be awarded a flat 100 — 0.30 of the weighted score — and no cap fired for it, so a
+    # measurement plan whose `## Measurement targets` section named no path and no live
+    # URL was rewarded exactly like one whose every citation resolved. The dimension is
+    # called reference_citations; zero citations is the worst case it can measure, not
+    # the best.
+    #
+    # The one honest 100 is the LIVE-TARGET-ONLY plan: a plan measuring a running system
+    # cites hosts rather than paths, and there is nothing on disk to verify. That is the
+    # same exception `run_opportunity_score` makes.
+    rcit_score = _citation_score(targets)
 
     pc_score = 100.0 * completeness["found"] / completeness["total_required"]
 
@@ -194,6 +221,26 @@ def main() -> int:
     # Node 2: reference_citations
     if targets["fabricated"] > 0:
         hard_caps_triggered.append("fabricated_target")
+        cap_value = min(cap_value, 49.0)
+
+    # Gate G-L, which `check_measurement_targets` measured and nothing consumed. Its
+    # docstring states the consequence: "A plan naming a live URL that no domain
+    # declares is planning a probe the cycle refuses to run (cycle-discover.md, gate
+    # G-L). Catching it here means the refusal lands while the plan is cheap to change."
+    # The field was computed, emitted, and read by no cap — so the refusal did land, at
+    # `/discover-execute`, after the plan was written and approved.
+    #
+    # 70, not 49: the plan is not fabricated, it names a host nobody declared. That is a
+    # rewrite of one line, and the cap says so rather than sending it back whole.
+    if targets.get("undeclared_live_hosts"):
+        hard_caps_triggered.append("undeclared_live_host")
+        cap_value = min(cap_value, 70.0)
+
+    if targets["total"] == 0 and not targets["live_targets"]:
+        # Named, so the reader sees WHY the dimension is 0 rather than inferring it from
+        # a number. A plan that cites nothing cannot be measured against anything, and a
+        # measurement plan is the one document where that is disqualifying.
+        hard_caps_triggered.append("no_targets_cited")
         cap_value = min(cap_value, 49.0)
 
     # Node 3: plan_completeness — bundles 4 sub-checks per check_plan_completeness module docstring

@@ -92,12 +92,14 @@ python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/brainstorm-pi
   | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['dangling_citations'] or 'all citations resolve')"
 ```
 
-Then emit the event:
+**Do not emit a phase end here.** `brainstorm` is ONE declared phase in
+`rules/cycle-phases.txt`, opened by `/brainstorm-vision` and closed by
+`/brainstorm-pieces` with the gate's verdict. A step that closes it mid-cascade
+reports the phase finished three times before it did, and a stream holding four
+closes against one open tells nobody how long the session took or whether one is
+running right now. Until phase 4 emits its end, this scope is correctly WIP.
 
-```bash
-python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" end \
-    --cycle brainstorm --slug {scope} --verdict AWAITING_REVIEW
-```
+Hand off to `/brainstorm-pieces`, which runs the gate and closes the phase.
 
 ## Anti-patterns
 

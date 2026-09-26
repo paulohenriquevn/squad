@@ -106,6 +106,18 @@ Each decision that IS recorded gets:
 
 `/plan-confidence` caps the score at 70 if any ADR lacks an alternative.
 
+Each one is a `###` heading in the form `check_adr_completeness` reads — `### D<n> — ` or
+`### ADR-<n> — `. Any other heading is not counted as an ADR at all:
+
+```markdown
+### D1 — <the decision, in one line>
+
+**Decision:** <what was decided>
+**Rationale:** <why this approach>
+**Alternatives considered:** <the alternative> — rejected because <reason>
+**Consequences:** <what this enables and what it constrains>
+```
+
 ## Drawbacks & Risks
 
 What does this plan make worse, riskier, or harder to change? Honesty here is the price of admission. **At least 2 entries** — no plan is risk-free.
@@ -315,6 +327,24 @@ Table mapping original gaps/requirements to tasks:
 | # | Gap / Requirement | Task(s) | Resolution |
 |---|---|---|---|
 | 1 | Description | T{N}.{M} | How it's resolved |
+
+**What the `Task(s)` column accepts**, and nothing else counts as closing a requirement:
+
+| Write | Means |
+|---|---|
+| `T{N}.{M}` | a numbered task in this plan closes it |
+| `Final Phase` | the Final Phase closes it end to end — valid only if this plan HAS one |
+| `out-of-scope`, `deferred`, `N/A — D{N}` | a deliberate deferral, which is not a miss |
+
+Anything else — a bare `—`, or prose like *already shipped* or *no dependency added* —
+reads as a requirement **nothing closes**, and `coverage_lt_100` caps the plan at INVALID.
+If the work really is already done, say which task or phase proves it; if it is genuinely
+out of scope here, use a deferral marker. A requirement whose closure only a human can
+infer is one the next gate will report as open.
+
+The header is read BY NAME, not by position: `Task(s)` and `Closed by` are both found,
+and a header this parser does not recognise is reported as unreadable rather than as a
+matrix with no rows.
 
 **Coverage: X/Y gaps covered (Z%)**
 

@@ -66,7 +66,6 @@ import json
 import sys
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 # ── The Five Lenses ────────────────────────────────────────────────────────────
 
@@ -150,7 +149,11 @@ class Verdict:
     solution: Solution
     rationale: str
     scope_notes: str = ""
-    created_issue: Optional[str] = None
+    # `created_issue: str | None` stood here, assigned by nothing and read by nothing.
+    # This module is a formatter: it prints the issue payload and files nothing, so
+    # there is no issue id for such a field to hold. It was a hook surviving from a
+    # version that filed, and an unset field on a dataclass reads as "not filed yet"
+    # rather than "this tool does not file".
 
     def to_issue(self) -> dict:
         """Format as a GitHub issue."""
@@ -204,6 +207,14 @@ Violation of **{self.dominant_lens.name}**: {self.rationale}
         }
 
 
+#: How many FILES a change touches before it stops being a T1. Named because the two
+#: numbers ARE the band definition and sat as bare literals inside the predicate — the
+#: docstring above explains what a wrong band cost and could not name the boundary it
+#: was explaining. `> 5` is T3, `> 2` is T2, everything else is T1.
+T3_FILE_FLOOR = 5
+T2_FILE_FLOOR = 2
+
+
 def size_from_reach(code_references: list[str], override: WorkSize | None = None) -> WorkSize:
     """How big the fix is, from how many places it touches.
 
@@ -218,9 +229,9 @@ def size_from_reach(code_references: list[str], override: WorkSize | None = None
     if override is not None:
         return override
     files = {ref.split(":", 1)[0] for ref in code_references if ref.strip()}
-    if len(files) > 5:
+    if len(files) > T3_FILE_FLOOR:
         return WorkSize.T3
-    if len(files) > 2:
+    if len(files) > T2_FILE_FLOOR:
         return WorkSize.T2
     return WorkSize.T1
 

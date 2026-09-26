@@ -17,7 +17,7 @@ import os
 import re
 import tempfile
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -181,6 +181,16 @@ _VALID_FINDING_TYPES = frozenset(
 )
 
 
+#: The sunset window `code-quality-golden-rule.md` § 4 declares. Stated here because
+#: this is the module that enforces it; the rule keeps the reasoning.
+_MAX_SUNSET_DAYS = 90
+
+
+def _TODAY() -> date:
+    """Indirection so a test can pin the day without touching the clock."""
+    return date.today()
+
+
 def load_allowlist(rule_file: Path) -> list[AllowlistEntry]:
     """Parse pipe-separated allowlist with strict sunset date validation.
 
@@ -224,6 +234,28 @@ def load_allowlist(rule_file: Path) -> list[AllowlistEntry]:
             raise ValueError(
                 f"allowlist.txt line {line_num}: malformed sunset date {sunset_str!r}: {e}"
             ) from e
+        # The window two documents call mandatory and nothing checked. The golden rule:
+        # `| Sunset window | ≤ 90 days from entry creation date |`; this file's own
+        # header: "MUST be ≤ 90 days from entry". `load_allowlist` validated the ISO
+        # shape and stopped, so `2029-09-01` was accepted (measured 2026-09-21) — a
+        # permanent waiver wearing a temporary one's clothes, which is exactly what
+        # § anti-patterns calls "allowlists growing stale forever".
+        #
+        # Measured against TODAY rather than the entry's creation date, which nothing on
+        # disk records. The approximation is strictly tighter than the contract: an
+        # entry written 30 days ago with a 90-day window has 60 days left, and a sunset
+        # beyond today+90 could not have satisfied the rule on any creation date.
+        #
+        # A sunset already PAST is accepted and parsed: the file's contract is that an
+        # expired entry is ignored at scoring time and REPORTED as expired, and refusing
+        # to parse it would hide the expiry instead of surfacing it.
+        if sunset > _TODAY() + timedelta(days=_MAX_SUNSET_DAYS):
+            raise ValueError(
+                f"allowlist.txt line {line_num}: sunset {sunset_str} is more than "
+                f"{_MAX_SUNSET_DAYS} days out. `code-quality-golden-rule.md` § 4 sets "
+                f"the window at {_MAX_SUNSET_DAYS} days from entry creation; a longer "
+                f"one is a permanent exemption with a date on it"
+            )
         entries.append(
             AllowlistEntry(
                 ecosystem=ecosystem,
@@ -303,6 +335,20 @@ def _detector_to_finding_type(detector: str) -> str:
         # #343 — the detector side already writes "architecture" into its allowlist_key; this was
         # the missing half of that agreement.
         "d5_architecture": "architecture",
+        # The names the detectors ACTUALLY emit beside the five above. `is_allowlisted`
+        # requires this mapping to equal the entry's FINDING-TYPE, and these resolved to
+        # `""` — so a finding saying the auditor was unavailable, or that a dimension was
+        # skipped, could not be allowlisted by any entry a project could write, while the
+        # contract says every exemption goes through the allowlist. An exemption that
+        # cannot be granted is a finding a project has to live with forever or silence
+        # some other way, which is how an allowlist stops being the one door.
+        "d1_unavailable": "dead_code",
+        "d2_unavailable": "symbol_fab",
+        "d3_unavailable": "orphan_export",
+        "d3_orphan_export_skipped": "orphan_export",
+        "d4_unavailable": "mutation_low",
+        "d4_mutation_score": "mutation_low",
+        "d5_unavailable": "architecture",
     }
     return mapping.get(detector, "")
 
@@ -623,6 +669,19 @@ def _finding_to_stable_identifier(f: Finding) -> str:
         return f"soft_cap_mutation_score_low_{f.language}"
     if f.detector == "d4_mutation" and f.severity == "SOFT_FLOOR":
         return f"soft_floor_mutation_score_medium_{f.language}"
+    # D5 fell through to `""` until 2026-09-17. `_arch.violation` and `_arch.vacuous_rule`
+    # both emit HARD findings, and every language detector runs D5 — so a FAIL_HARD
+    # verdict could be reached by a finding whose stable identifier was the empty string.
+    # Nothing downstream can allowlist, cite or dismiss an identifier that is empty, and
+    # a cap nobody can name is a cap nobody can act on. The two are separated because they
+    # take different actions: fix the code, versus delete the rule that can no longer fire.
+    if f.detector == "d5_architecture":
+        # `vacuous_rule` puts the RULE in symbol_or_line and points file_path at the
+        # config; `violation` points at the offending source. The allowlist tail carries
+        # the rule name in both, so the shape is told apart by the message it built.
+        if "names something that is not in the tree" in f.message:
+            return f"vacuous_architecture_rule_{f.language}"
+        return f"architecture_violation_{f.language}"
     return ""
 
 

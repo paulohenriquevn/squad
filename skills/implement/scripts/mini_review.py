@@ -127,11 +127,37 @@ def _aggregate_wiring(progress_path: Path, phase: str, repo_root: Path) -> dict[
         for sym in recheck.fail_symbols
     ]
 
+    # A PARTIAL resolution is INCONCLUSIVE, not PASS. Naming the unresolved symbols was the first
+    # half (#190); the status kept reading PASS over them, and the consumer that measured
+    # `symbols_resolved: 17` had the four exports under review among the 11 never located.
+    #
+    # It does not block: a derived or dynamic name legitimately does not resolve, and a gate that
+    # fires on ordinary work is one somebody switches off (`code-quality-golden-rule.md § 4.1`).
+    # So the finding is MEDIUM — carried into the report, never a NEEDS_FIX on its own — and it
+    # names the directories searched, which is the fact a reader needs to tell "a derived name"
+    # from "my source lives where the search does not look".
+    unresolved = list(recheck.unresolved_symbols)
+    if unresolved:
+        findings.append({
+            "severity": "MEDIUM",
+            "code": "wiring_symbols_unresolved",
+            "message": f"{len(unresolved)} of {recheck.symbols_checked} symbol(s) could not be "
+                       f"located under {', '.join(recheck.searched_roots)}, so pillar (a) says "
+                       f"nothing about them: {', '.join(unresolved)}",
+        })
+    if recheck.pillar_a_fails > 0:
+        status = "FAIL"
+    elif unresolved:
+        status = "INCONCLUSIVE"
+    else:
+        status = "PASS"
     return {
-        "status": "FAIL" if recheck.pillar_a_fails > 0 else "PASS",
+        "status": status,
         "derivation": derivation,
         "symbols_checked": recheck.symbols_checked,
         "symbols_resolved": recheck.symbols_resolved,
+        "symbols_unresolved": unresolved,
+        "searched_roots": list(recheck.searched_roots),
         "pillar_a_fails": recheck.pillar_a_fails,
         "findings": findings,
     }
@@ -226,6 +252,7 @@ def _phase_checkpoint_findings(
     progress_path: Path,
     phase: str,
     repo_root: Path,
+    slug: str,
 ) -> list[dict[str, str]]:
     """Cross-check this phase's tasks against git: a task committed in git but not
     recorded `committed` in the checkpoint is surfaced here, on the phase boundary,
@@ -236,7 +263,7 @@ def _phase_checkpoint_findings(
         return []
     all_ids = plan_task_ids_from_text(plan_path.read_text(encoding="utf-8-sig"))
     phase_ids = [tid for tid in all_ids if tid.startswith(f"T{phase}.")]
-    report = check_checkpoint_consistency(progress, repo_root, phase_ids)
+    report = check_checkpoint_consistency(progress, repo_root, phase_ids, slug=slug)
     return [{"severity": f.severity, "code": f.code, "message": f.message}
             for f in report.findings]
 
@@ -245,7 +272,7 @@ def _collect_all_findings(
     phase_completeness: Any,
     diff_cohesion: Any,
     wiring: dict[str, Any],
-    cq: dict[str, Any],
+    delta_coverage: dict[str, Any],
 ) -> list[dict[str, str]]:
     findings: list[dict[str, str]] = []
     for f in phase_completeness.findings:
@@ -253,7 +280,7 @@ def _collect_all_findings(
     for f in diff_cohesion.findings:
         findings.append({"severity": f.severity, "code": f.code, "message": f.message})
     findings.extend(wiring.get("findings", []))
-    findings.extend(cq.get("findings", []))
+    findings.extend(delta_coverage.get("findings", []))
     return findings
 
 
@@ -286,7 +313,7 @@ def _render_report(
     phase_completeness: Any,
     diff_cohesion: Any,
     wiring: dict[str, Any],
-    cq: dict[str, Any],
+    delta_coverage: dict[str, Any],
     findings: list[dict[str, str]],
     project_root: Path,
 ) -> str:
@@ -344,13 +371,17 @@ to `/review` (which runs once at the end of all phases).
     md += f"- status: `{wiring.get('status')}`\n"
     md += f"- symbols_checked: {wiring.get('symbols_checked', 'n/a')}\n"
     md += f"- pillar_a_fails: {wiring.get('pillar_a_fails', 'n/a')}\n"
+    if wiring.get("symbols_unresolved"):
+        md += (f"- symbols_unresolved (not located under "
+               f"{', '.join(wiring.get('searched_roots') or [])}): "
+               f"{', '.join(wiring['symbols_unresolved'])}\n")
     if wiring.get("reason"):
         md += f"- reason: {wiring['reason']}\n"
     md += "\n### 4. Delta audit coverage\n\n"
-    md += f"- status: `{cq.get('status')}`\n"
-    if cq.get("reason"):
-        md += f"- reason: {cq['reason']}\n"
-    for path in cq.get("uncovered_files", []):
+    md += f"- status: `{delta_coverage.get('status')}`\n"
+    if delta_coverage.get("reason"):
+        md += f"- reason: {delta_coverage['reason']}\n"
+    for path in delta_coverage.get("uncovered_files", []):
         md += f"- uncovered: `{path}`\n"
     md += "\n## Recommendation\n\n"
     if verdict == "PHASE_REVIEW_PASS":
@@ -373,20 +404,23 @@ def run_mini_review(
     output_dir: Path,
 ) -> tuple[str, str, Path]:
     """Return (verdict, max_severity, report_path)."""
-    pc = check_phase_completeness(plan_path, progress_path, phase)
-    dc = check_diff_cohesion(plan_path, progress_path, phase, project_root)
+    # Named. `pc`, `dc` and `cq` carried the four results the verdict is computed
+    # from, across a render function 130 lines away — and `cq` is the one whose
+    # meaning is least guessable from its letters.
+    completeness = check_phase_completeness(plan_path, progress_path, phase)
+    cohesion = check_diff_cohesion(plan_path, progress_path, phase, project_root)
     wiring = _aggregate_wiring(progress_path, phase, project_root)
-    cq = _check_delta_audit_coverage(dc.modified_files, project_root)
+    delta_coverage = _check_delta_audit_coverage(cohesion.modified_files, project_root)
 
-    findings = _collect_all_findings(pc, dc, wiring, cq)
-    findings.extend(_phase_checkpoint_findings(plan_path, progress_path, phase, project_root))
+    findings = _collect_all_findings(completeness, cohesion, wiring, delta_coverage)
+    findings.extend(_phase_checkpoint_findings(plan_path, progress_path, phase, project_root, slug))
     verdict, max_severity = _compute_verdict(findings)
 
     output_dir.mkdir(parents=True, exist_ok=True)
     date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     report_path = output_dir / f"{slug}-phase{phase}-review-{date}.md"
     report_path.write_text(
-        _render_report(slug, phase, verdict, max_severity, pc, dc, wiring, cq, findings, project_root),
+        _render_report(slug, phase, verdict, max_severity, completeness, cohesion, wiring, delta_coverage, findings, project_root),
         encoding="utf-8",
     )
     return verdict, max_severity, report_path

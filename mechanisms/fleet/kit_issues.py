@@ -40,6 +40,21 @@ from dataclasses import dataclass
 #: and handing one to a lane reproduces the problem one level up.
 NEEDS_A_PERSON = frozenset({"needs-decision", "question", "discussion", "wontfix"})
 
+#: Labels that mean "fixed, merged, and waiting for the release that makes it
+#: installable". An issue in this state is OPEN on purpose: the project rule separates
+#: *the fix is merged* from *the fix is installable* and closes only on the second,
+#: because closing at merge tells whoever is blocked that the problem is gone while the
+#: installer still carries it.
+#:
+#: Without this set such an issue is indistinguishable from one nobody has touched — both
+#: open, both unlabelled for a person — and a lane given one spends an agent re-solving a
+#: solved problem, then writes a report that looks like progress. Measured 2026-09-22,
+#: when twenty issues sat in exactly that state in this repository.
+#:
+#: `in-develop` is the name the project rule already prescribes. A second spelling would
+#: be a second state nobody maintains.
+AWAITING_RELEASE = frozenset({"in-develop"})
+
 
 class Unavailable(RuntimeError):
     """The registry could not be read. Distinct from "the registry is empty".
@@ -61,17 +76,32 @@ class Issue:
         return f"kit#{self.number}"
 
     def actionable(self) -> bool:
-        return not (set(self.labels) & NEEDS_A_PERSON)
+        return self.holding_reason is None
+
+    @property
+    def holding_reason(self) -> str | None:
+        """Why this issue is not fleet work, or None when it is.
+
+        Two reasons, reported apart. Collapsing them would tell a reader that twenty
+        issues need their attention when none of them does, which is a signal that
+        always fires — and a signal that always fires is the same as no signal.
+        """
+        labels = set(self.labels)
+        if labels & NEEDS_A_PERSON:
+            return "needs_a_person"
+        if labels & AWAITING_RELEASE:
+            return "awaiting_release"
+        return None
 
 
 def open_issues(repo: str, *, timeout: int = 60) -> list[Issue]:
     """Every open issue in `repo`, or `Unavailable` with the reason."""
     try:
-        done = subprocess.run(  # noqa: PLW1510
+        done = subprocess.run(
             ["gh", "issue", "list", "--repo", repo, "--state", "open",
              "--limit", "100", "--json", "number,title,labels,url"],
             capture_output=True, text=True, timeout=timeout,
-            stdin=subprocess.DEVNULL)
+            stdin=subprocess.DEVNULL, check=False)
     except FileNotFoundError as exc:
         raise Unavailable(
             f"`gh` is not installed, so the kit's registry cannot be read on this "

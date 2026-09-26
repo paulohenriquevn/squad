@@ -1,4 +1,5 @@
 # Cycle: DISCOVER
+<!-- rule-id: SQ-CYC-07 -->
 
 Source of Truth for the discovery cycle. Skills consume this; do not duplicate content into SKILL.md.
 
@@ -26,6 +27,10 @@ Do NOT trigger DISCOVER for:
 - Anything answerable by reading our own `README.md` / `CLAUDE.md`.
 - An item already `triaged`, `planned` or `shipped`. Re-measuring a closed item is how duplicate work enters.
 
+**This phase is `conditional` in `cycle-phases.txt`, and the list above is why.** An item that arrives carrying the evidence this cycle would produce — a reproduced bug with a failing test, an item filed with a measured pointer — has nothing to gain from it, and a run that skips it is complete rather than short. The phase was declared `required` until 2026-09-19, which made every such run report a missing step. What refuses an unmeasured item is `triaged_without_evidence` (BLOCKER in `check_backlog_structure.py`): it asks for the evidence, not for the ceremony that usually produces it, so the guard holds whether or not this cycle ran.
+
+Optional is not skipped-by-default. An item at `status: raw` with `evidence: none-yet` is exactly what this cycle exists to pick up, and the selector still hands it out.
+
 ## Chain
 
 ```
@@ -36,7 +41,7 @@ Do NOT trigger DISCOVER for:
 /discover-plan-confidence {slug}
      ↓ (gate on the measurement plan itself; INVALID returns to /discover-plan)
 /discover-execute {slug}
-     ↓ (runs the measurement → records/discoveries/opportunities/{slug}-opportunity.md)
+     ↓ (runs the measurement → .squad/records/discoveries/opportunities/{slug}-opportunity.md)
      │                        └─ or → ITEM_KILLED, and the B-NNN block records kill_reason
 /discover-confidence {slug}
      ↓ (scores the opportunity; INVALID returns to /discover-plan)
@@ -172,10 +177,16 @@ away what the panel was convened to produce.
 
 | # | Gate | Blocks on |
 |---|---|---|
-| G-E | **Evidence pointers resolve** (`check_evidence_pointers.py`) | A cited `file:line` that does not exist, a URL never actually fetched, a trace id never observed, a test asserted to fail but never run. Fabricated evidence is the one unrecoverable defect in this cycle: everything downstream trusts it. |
-| G-M | **Mode contract satisfied** (`check_opportunity_completeness.py`) | The mode's mandatory evidence is incomplete — most often `bug` without a failing test. |
-| G-L | **Live target declared** (`check_measurement_targets.py`, at plan time) | `--mode live-test` on a domain with no block in `rules/live-target.txt`. |
-| G-C | **Corners populated** (`check_corner_coverage.py`) | Any of the four corners empty. `unknown` populates Constraint relation; it is an answer, not a blank. |
+| G-E | **Code pointers resolve** (`check_evidence_pointers.py`, run by `run_opportunity_score.py`) | A cited `file:line` that does not exist, or that points past the end of the file. Fabricated evidence is the one unrecoverable defect in this cycle — everything downstream trusts it — and this gate catches **the half of it that is re-verifiable on disk**. See the row below for the half that is not |
+| — | **What G-E cannot check, stated rather than implied** | A URL never actually fetched, a trace id never observed, a test asserted to fail but never run. None of the three is re-readable later: an HTTP call against a dev environment can legitimately differ on a second run, so a checker claiming to verify it would be asserting. Until 2026-09-21 this row did not exist and the line above promised all three — while an opportunity whose entire Corner 1 was three HTTP calls nobody made scored `evidence_pointers_score: 100.0`, `weighted_avg: 100.0`, no cap. Runtime observations are now recorded and counted as evidence, and **the evidence dimension reports itself unmeasured** rather than voting a number it did not measure. What judges whether a recorded observation is true is the panel (G-P), which is why this phase has one |
+| G-M | **Mode contract satisfied** (`check_opportunity_completeness.py`, run by `run_opportunity_score.py`) | `--mode bug` that names no failing test, or names one whose file is not on disk. Declared structurally — `**Failing test:** path/to/test.py::test_name` — because a regex hunting for "the test fails" in prose would produce verdicts about language, which is why G3, G4 and G5 are left conversational. Whether the test genuinely fails is what `/discover-execute` runs and what the panel judges; what this refuses is the opportunity that never names one. Until 2026-09-21 the checker verified only that the word `bug` was on the `**Mode:**` line: an opportunity whose Corner 1 read "No test written yet" scored 100.0 across the board |
+| G-R | **The finding reached the registry** (`check_opportunity_completeness.py`, run by `run_opportunity_score.py`) | `**Item:** B-NNN` naming a block no registry defines. For a `--sweep` finding that is the orphaned-finding failure by definition — the measurement made, the document written, and nothing reaching the registry anybody reads. With no `BACKLOG.md` at the project root the check reports NOT CHECKED rather than calling every opportunity an orphan. The anti-pattern was declared and unenforced until 2026-09-21, and the kit's own `skills/discover-confidence/fixtures/good-opportunity.md` is an opportunity about that gap |
+| G-L | **Live target declared** (`check_measurement_targets.py`, run by `run_measurement_plan_score.py`, at plan time) | `--mode live-test` on a domain with no block in `rules/live-target.txt`. |
+| G-C | **Corners covered** — two checkers, two questions, one id | Any of the four corners empty. `unknown` populates Constraint relation; it is an answer, not a blank |
+| | `check_corners_questioned.py` (plan, via `run_measurement_plan_score.py`) | a corner no Measurement Question reaches and no `DEFER-CORNER` marker excuses |
+| | `check_corners_populated.py` (opportunity, via `run_opportunity_score.py`) | a corner the finished document leaves empty or placeholder |
+
+The two shared one filename until 2026-09-21 — one name, two questions, 80 of ~50 lines of code different. That is the collision `run_slice_tests.sh` isolates processes to survive, and the gate table named only one of the two. The retired name is in `CHANGELOG.md`, which is where a name that no longer resolves belongs: a rule is read as instruction, and naming a script the kit does not ship tells the reader a constraint is enforced and stops them looking.
 | G-K | **Kill is reasoned** — mechanised on two layers: `backlog_status.py` REFUSES a transition to `killed` without a `--kill-reason` (point of action), and `check_backlog_structure.py` reports `killed_without_reason` as MAJOR (after the fact). Both name this gate by id. _(not mechanized: debt since 2026-08-31 — the SUBSTANCE of the reason — nothing confronts what the reason claims against what was measured, and a `kill_reason` of "n/a" satisfies both layers)_ | `ITEM_KILLED` without a `kill_reason` naming what was measured and what it showed. An unexplained kill is indistinguishable from an abandoned run. |
 | G-P | **Panel approved** (`check_panel_approval.py`) | A document no panel carried. Three states, not two: *returned* is `NEEDS_REVISION` and editing can lift it; *no record yet* is `AWAITING_REVIEW` — complete and unsigned, neither a failure nor a pass, and the action is to convene; *did not convene* — an absent reviewer, a voter nobody assigned — is `ITEM_IN_FLIGHT`, held on a material impediment. Sending the author to rewrite a document nobody found fault with is the wrong action in both. **A missing record fails**: a phase that skipped its panel must not be indistinguishable from one whose reviewers all approved. |
 
@@ -198,6 +209,8 @@ away what the panel was convened to produce.
 
 Two phases drive autonomous halt-loops via `ralph-loop:ralph-loop`, following the template in `rules/cycle-implement.md`: pre-flight guard against concurrent loops, formal stop conditions, post-promise sanity check, and an honest BLOCKED report over a false PASS.
 
+**The phase opens where the chain opens.** `/discover-plan` emits the start; `/discover-execute` emits the end with the verdict. It opened in `/discover-execute` until 2026-09-21 — phase 4 of 6 — so the lead time measured the execution of the measurement and not the three phases that produce and approve the plan, and a chain stalling at `/discover-plan-confidence` had no open start to show it as work in flight. The fast lane is the exception and emits its own start, because there `/discover-plan` never ran.
+
 - **`/discover-execute`** — completion promise `<promise>OPPORTUNITY_COMPLETE</promise>`, asserting that every plan question is `done` or `blocked` with a reason, every evidence pointer resolves on disk or in a recorded observation, all four corners are populated, and the mode contract is satisfied. The post-promise check re-verifies pointer integrity. Never emit on a partial state. `ITEM_KILLED` is emitted instead of the promise, with its `kill_reason`.
 - **`/discover-improve`** — completion promise `<promise>OPPORTUNITY_IMPROVED</promise>`, asserting a re-run of the scorer in the emitting iteration reaches the target verdict. Partial improvement does not justify the promise.
 
@@ -214,15 +227,15 @@ Two phases drive autonomous halt-loops via `ralph-loop:ralph-loop`, following th
 
 ## Output
 
-- `records/discoveries/plans/{slug}-plan.md` — the measurement plan
-- `records/discoveries/opportunities/{slug}-opportunity.md` — the terminal artifact
+- `.squad/records/discoveries/plans/{slug}-plan.md` — the measurement plan
+- `.squad/records/discoveries/opportunities/{slug}-opportunity.md` — the terminal artifact
 - `BACKLOG.md` — the `B-NNN` block updated: `status` → `triaged` with `evidence`, or `killed` with `kill_reason`. A `--sweep` appends new blocks with `source: discover-{mode}`.
 
-The study zone the ancestor cycle used (`records/references/`, seeded at project inception and governed by a provenance rule) is **retired**: it existed to hold other people's code for imitation, which is the practice this cycle removed.
+The study zone the ancestor cycle used (`.squad/records/references/`, seeded at project inception and governed by a provenance rule) is **retired**: it existed to hold other people's code for imitation, which is the practice this cycle removed.
 
 ## Rollback
 
-An opportunity that turns out wrong is simply not consumed downstream — supersede or delete the file under `records/discoveries/opportunities/`. The `B-NNN` item returns to `raw` so it can be re-measured, with a note recording that the first measurement was withdrawn and why. Do not silently reset it: an item that was measured, believed, and then withdrawn carries information a fresh-looking `raw` item does not.
+An opportunity that turns out wrong is simply not consumed downstream — supersede or delete the file under `.squad/records/discoveries/opportunities/`. The `B-NNN` item returns to `raw` so it can be re-measured, with a note recording that the first measurement was withdrawn and why. Do not silently reset it: an item that was measured, believed, and then withdrawn carries information a fresh-looking `raw` item does not.
 
 ## Cross-references
 

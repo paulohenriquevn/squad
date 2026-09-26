@@ -74,7 +74,7 @@ test -f .claude/records/reviews/{slug}-implement-validate-*.md
 # not read the verdict, and the per-soft-cap ADR requirement is not verifiable by
 # eye. The script below is the same one `consolidate_findings.py` injects into the
 # verdict — running it here only anticipates the answer, never replaces it.
-python3 .claude/skills/review/scripts/check_upstream_gate.py {slug} --project-root .
+python3 $([ -d .claude/skills ] && echo .claude || echo .)/skills/review/scripts/check_upstream_gate.py {slug} --project-root .
 grep -qE '"verdict":[[:space:]]*"(PASS|PASS_WITH_CAVEATS)"' .claude/records/audits/{slug}-code-quality-*.md \
   || (echo "Refuse: /code-quality verdict is not PASS/PASS_WITH_CAVEATS. Loop back to /implement." && exit 1)
 # Tests green on the branch
@@ -89,10 +89,17 @@ If any check fails, refuse with the specific missing piece surfaced honestly. Th
 ### Step 2 — Domain detection
 
 ```bash
-python3 .claude/skills/review/scripts/detect_domain.py \
-  --plan .claude/records/plans/{slug}-plan.md \
-  --diff-base main
+python3 $([ -d .claude/skills ] && echo .claude || echo .)/skills/review/scripts/detect_domain.py \
+  --plan .claude/records/plans/{slug}-plan.md
 ```
+
+No `--diff-base`: the script resolves the integration branch (`git-safety.md` § 1 —
+`develop`, locally or as `origin/develop`) and reports the ref it compared as
+`diff_base`. **That value is the base for every later step** — the auditors in Step 2b
+and the reviewers in Step 3 — so all three read the same revision. Never type `main`
+here: a repository on this kit's flow need not have one, and every plugin refuses a
+ref that does not resolve. A base that does not resolve exits 2 and names the refs it
+tried; that is a stop, not an empty domain list to carry on with.
 
 Output: JSON with detected domains + confidence per domain.
 
@@ -101,7 +108,8 @@ Output: JSON with detected domains + confidence per domain.
   "primary_domain": "memory-layer",
   "secondary_domains": ["pgvector-schema", "llm-extraction"],
   "confidence": {"memory-layer": 0.92, "pgvector-schema": 0.78, "llm-extraction": 0.65},
-  "domain_keywords_matched": ["memory store", "embedding", "Postgres", "pgvector", "remember"]
+  "domain_keywords_matched": ["memory store", "embedding", "Postgres", "pgvector", "remember"],
+  "diff_base": "develop"
 }
 ```
 
@@ -120,7 +128,7 @@ the wrong thing reads as coverage.
 
 ```bash
 python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/select_auditors.py" \
-  --slug {slug} --domains "<primary,secondary from Step 2>" --diff-base main --write
+  --slug {slug} --domains "<primary,secondary from Step 2>" --diff-base "<diff_base from Step 2>" --write
 ```
 
 Name the change the way it is actually named: `--diff-base <ref>`, `--pr <n>` or
@@ -133,9 +141,43 @@ assignment will say so in writing.
   BLOCKER finding in Step 4 with its own remediation; do not work around it.
 - **`none_declared`** — this project requires no independent audit. Nothing to run.
 
-Run each command the assignment prints, exactly as printed. The `--output-dir` is where
+Run each command the assignment prints, exactly as printed, **from the directory the
+assignment's `run from:` line names** — the project root. The `--output-dir` is where
 Step 4 looks, and the `--diff-base` is what keeps the audit about this change; each
 plugin applies its own declared `diff_mode` to that base.
+
+The working directory is a premise, not a detail. Every plugin confines `--output-dir`
+under its own CWD (a path-traversal fix), and the assignment emits an absolute path
+under this project's write root, so the command is refused anywhere else. Its refusal
+names the flag — `--output-dir is unsafe (escapes current directory)` — and acting on
+that reading means moving the output directory, which is the one thing that must not
+move: Step 4 looks for the report exactly where the assignment put it. **Move the
+caller, never the `--output-dir`.**
+
+**One auditor at a time, in this session, to completion.** Each printed command is
+a halt-loop, not a script: its setup writes `.claude/<name>-loop.local.md`
+(`code-review-loop.local.md` for `loop-code-review`) with `active: true`, and from then
+on that plugin's Stop hook takes over this session until the run ends. That fixes the launch order:
+
+1. **Sequential, never back to back.** Every active loop's Stop hook blocks every Stop
+   and advances its OWN iteration counter on turns spent on the other loops, so N
+   setups launched together share one ceiling — each auditor gets roughly
+   `max_iterations / N` turns of its own, and the audits that hit the cap come back
+   `INCOMPLETE`. No plugin refuses to start while another `loop-*` is active; the order
+   is yours to keep.
+2. **Launch the next only after the previous one finished**: its report exists at
+   `<output_dir>/final_report.md` (the `output_dir` of that row in the assignment), and
+   no `.claude/*-loop.local.md` still says `active: true`. Check both before the
+   next command; if either fails, the previous run has not finished, and a second
+   launch is exactly the shared-ceiling case above.
+3. **Never delegate a loop to a sub-agent.** Stop hooks do not fire inside an Agent
+   sub-agent, so a loop started there runs one turn and stops, and leaves no report.
+4. **Invoke it by the name the assignment prints** — the namespaced skill
+   (`/loop-code-review:loop-code-review …`), which is the name the Skill tool resolves.
+5. **Then resume here.** When the last row's report exists, continue with Step 3 in
+   the same session. The loops do not return to this skill on their own; the
+   assignment file (`.squad/records/audits/{slug}-auditors.json`) is where you pick the
+   list back up, and Step 4 reads the reports from the same `output_dir`s.
 
 **Do not paraphrase an auditor's findings into your own.** They travel as that
 plugin's report, with its `## Verdict` quoted and its `## What Was NOT Analyzed`
@@ -149,15 +191,16 @@ did not run.
 ### Step 3 — Spawn specialized agents (parallel)
 
 ```bash
-python3 .claude/skills/review/scripts/spawn_reviewers.py \
+python3 $([ -d .claude/skills ] && echo .claude || echo .)/skills/review/scripts/spawn_reviewers.py \
   --plan .claude/records/plans/{slug}-plan.md \
   --slug {slug} \
   --primary-domain memory-layer \
   --secondary-domains pgvector-schema,llm-extraction \
+  --diff-base "<diff_base from Step 2>" \
   --output-dir .squad/records/reviews/review-{slug}-{YYYY-MM-DD}/
 ```
 
-Both `--slug` and `--primary-domain` are required. `--date` defaults to today UTC; `--diff-base` defaults to `main`.
+Both `--slug` and `--primary-domain` are required. `--date` defaults to today UTC. `--diff-base` takes Step 2's `diff_base`; omitted, it is resolved the same way Step 2 resolves it, and an unresolvable one is refused rather than written into every reviewer's brief.
 
 The script:
 1. Reads templates at `templates/agent-*.md`
@@ -195,7 +238,7 @@ Each agent runs its review independently and returns findings in a structured fo
 ### Step 4 — Consolidate findings
 
 ```bash
-python3 .claude/skills/review/scripts/consolidate_findings.py \
+python3 $([ -d .claude/skills ] && echo .claude || echo .)/skills/review/scripts/consolidate_findings.py \
   --findings-dir .squad/records/reviews/review-{slug}-{date}/findings/ \
   --output .claude/records/reviews/{slug}-review-{date}.md \
   --plan .claude/records/plans/{slug}-plan.md
@@ -213,7 +256,7 @@ The script:
 Run validation gates from `/implement`'s validation report, but with TIGHTER thresholds:
 
 ```bash
-python3 .claude/skills/implement/scripts/run_validation.py {slug}  # already exists
+python3 $([ -d .claude/skills ] && echo .claude || echo .)/skills/implement/scripts/run_validation.py {slug}  # already exists
 ```
 
 Plus, `/review` adds:
@@ -224,7 +267,7 @@ Plus, `/review` adds:
 ### Step 6 — Edge-case coverage analysis
 
 ```bash
-python3 .claude/skills/review/scripts/edge_case_coverage.py \
+python3 $([ -d .claude/skills ] && echo .claude || echo .)/skills/review/scripts/edge_case_coverage.py \
   --plan .claude/records/plans/{slug}-plan.md \
   --tests-dir tests/
 ```
@@ -232,11 +275,24 @@ python3 .claude/skills/review/scripts/edge_case_coverage.py \
 The script:
 1. Extracts every Edge Case mentioned in the plan (Deep Dives + Acceptance Criteria sections)
 2. Searches tests/ for assertions exercising each edge case (keyword match + AST pattern via ast-grep)
-3. Reports: covered / partial / missing edge cases
+3. Reports: covered (named test exists) / partial (keyword hit only) / missing edge cases
 
 ### Step 7 — HALT-if-BLOCKER decision
 
 After all findings consolidate, decide (per `rules/cycle-review.md § Verdicts`):
+
+**`INVALID` — nothing was reviewed.** When no findings file could be read, the
+consolidator emits `INVALID` and exits **1**. It is not a judgement about the code: it
+says the review did not happen, and `NEEDS_DEEPER` was rejected for it precisely
+because that reads as a finding about the code and sends the author hunting for
+problems nobody measured. Both the verdict and this exit code were absent from this
+contract while the script emitted them.
+
+**Exit codes.** `0` — READY_TO_MERGE or READY_TO_MERGE_WITH_FOLLOWUPS. `1` —
+NEEDS_FIXES, or INVALID. `2` — the findings directory does not exist. `3` —
+NEEDS_DEEPER. A caller distinguishing "fix these" from "look wider" reads 1 against 3,
+and `3` was undocumented too.
+
 
 - Any BLOCKER → **HALT**. Merge cannot proceed. Loop back to `/implement` to fix.
 - More than 2 HIGH → `READY_TO_MERGE_WITH_FOLLOWUPS` **only when every HIGH is a registered followup** — named by id under the plan's `## Followups` section (that is what `--plan` is read for) or carrying an issue reference `#NNN` in `recommended_action`. Any unregistered HIGH → **HALT** with `NEEDS_FIXES`. A rationale written in the report's prose is not registration: a caveat nobody owns is a defect with better manners. Up to 2 HIGH with documented mitigation MAY emit `READY_TO_MERGE`.
@@ -259,7 +315,7 @@ Report format (see `consolidate_findings.py`):
 **Date:** {date}
 **Reviewers (spawned agents):** 5-7 (list)
 **Findings:** N total (BLOCKER: N, HIGH: N, MEDIUM: N, LOW: N, INFO: N)
-**Verdict:** READY_TO_MERGE / READY_TO_MERGE_WITH_FOLLOWUPS / NEEDS_FIXES / NEEDS_DEEPER
+**Verdict:** READY_TO_MERGE / READY_TO_MERGE_WITH_FOLLOWUPS / NEEDS_FIXES / NEEDS_DEEPER / INVALID
 
 ## BLOCKER findings (must fix before merge)
 ### F1: {description}
@@ -420,7 +476,7 @@ Per `cycle-review.md § Verdicts` — `BLOCKED` is the honest outcome here:
 - Agent templates: `templates/agent-*.md`
 - Orchestrator prompt: `prompts/orchestrator-prompt.md`
 - Scripts: `scripts/detect_domain.py`, `scripts/spawn_reviewers.py`, `scripts/edge_case_coverage.py`, `scripts/consolidate_findings.py`
-- Reuses: `.claude/skills/implement/scripts/run_validation.py` (quality gates), `.claude/skills/implement/scripts/check_wiring.py` (wiring re-validation)
+- Reuses: `$([ -d .claude/skills ] && echo .claude || echo .)/skills/implement/scripts/run_validation.py` (quality gates), `$([ -d .claude/skills ] && echo .claude || echo .)/skills/implement/scripts/check_wiring.py` (wiring re-validation)
 - Generated audit trail: `.squad/records/reviews/review-{slug}-{date}/`
 - Final reports: `.claude/records/reviews/{slug}-review-{date}.md`
 - Project rules consumed: `architecture.md`, `testing.md`, `public-copy.md`, `discover-plan-golden-rule.md` and `discover-opportunity-golden-rule.md` (if the review touches discovery artifacts)

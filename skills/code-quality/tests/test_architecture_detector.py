@@ -102,6 +102,8 @@ class TestRuleSelfcheck:
             "from": {"path": "^agents/goal/"},
             "to": {"path": "^tui/consent/"},
         }
+        # The fixture's literal narrows to a nested-dict type; the override is a
+        # partial of the same rule, which mypy cannot express against the literal.
         rule.update(over)  # type: ignore[arg-type]
         return rule
 

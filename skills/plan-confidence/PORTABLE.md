@@ -108,7 +108,7 @@ Install all-at-once: `pip install PyYAML pytest ruff mypy hypothesis jsonschema`
 | **Windows (native cmd/PowerShell)** | ❌ NOT supported | ⚠️ Python scripts work, paths might break | bash setup.sh requires bash; native Windows uses backslash paths |
 
 For native Windows users:
-- The Python scripts (`run_structural.py`, `apply_fixes.py`, etc.) work in PowerShell, but path conventions differ.
+- The Python scripts (`run_structural.py`, `apply_plan_fixes.py`, etc.) work in PowerShell, but path conventions differ.
 - Use **WSL2** for the smoothest experience.
 - The `setup.sh` installer requires bash — run it from WSL2 or git-bash.
 

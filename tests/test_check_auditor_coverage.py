@@ -173,6 +173,45 @@ def test_a_project_declaring_no_auditor_is_not_blocked(tmp_path: Path) -> None:
     assert result["status"] == "none_declared"
 
 
+def test_an_unreadable_registry_is_not_read_as_a_project_declaring_no_auditor(
+        tmp_path: Path) -> None:
+    """`except OSError: declared = []` made every read failure mean "none declared".
+
+    Absence is one OSError among many. A permission bit, a directory where the file
+    should be, an I/O error on the volume — each arrived as an empty list, and the very
+    next branch turned an empty list into COVERED with the detail "Stated, never
+    inferred from an empty result", which is exactly what it was inferring. The gate
+    that exists to prove an audit happened returned "no audit required" the moment it
+    could not read the file that says which audits are required.
+    """
+    project = _project(tmp_path, assignment=False)
+    registry = project / "rules" / "review-auditors.txt"
+    registry.unlink()
+    registry.mkdir()  # a directory where the registry belongs: read_text raises IsADirectoryError
+
+    code, result = check("B-014", project=project, config_dir=_config(tmp_path))
+
+    assert code == UNCHECKED, (
+        f"an unreadable registry produced {code}, not 'nothing was verified'"
+    )
+    assert result["status"] == "unchecked"
+    assert "IsADirectoryError" in result["detail"] or "directory" in result["detail"].lower(), (
+        f"the detail does not name why the registry could not be read: {result['detail']!r}"
+    )
+
+
+def test_an_absent_registry_is_still_a_project_that_declares_no_auditor(
+        tmp_path: Path) -> None:
+    """The refusal above must not swallow the case it was built around."""
+    project = _project(tmp_path, assignment=False)
+    (project / "rules" / "review-auditors.txt").unlink()
+
+    code, result = check("B-014", project=project, config_dir=_config(tmp_path))
+
+    assert code == COVERED
+    assert result["status"] == "none_declared"
+
+
 def test_a_declared_requirement_with_no_assignment_blocks(tmp_path: Path) -> None:
     """Nothing can say an audit happened if nothing said it was required."""
     code, result = check("B-014", project=_project(tmp_path, assignment=False),

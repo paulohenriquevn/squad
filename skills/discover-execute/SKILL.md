@@ -125,10 +125,10 @@ On `<promise>OPPORTUNITY_BLOCKED</promise>` the check still runs, plus the block
 On `<promise>ITEM_KILLED</promise>`, verify instead that the `B-NNN` block carries a `kill_reason` naming what was measured and what it showed (gate G-K). An unexplained kill is indistinguishable from an abandoned run.
 
 
-Emit the START of this phase before doing the work:
+Emit the START of this phase before doing the work — **only in the fast lane**, where `--mode bug` entered here directly and `/discover-plan` never ran. On the full chain the phase was opened there, and a second start would report one measurement as two:
 
 ```bash
-python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" start \
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" start \
     --cycle discover --slug {B-NNN}
 ```
 
@@ -149,14 +149,14 @@ The status change is written by the writer that owns it, which refuses the
 transitions the contract forbids:
 
 ```bash
-python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/backlog_status.py" \
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/backlog_status.py" \
     BACKLOG.md B-NNN --to triaged            # or --to killed --kill-reason "<what was measured>"
 ```
 
 Then record the transition in the stream, carrying the outcome above as the verdict:
 
 ```bash
-python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" end \
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" end \
     --cycle discover --slug B-NNN --verdict AWAITING_REVIEW
 ```
 
@@ -171,7 +171,7 @@ Report: the opportunity path, iterations used, questions answered / blocked with
 
 ### Step 9 — Sweep mode
 
-`--sweep {domain}` measures a domain with no prior item. Each finding is registered directly in `BACKLOG.md` with `source: discover-{mode}`, its evidence attached, and `status: triaged` — sweep findings skip intake because they arrive with the evidence intake is not allowed to require.
+`--sweep {domain}` measures a domain with no prior item. Each finding is registered directly in `BACKLOG.md` with `source: discover-{mode}`, its evidence attached, `status: approved` and `approved_by: system/autonomous-sweep` — sweep findings skip intake because they arrive with the evidence intake is not allowed to require, and `rules/cycle-backlog.md` files an item the system found as approved when it is filed.
 
 Registration is not optional. A finding that stays in this run's output and never reaches the registry is exactly the orphaned-finding failure the single registry exists to prevent.
 

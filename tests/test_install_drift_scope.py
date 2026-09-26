@@ -2,7 +2,7 @@
 
 Two false positives measured 2026-08-20 against `speculative`'s installation:
 
-1. `agents/speculative.md` e os 4 validadores do projeto apareceram como
+1. `agents/speculative.md` and the project's 4 validators showed up as
    `INSTALL_AHEAD` — "work the kit does not have". They are domain specialists:
    they must never travel into the kit (grill, decision 5).
 2. `settings.json` showed up as `DIVERGED`. The two files are identical as JSON —
@@ -36,10 +36,10 @@ def _trees(tmp_path: Path) -> tuple[Path, Path]:
 
 
 def _run(install: Path, kit: Path) -> str:
-    return subprocess.run(  # noqa: PLW1510
+    return subprocess.run(
         [sys.executable, str(_SCRIPT), "--install", str(install), "--kit", str(kit)],
         capture_output=True, text=True,
-    ).stdout
+     check=False).stdout
 
 
 def test_a_project_specialist_is_not_reported_as_unharvested(tmp_path: Path) -> None:
@@ -88,10 +88,12 @@ def _kit_repo_with_history(tmp_path: Path) -> tuple[Path, str, str]:
     run("init", "-q")
     older = "line A\nline OLD\n"
     (kit / "rules" / "x.md").write_text(older, encoding="utf-8")
-    run("add", "-A"); run("-c", "commit.gpgsign=false", "commit", "-q", "-m", "v1")  # noqa: E702
+    run("add", "-A")
+    run("-c", "commit.gpgsign=false", "commit", "-q", "-m", "v1")
     newer = "line A\nline NEW\n"
     (kit / "rules" / "x.md").write_text(newer, encoding="utf-8")
-    run("add", "-A"); run("-c", "commit.gpgsign=false", "commit", "-q", "-m", "v2")  # noqa: E702
+    run("add", "-A")
+    run("-c", "commit.gpgsign=false", "commit", "-q", "-m", "v2")
     return kit, older, newer
 
 

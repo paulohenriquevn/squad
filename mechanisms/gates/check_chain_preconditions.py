@@ -54,7 +54,10 @@ for _up in Path(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         sys.path.insert(0, str(_up))
         break
-from squad.paths import routing_table  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import routing_table, rules_dir  # noqa: E402 — post-bootstrap import
 
 
 @dataclass
@@ -83,10 +86,8 @@ class Report:
 
 
 def _rules_dir(project: Path) -> Path | None:
-    for candidate in (project / ".claude" / "rules", project / "rules"):
-        if candidate.is_dir():
-            return candidate
-    return None
+    """Delegated. Nine sites resolved this pair by hand and six used the other order."""
+    return rules_dir(project)
 
 
 def _data_rows(path: Path) -> list[str]:
@@ -146,16 +147,54 @@ def check_languages(project: Path) -> list[Check]:
     return out
 
 
+def is_the_kit_itself(project: Path) -> bool:
+    """Is this the kit's own checkout rather than a project that installed it?
+
+    The two preconditions below are the CONSUMER's to satisfy, and the kit ships
+    both deliberately unmet: `BACKLOG.md` is never versioned (it is the maintainer's
+    own register, not the product's), and `rules/domain-routing.txt` ships with no
+    rows because the table describes repositories the kit does not have.
+
+    So this gate refused the kit's own tree on every run, permanently, for the state
+    the kit is supposed to be in — and a gate that always refuses is a gate whose
+    refusal carries no information. Told apart by the manifest: only the kit's own
+    checkout carries `.claude-plugin/plugin.json` beside `skills/` and `mechanisms/`.
+    """
+    manifest = project / ".claude-plugin" / "plugin.json"
+    return (manifest.is_file()
+            and (project / "skills").is_dir()
+            and (project / "mechanisms" / "gates").is_dir())
+
+
 def check_routing(project: Path) -> Check:
     """Without a routing row, gate G1 refuses every item at intake."""
     table = routing_table(project)
     if table is None:
+        if is_the_kit_itself(project):
+            # The same fact the empty-table branch below already knew, arriving through
+            # the other door. A table with no rows and no table at all are both "this
+            # tree has no consumer's repositories to route", and this branch called the
+            # second one a FAILURE while the first was correctly `not measurable`.
+            #
+            # It only started firing on 2026-09-21, when the kit stopped shipping a
+            # placeholder under `rules/` — the file had been standing in for the
+            # distinction, which is why the gap went unseen.
+            return Check("domain routing", None,
+                         "no routing table, and this is the kit — the table describes "
+                         "a consumer's repositories and is written into the project's "
+                         "write root by `/backlog-init`. Not measurable here, and not "
+                         "a failure of this tree.")
         return Check("domain routing", False,
                      "no domain-routing.txt anywhere — gate G1 refuses every item "
                      "with `unroutable_repo`, so nothing can be filed",
                      "run /backlog-init, or write the table by hand")
     rows = _data_rows(table)
     if not rows:
+        if is_the_kit_itself(project):
+            return Check("domain routing", None,
+                         f"{table.name} ships with no rows ON PURPOSE — the table "
+                         "describes a consumer's repositories, and this is the kit. "
+                         "Not measurable here, and not a failure of this tree.")
         return Check("domain routing", False,
                      f"{table} has no routing row — every item is unroutable (G1)",
                      "add one row per repository: `<domain> | <repos> | <agent file>`")
@@ -165,6 +204,11 @@ def check_routing(project: Path) -> Check:
 def check_backlog(project: Path) -> Check:
     path = project / "BACKLOG.md"
     if not path.is_file():
+        if is_the_kit_itself(project):
+            return Check("backlog", None,
+                         "no BACKLOG.md, and this is the kit — the register is the "
+                         "maintainer's and is never versioned. Not measurable here, "
+                         "and not a failure of this tree.")
         return Check("backlog", False, "no BACKLOG.md — there is nothing to work on",
                      "run /backlog-init")
     items = len(re.findall(r"^## B-\d+", path.read_text(encoding="utf-8-sig"), re.M))
@@ -196,7 +240,28 @@ def check_approved(project: Path) -> Check:
         return Check("approved work", None,
                      "no BACKLOG.md, so nothing can be approved either", "")
     text = path.read_text(encoding="utf-8-sig")
-    approved = len(re.findall(r"^status:\s*approved\s*$", text, re.M))
+    # B-197 — both sides of the subtraction counted over the SAME blocks.
+    #
+    # The first version counted the population as `^status: approved` and the attributions as
+    # every `^approved_by:` line in the FILE. Different domains, so the moment a registry
+    # advanced past `approved` the remainder went negative: measured on a consumer
+    # 2026-09-21, `11 approved · 41 by the loop · -30 unattributed`, printed as `[ok]`.
+    #
+    # Widening the population to the committed statuses was a HALF-MEASURE, recorded here
+    # because the number proved it: the same registry then read `-3`, since a `killed` item
+    # approved before it died still carries the field. Widening one side of a subtraction does
+    # not make two populations the same population; counting both over one set of blocks does.
+    #
+    # The committed set is the honest population for the question the split answers — "has
+    # anyone read this registry?" — because an item that shipped was read by whoever committed
+    # to it. Same set `check_backlog_structure.py` fires `approval_unattributed` over, so the
+    # two instruments agree about who owes an attribution.
+    _committed_re = re.compile(r"^status:\s*(?:approved|planned|shipped)\s*$", re.M)
+    # `\d+`, not `\d{3}`: a registry that crosses B-999 must not vanish from this count.
+    _blocks = [b for b in re.split(r"(?m)^(?=## B-\d+ )", text) if _committed_re.search(b)]
+    approved = len(_blocks)
+    committed_by_human = sum(1 for b in _blocks if re.search(r"^approved_by:\s*human/", b, re.M))
+    committed_by_system = sum(1 for b in _blocks if re.search(r"^approved_by:\s*system/", b, re.M))
     triaged = len(re.findall(r"^status:\s*triaged\s*$", text, re.M))
     if approved:
         # WHO approved, not just how many. Since 2026-09-14 a sweep finding is born
@@ -204,8 +269,7 @@ def check_approved(project: Path) -> Check:
         # to answer "has anyone read this registry?" — and a loop that approves its own
         # findings can feed itself. The split is reported at the one moment it can still
         # change a decision: before the next run starts.
-        by_human = len(re.findall(r"^approved_by:\s*human/", text, re.M))
-        by_system = len(re.findall(r"^approved_by:\s*system/", text, re.M))
+        by_human, by_system = committed_by_human, committed_by_system
         unattributed = approved - by_human - by_system
         parts = [f"{approved} item(s) approved"]
         if by_human or by_system:
@@ -267,11 +331,21 @@ def render(rep: Report, project: Path) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Refuse to start a chain that cannot finish.")
-    parser.add_argument("project", nargs="?", default=".", type=Path)
+    # `--root` beside the positional, per `_contract.py`. The positional stays: a
+    # consumer already types it, and the contract is about what a caller can rely
+    # on, never about taking something away.
+    #
+    # Separate dests, resolved here. Sharing one `dest` silently broke the flag:
+    # argparse applies the absent positional's default AFTER parsing the option, so
+    # `--root /elsewhere` was overwritten by `.` and this gate reported on the
+    # directory the shell stood in, under a heading naming the other tree.
+    parser.add_argument("positional_project", nargs="?", metavar="project",
+                        type=Path, default=None)
+    parser.add_argument("--root", dest="project", type=Path, default=None)
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
-    project = args.project.resolve()
+    project = (args.project or args.positional_project or Path(".")).resolve()
     rep = measure(project)
     if args.json:
         print(json.dumps({"checks": [

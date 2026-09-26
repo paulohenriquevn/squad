@@ -41,6 +41,7 @@ data root, so the copies cannot come back. One owner, or the drift returns silen
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 #: The single write root. A folder, under the project, holding only produced data.
@@ -90,6 +91,13 @@ LEGACY_RECORDS_ROOTS: tuple[str, ...] = (
 )
 LEGACY_WIKI_ROOTS: tuple[str, ...] = (".claude/wiki", "wiki")
 
+#: The legacy wiki roots whose LOCATION is the evidence the kit wrote them. `.claude/`
+#: is the installed kit's own directory and no plugin writes a bundle there by default.
+#: The bare `wiki/` is different: `loop-system-cartography` and `loop-project-purge`
+#: both write their OKF bundle to `<project>/wiki/` by default, so there the directory
+#: has to show the kit's shape before a reader accepts it (`is_kit_wiki`).
+KIT_LOCATED_WIKI_ROOTS: frozenset[str] = frozenset({".claude/wiki"})
+
 #: What the bundle calls a leaf, mapped to where the dated trail used to keep it.
 DURABLE_LEAVES: dict[str, str] = {
     "sops": "sops",
@@ -98,10 +106,96 @@ DURABLE_LEAVES: dict[str, str] = {
     "opportunities": "discoveries/opportunities",
 }
 
+#: Every leaf this kit has written into a bundle. Measured over the whole history of
+#: this repository (every added line outside tests naming `wiki/<leaf>`): `product`,
+#: `decisions`, `sops`, `design`, `references`, `opportunities` — and nothing else. A
+#: plugin's bundle is organised by its own concept types (`components/`, `flows/`) or
+#: keeps concepts at its root, which is what lets a reader tell the two apart without a
+#: marker file the kit's legacy bundles never had.
+KIT_WIKI_LEAVES: frozenset[str] = frozenset({*DURABLE_LEAVES, "product", "design"})
+
+#: The files OKF reserves at a bundle root. Every bundle carries them, whoever wrote it,
+#: so they are evidence of nothing.
+_OKF_RESERVED_FILES: frozenset[str] = frozenset({"index.md", "log.md"})
+
+
+def is_cycle_generated_skill(name: str) -> bool:
+    """A skill the CYCLES wrote, not a phase anybody maintains.
+
+    `/review` emits `review-{slug}-{role}-knowledge` per reviewer, per run. These
+    are output. Asking one for a row in the kit's map, a cycle contract, or an
+    `SOP.md` asks an artifact to behave like an input.
+
+    It lives HERE, with the rest of what this kit knows about its own produced
+    data, because it has been hoisted once already and the hoist was not far
+    enough. `check_xrefs.py` pulled it out of an inline check after a first
+    version exempted `no_orphan_skills` and left `skill_has_cycle_contract`
+    charging — 26 WARN traded for 3, which looked like a fix. Its docstring closed
+    with "One definition, two consumers: that is what stops the next half from
+    escaping." A third sweep, `check_skill_map.py`, never learned it, and warned
+    about this exact shape in its own prose while doing it: measured on a consumer
+    2026-09-18, 13 `missing_from_map` plus `missing_sop` and a disagreeing count,
+    every finding about a file `/review` had just written. The only exemption on
+    offer was a hand-maintained list, so the remedy was to re-list after every
+    review what the kit generates by itself.
+
+    Two consumers inside one directory was the ceiling. From here a fourth sweep
+    inherits the answer rather than re-deriving it.
+
+    `*-sepa-knowledge` is BACKWARD COMPATIBILITY and has no producer any more.
+    `/implement` generated one per plan until 2026-09-01 and now routes to the
+    project's own domain specialist. The pattern stays because consumers still
+    hold what was written to their disks, and dropping it would turn those files
+    into orphans and fail repositories that did nothing wrong. Remove it once no
+    consumer carries one.
+    """
+    return name.endswith("-knowledge") and (name.startswith("review-")
+                                            or "-sepa-" in name)
+
 
 def data_root(project_root: Path | str) -> Path:
     """`<project>/.squad` — where every write goes, whether or not it exists yet."""
     return Path(project_root) / DATA_DIRNAME
+
+
+#: What may appear in a path segment built from a CLI argument. Deliberately narrow:
+#: a slug is an item id or a plan name, and a phase is a word from `cycle-phases.txt`.
+_SAFE_SEGMENT = re.compile(r"^[A-Za-z0-9._-]+$")
+
+
+class UnsafeSegment(ValueError):
+    """A CLI string was going to become part of a path and is not a single safe name."""
+
+
+def safe_segment(value: str, *, what: str) -> str:
+    """`value`, or a refusal naming what was wrong with it.
+
+    Four mechanisms built a filename by interpolating `--slug` and `--phase` straight
+    into an f-string and then `mkdir -p`'d the parent: `convene_panel.assignment_path`,
+    `cast_vote`, `critic_round` and the record writer beside them. A slug containing
+    `../` escaped the write root and CREATED the directories on the way, so a mechanism
+    whose whole contract is "everything this system writes goes under `.squad/`" wrote
+    outside the tree it owns. `.` and `..` are refused by name: both match the character
+    class and neither is a filename.
+    """
+    if not value or not _SAFE_SEGMENT.match(value) or value in (".", ".."):
+        raise UnsafeSegment(
+            f"{what} must be a single name of letters, digits, dot, dash or underscore "
+            f"— got {value!r}. It becomes part of a path, and `../` in one is how a "
+            f"writer leaves the write root.")
+    return value
+
+
+def confined(path: Path, root: Path, *, what: str) -> Path:
+    """`path`, once it is proved to resolve inside `root`.
+
+    The second half of the same guard. `safe_segment` refuses the spelling; this refuses
+    the RESULT, so a future caller composing segments some other way is still held.
+    """
+    resolved = path.resolve()
+    if not resolved.is_relative_to(root.resolve()):
+        raise UnsafeSegment(f"{what} resolves to {resolved}, outside {root}")
+    return path
 
 
 def write_records_dir(project_root: Path | str, leaf: str = "") -> Path:
@@ -145,9 +239,66 @@ def lead_log_path(project_root: Path | str) -> Path:
     return data_root(project_root) / "lead.jsonl"
 
 
+def assignment_log_path(project_root: Path | str) -> Path:
+    """Where the router records which unit is held by which lane, scoped to the PROJECT.
+
+    The default was `~/.squad-fleet/assignments.jsonl`, which is scoped to the MACHINE.
+    Every `fleet_supervisor.sh --project X` and `--project Y` on one host replayed and
+    appended to the same file, and `in_flight()` keys the held set by unit slug alone —
+    so `B-014` in one consumer and `B-014` in another are one key. A unit held in one
+    project therefore read as held in the other, and the second fleet skipped work that
+    nothing was doing.
+
+    Same failure and same fix as `lead_log_path` above, one file along. `--log` still
+    overrides for anyone who wants it elsewhere.
+    """
+    return data_root(project_root) / "assignments.jsonl"
+
+
+#: The active sprint's record. One name, one place, for the same reason as the plan
+#: pointer: a second spelling of a data-root path is a second answer to where state lives.
+SPRINT_RECORD = "sprint.md"
+
+
+def sprint_record(project_root: Path | str) -> Path:
+    """The file naming the active block of work, its goal, and what it admitted.
+
+    Directly under the data root rather than in `records/`, because it is what one
+    session leaves for the next rather than a dated artifact — the same argument
+    `write_state_dir` makes. It becomes a record only when it CLOSES, and the closing
+    verdicts are what make it worth keeping.
+    """
+    return data_root(project_root) / SPRINT_RECORD
+
+
 def active_plan_pointer(project_root: Path | str) -> Path:
     """The file naming which plan is active. One name, one place."""
     return data_root(project_root) / ACTIVE_PLAN
+
+
+def active_plan_candidates(project_root: Path | str) -> list[Path]:
+    """Where to LOOK for the active-plan pointer, canonical first, then legacy.
+
+    A reader — the status line, most visibly — has to try the old name too, or a
+    project that has not migrated shows no plan while a plan is active. Those old
+    names are data-root literals, and `check_write_containment.py` fails any kit file
+    outside this module that spells one. That is the rule working: the shell had
+    `.active_plan` typed into it, which is exactly the second spelling this module
+    exists to prevent. So the LIST is published here and the reader iterates it.
+    """
+    root = Path(project_root)
+    candidates = [active_plan_pointer(root)]
+    for name in LEGACY_STATE_NAMES:
+        if name == ACTIVE_PLAN or name.lstrip(".").replace("_", "-") == ACTIVE_PLAN:
+            candidates.append(root / name)
+    return candidates
+
+
+def plans_dir_candidates(project_root: Path | str) -> list[Path]:
+    """Where to LOOK for written plans, canonical first, then the legacy roots."""
+    root = Path(project_root)
+    return [write_records_dir(root, "plans"),
+            *(root / base / "plans" for base in LEGACY_RECORDS_ROOTS)]
 
 
 #: The routing table: which repositories exist here, and who owns each. DERIVED by
@@ -167,6 +318,36 @@ ROUTING_TABLE = "domain-routing.txt"
 #: run anything inside another project's repository, so a hard cut breaks every
 #: consumer that updates without migrating.
 LEGACY_ROUTING_ROOTS: tuple[str, ...] = (".claude/rules", "rules")
+
+
+#: The two places a rules directory can be, in the ONE order this module declares.
+#: Exported because some readers iterate the BASES rather than asking for a directory —
+#: the file they want may live in either — and a second spelling of this pair is the
+#: defect `rules_dir` was written to remove.
+RULE_BASES: tuple[str, ...] = (".claude/rules", "rules")
+
+
+def rules_dir(project_root: Path | str) -> Path | None:
+    """Where this project's rule tables are READ from, or None when there are none.
+
+    ONE order, declared once. Nine sites resolved this pair by hand and they disagreed:
+    six tried `("rules", ".claude/rules")` and three tried `(".claude/rules", "rules")`.
+    In a plugin install BOTH directories exist — `.claude/rules/` is the installed kit's
+    and `rules/` may be the project's own — so the same question got two answers
+    depending on which module asked it, and a table edited in one was invisible to half
+    the readers.
+
+    `.claude/rules` wins, for the case where the disagreement is observable: in a
+    consumer, the kit's tables are the ones under `.claude/`. In the kit's own checkout
+    only `rules/` exists and the order never comes up. This matches `LEGACY_ROUTING_ROOTS`
+    above, which settled the same question for the routing table first.
+    """
+    root = Path(project_root)
+    for relative in RULE_BASES:
+        candidate = root / relative
+        if candidate.is_dir():
+            return candidate
+    return None
 
 
 def write_routing_table(project_root: Path | str) -> Path:
@@ -208,13 +389,96 @@ def records_dir(project_root: Path | str, leaf: str = "") -> Path | None:
     return _first_existing(root, LEGACY_RECORDS_ROOTS, leaf)
 
 
+def foreign_wiki_entries(directory: Path) -> list[str]:
+    """Top-level entries of a bundle root that this kit never writes, sorted.
+
+    Hidden entries (`.gitkeep`, `.obsidian/`) and the OKF reserved files say nothing
+    about who wrote a bundle, so they are not counted either way.
+    """
+    if not directory.is_dir():
+        return []
+    return sorted(
+        entry.name for entry in directory.iterdir()
+        if not entry.name.startswith(".")
+        and entry.name not in _OKF_RESERVED_FILES
+        and not (entry.is_dir() and entry.name in KIT_WIKI_LEAVES)
+    )
+
+
+def kit_wiki_leaves_in(directory: Path) -> list[str]:
+    """The kit's leaves present at a bundle root, sorted."""
+    if not directory.is_dir():
+        return []
+    return sorted(leaf for leaf in KIT_WIKI_LEAVES if (directory / leaf).is_dir())
+
+
+def is_kit_wiki(directory: Path) -> bool:
+    """Does this bundle root show the shape of one THIS kit wrote?
+
+    At least one of the kit's leaves and nothing the kit never writes. Positive
+    evidence, not the absence of a stranger's: a directory the kit cannot recognise as
+    its own is not read as the project's knowledge, whoever turns out to have made it.
+
+    Measured by reading the defaults of two installed plugins (2026-09-25):
+    `loop-system-cartography` writes `<TARGET>/wiki` with `components/`, `entities/`,
+    `flows/`, `operations/`; `loop-project-purge` writes `wiki/` with concepts at the
+    root. Before this, `wiki_dir()` accepted either as the project's bundle because the
+    directory existed, and `check_data_root` asked the project to migrate it.
+    """
+    return bool(kit_wiki_leaves_in(directory)) and not foreign_wiki_entries(directory)
+
+
 def wiki_dir(project_root: Path | str, leaf: str = "") -> Path | None:
-    """Where this project's durable bundle for `leaf` actually is, or None."""
+    """Where this project's durable bundle for `leaf` actually is, or None.
+
+    The write root first, then the legacy roots — but a legacy root the kit's location
+    does not vouch for is read only when it has the kit's shape (`is_kit_wiki`). A bare
+    `wiki/` holding another producer's bundle is not a fallback, it is somebody else's
+    directory, and answering from it put a plugin's output into the kit's gates.
+    """
     root = Path(project_root)
     current = write_wiki_dir(root, leaf)
     if current.is_dir():
         return current
-    return _first_existing(root, LEGACY_WIKI_ROOTS, leaf)
+    for relative in LEGACY_WIKI_ROOTS:
+        base = root / relative
+        if relative not in KIT_LOCATED_WIKI_ROOTS and not is_kit_wiki(base):
+            continue
+        candidate = base / leaf if leaf else base
+        if candidate.is_dir():
+            return candidate
+    return None
+
+
+#: Where a project keeps documents PEOPLE wrote, versioned with the product. Distinct
+#: from the write root on purpose, and kept a separate function rather than a third
+#: entry in `LEGACY_WIKI_ROOTS`: making it a fallback of `wiki_dir()` would put authored
+#: documents and run output back behind one name, which is the ambiguity the 2026-09-21
+#: move removed.
+AUTHORED_WIKI_ROOT = "docs/wiki"
+
+
+def authored_wiki_dir(project_root: Path | str, leaf: str = "") -> Path | None:
+    """The project's AUTHORED bundle for `leaf`, or None when it keeps none.
+
+    WHY THIS IS NOT `wiki_dir`. `wiki_dir` answers from `.squad/`, the write root — what
+    a cycle produced for this project. This answers from `docs/wiki/`, where a person
+    sat down and wrote something that ships with the product.
+
+    The kit is the case that made the distinction necessary: it is itself a product, so
+    its eleven ADRs and SOPs are authored documents, and they lived in the write root
+    until 2026-09-21 on the argument that "this kit's durable knowledge IS its source".
+    The argument was true and the location taught, by example, that writing authored
+    documents into a consumer's write root was normal.
+
+    A project with no `docs/wiki/` gets None, which is not an error: most projects keep
+    no authored bundle, and their `.squad/wiki/` is the only one they have.
+    """
+    root = Path(project_root)
+    candidate = root / AUTHORED_WIKI_ROOT
+    if leaf:
+        candidate = candidate / leaf
+    return candidate if candidate.is_dir() else None
 
 
 def resolve_knowledge_dir(project_root: Path | str, leaf: str) -> Path | None:
@@ -230,21 +494,6 @@ def resolve_knowledge_dir(project_root: Path | str, leaf: str) -> Path | None:
         return records_dir(root, leaf)
     found = wiki_dir(root, leaf)
     return found if found is not None else records_dir(root, legacy_leaf)
-
-
-def legacy_data_dirs(project_root: Path | str) -> list[Path]:
-    """Legacy roots this project still has on disk, for a migration to report.
-
-    Nothing here moves them. A migration the kit performed inside a consumer's
-    repository would be the kit writing to a project it does not own.
-    """
-    root = Path(project_root)
-    seen: list[Path] = []
-    for relative in (*LEGACY_RECORDS_ROOTS, *LEGACY_WIKI_ROOTS):
-        candidate = root / relative
-        if candidate.is_dir() and candidate not in seen:
-            seen.append(candidate)
-    return seen
 
 
 def contains(project_root: Path | str, path: Path | str) -> bool:

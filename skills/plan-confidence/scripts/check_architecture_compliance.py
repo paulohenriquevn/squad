@@ -164,6 +164,16 @@ def _has_size_budget_signal(plan_content: str) -> bool:
     )
 
 
+def _display_path(rules_dir: Path, fallback: bool) -> str:
+    """The rules tree as a reader should see it: short when it is ours, whole otherwise."""
+    if fallback:
+        return "defaults/"
+    try:
+        return str(rules_dir.relative_to(SKILL_ROOT.parent.parent.parent))
+    except ValueError:
+        return str(rules_dir)
+
+
 def check_architecture_compliance(plan_path: Path) -> ComplianceReport:
     """Verify the plan REFERENCES the project rules in `.claude/rules/`.
 
@@ -193,7 +203,12 @@ def check_architecture_compliance(plan_path: Path) -> ComplianceReport:
     if rules_referenced:
         reasons.append(f"References {len(rules_referenced)} project rule(s): {rules_referenced[:3]}")
     else:
-        reasons.append(f"Plan does NOT reference any rule in `{rules_dir.relative_to(SKILL_ROOT.parent.parent.parent) if not fallback else 'defaults/'}`")
+        # `relative_to` RAISES when the rules tree is not under this kit — which is every
+        # consumer project, the case this skill exists to serve. A plan citing none of a
+        # consumer's rules produced a ValueError traceback instead of a reason string, and
+        # no test reached the branch because the only test with a rules tree was skipped.
+        reasons.append(
+            f"Plan does NOT reference any rule in `{_display_path(rules_dir, fallback)}`")
     if principles_cited:
         reasons.append(f"Cites {len(principles_cited)} principle(s): {principles_cited[:3]}")
     else:

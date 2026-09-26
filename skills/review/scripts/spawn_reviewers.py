@@ -23,13 +23,18 @@ for _up in _P(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _s.path.insert(0, str(_up))
         break
-import argparse  # noqa: E402
-import json  # noqa: E402
-import sys  # noqa: E402
-from datetime import datetime, timezone  # noqa: E402
-from pathlib import Path  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+import argparse  # noqa: E402 — post-bootstrap import
+import hashlib  # noqa: E402 — post-bootstrap import
+import json  # noqa: E402 — post-bootstrap import
+import re  # noqa: E402 — post-bootstrap import
+import sys  # noqa: E402 — post-bootstrap import
+from datetime import datetime, timezone  # noqa: E402 — post-bootstrap import
+from pathlib import Path  # noqa: E402 — post-bootstrap import
 
-from squad.paths import write_records_dir  # noqa: E402
+from squad.paths import write_records_dir  # noqa: E402 — post-bootstrap import
 
 TEMPLATES = {
     "architecture": "agent-architecture-reviewer.md",
@@ -120,6 +125,8 @@ class _ModelOverrideAction(argparse.Action):
     Rejects empty model values (EC-5).
     """
 
+    # argparse.Action.__call__ is typed with `values: str | Sequence[Any] | None`;
+    # this action accepts only the str form and validates it, so the signature narrows.
     def __call__(  # type: ignore[override]
         self, parser: argparse.ArgumentParser, namespace: argparse.Namespace,
         values: object, _option_string: str | None = None,
@@ -167,18 +174,83 @@ def substitute(template_content: str, mapping: dict[str, str]) -> str:
     return result
 
 
+#: What may become a path segment here. `role` is built as `f"domain-{domain}"` from
+#: `--primary-domain` and every comma-separated `--secondary-domains` entry, and `--slug`
+#: is interpolated into the output directory name. Both arrive from the CLI, and neither
+#: was checked before becoming a filename — a `../` in either walks out of the write root
+#: and `mkdir(parents=True)` creates the directories on the way.
+_SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+
+def safe_name(value: str, *, what: str) -> str:
+    """`value`, or a ValueError naming what was wrong with it."""
+    if not _SAFE_NAME.match(value or "") or value in (".", ".."):
+        raise ValueError(
+            f"{what} must be a single name of letters, digits, dot, dash or underscore, "
+            f"starting with a letter or digit — got {value!r}. It becomes part of a path.")
+    return value
+
+
 def write_agent_file(skill_dir: Path, template_name: str, output_dir: Path, role: str, mapping: dict[str, str]) -> Path:
     template_path = skill_dir / "templates" / template_name
     if not template_path.exists():
         raise FileNotFoundError(f"Template not found: {template_path}")
+
+    safe_name(role, what="the agent role")
 
     content = template_path.read_text(encoding="utf-8-sig")
     substituted = substitute(content, mapping)
 
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / f"{role}.md"
+    # The RESULT, not only the spelling: a caller composing the name some other way is
+    # still held to the directory this function was given.
+    if not output_path.resolve().is_relative_to(output_dir.resolve()):
+        raise ValueError(f"{output_path} resolves outside {output_dir}")
     output_path.write_text(substituted, encoding="utf-8")
     return output_path
+
+
+#: What `skill-creator/scripts/quick_validate.py` enforces on a skill `name`, from the
+#: Claude Code Skills spec. Generated names are held to it here, where they are made,
+#: rather than failed by the gate after every `/review` has already written them.
+SKILL_NAME_LIMIT = 64
+_SLUG_HASH_LEN = 8
+
+
+def knowledge_skill_name(slug: str, role: str) -> str:
+    """`review-{slug}-{role}-knowledge`, shortened to fit the skill-name limit.
+
+    `review-` + `-cross-validation-knowledge` is 34 characters, which leaves 30 for a slug
+    — and plan slugs are derived from titles. Measured in a consumer 2026-09-24: 13 of
+    16 generated knowledge skills over the limit, the longest at 78, every one failing
+    the kit's own validator.
+
+    A name that fits is left alone. One that does not keeps as much of the slug as fits
+    and ends it with a hash of the WHOLE slug, so the same plan always maps to the same
+    name and two plans sharing a long prefix do not collide. The role is never cut: it
+    is what tells a plan's five skills apart.
+    """
+    prefix, suffix = "review-", f"-{role}-knowledge"
+    name = f"{prefix}{slug}{suffix}"
+    if len(name) <= SKILL_NAME_LIMIT:
+        return name
+
+    digest = hashlib.sha1(slug.encode("utf-8"), usedforsecurity=False).hexdigest()[:_SLUG_HASH_LEN]
+    room = SKILL_NAME_LIMIT - len(prefix) - len(suffix) - len(digest) - 1
+    kept = slug[:max(room, 0)].rstrip("-")
+    if not kept:
+        raise ValueError(
+            f"cannot name the knowledge skill for role {role!r} within {SKILL_NAME_LIMIT} "
+            f"characters: `{prefix}<slug>{suffix}` leaves no room for any of the slug "
+            f"{slug!r} plus its {_SLUG_HASH_LEN}-character hash. Shorten the role (a "
+            f"domain name becomes `domain-<name>`).")
+    return f"{prefix}{kept}-{digest}{suffix}"
+
+
+#: The frontmatter `name:` line, and only the first one: the templates also show a
+#: `name:` inside a fenced example further down, which documents and is not read.
+_FRONTMATTER_NAME = re.compile(r"\A(---\n(?:(?!---\n).*\n)*?)name:[^\n]*\n")
 
 
 def write_skill_file(
@@ -192,7 +264,7 @@ def write_skill_file(
     """Write paired knowledge skill file (Claude Code Skills spec) alongside the agent.
 
     Per cycle-review v1.1 (2026-05-25): for each agent generated, a paired knowledge
-    skill is written at .claude/skills/review-{slug}-{role}-knowledge/SKILL.md.
+    skill is written at .claude/skills/<knowledge_skill_name(slug, role)>/SKILL.md.
     The skill provides domain best practices via WebSearch + plan-specific context.
     """
     template_path = skill_dir / "templates" / template_name
@@ -200,9 +272,24 @@ def write_skill_file(
         raise FileNotFoundError(f"Skill template not found: {template_path}")
 
     content = template_path.read_text(encoding="utf-8-sig")
-    substituted = substitute(content, mapping)
+    # `ROLE` is injected HERE and not by the caller, because this function is the one
+    # that names the output directory. A skill whose frontmatter `name` disagrees with
+    # its directory is discovered under one identity and referenced under the other,
+    # which surfaces as a missing skill — the failure mode with no error message. Set
+    # from the same `role` the path below is built from, the two cannot drift.
+    substituted = substitute(content, {**mapping, "ROLE": role})
+    # The same rule for the name: set from the one value the directory is built from. A
+    # shortened name cannot come out of `{SLUG}` substitution, so the frontmatter line is
+    # written here; the body keeps the full slug, which is what a reader searches for.
+    skill_name = knowledge_skill_name(slug, role)
+    substituted, replaced = _FRONTMATTER_NAME.subn(
+        lambda m: f"{m.group(1)}name: {skill_name}\n", substituted, count=1)
+    if not replaced:
+        raise ValueError(
+            f"{template_path} has no `name:` in its frontmatter, so the generated skill "
+            f"could not be named {skill_name!r} to match its directory")
 
-    skill_output_dir = skills_root / f"review-{slug}-{role}-knowledge"
+    skill_output_dir = skills_root / skill_name
     skill_output_dir.mkdir(parents=True, exist_ok=True)
     skill_path = skill_output_dir / "SKILL.md"
     skill_path.write_text(substituted, encoding="utf-8")
@@ -230,7 +317,15 @@ def main() -> int:
         default="",
         help="Comma-separated list of secondary domains (max 3)",
     )
-    parser.add_argument("--diff-base", default="main", help="Git diff base (default: main)")
+    # No literal default. It read `main`, a branch this kit's own repository does not
+    # have, so every reviewer was briefed with `git diff main..HEAD` — a command that
+    # dies on the first line of its own brief. The base is resolved by the same code
+    # `detect_domain.py` uses, and an unresolvable one is refused here.
+    parser.add_argument("--diff-base", default=None,
+                        help="Git diff base (default: the integration branch, resolved "
+                             "locally or on origin — pass detect_domain.py's diff_base)")
+    parser.add_argument("--project-root", type=Path, default=None,
+                        help="Repository the diff base is resolved in (default: CWD)")
     parser.add_argument("--output-dir", type=Path, default=None, help="Where to write agent files")
     parser.add_argument(
         "--skills-dir",
@@ -264,6 +359,15 @@ def main() -> int:
         print(json.dumps({"error": f"Plan not found: {args.plan}"}), file=sys.stderr)
         return 2
 
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from detect_domain import ReviewBaseError, resolve_review_base
+
+    try:
+        diff_base = resolve_review_base(args.project_root or Path.cwd(), args.diff_base)
+    except ReviewBaseError as exc:
+        print(json.dumps({"error": str(exc)}), file=sys.stderr)
+        return 2
+
     # Resolve skill dir: explicit override, then walk-up from plan, then walk-up from this script
     if args.skill_dir:
         skill_dir = args.skill_dir
@@ -276,6 +380,7 @@ def main() -> int:
     # Generated per-item files are OUTPUT, so they land in the project's write root —
     # never in `agents/`, where the kit keeps its DECLARED specialists, and never
     # inside the install, which receives nothing this system writes.
+    safe_name(args.slug, what="--slug")
     output_dir = args.output_dir or (
         write_records_dir(_project_root(skill_dir), "reviews")
         / f"review-{args.slug}-{date_str}")
@@ -286,10 +391,20 @@ def main() -> int:
     model_overrides: dict[str, str] = args.model_override or {}
 
     base_mapping = {
+        # The directory this script CREATES and the consolidator is pointed at, so a
+        # reviewer following its brief writes where the review will read.
+        #
+        # The templates carried `.claude/agents/review-{SLUG}-{DATE}/findings/` — a
+        # second, hand-written copy of a path only this script knows, and it was wrong.
+        # Measured on a consumer 2026-09-18: all eleven reviewers needed the path
+        # corrected by hand in their dispatch prompt, and nothing failed loudly — the
+        # reviewer writes its file, the consolidator finds an empty directory, and the
+        # review reports on the findings it could see.
+        "FINDINGS_DIR": str(output_dir / "findings"),
         "SLUG": args.slug,
         "DATE": date_str,
         "PLAN_PATH": str(args.plan),
-        "DIFF_BASE": args.diff_base,
+        "DIFF_BASE": diff_base,
         "DOMAIN_KEYWORDS": args.domain_keywords,
     }
 
@@ -375,6 +490,7 @@ def main() -> int:
         "slug": args.slug,
         "date": date_str,
         "primary_domain": args.primary_domain,
+        "diff_base": diff_base,
         "secondary_domains": [d.strip() for d in args.secondary_domains.split(",") if d.strip()],
         "output_dir": str(output_dir),
         "findings_dir": str(findings_dir),

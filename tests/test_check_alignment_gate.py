@@ -22,58 +22,20 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parents[1] / "skills/plan-confidence/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from check_alignment_gate import check_alignment_gate  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from check_alignment_gate import check_alignment_gate  # noqa: E402 (post-bootstrap)
 
-PLAN = """---
-version: 1.0
----
-
-# Plan: Reduce the trace explorer p95
-
-## Context
-
-Implements B-014 from the backlog. Evidence gathered by `/discover-plan`.
-
-## Tasks
-
-### T1.1 — Profile the shard scan
-"""
-
-ALIGNED_BRIEF = """
-# Alignment: B-014
-
-## Reviewer sign-off
-- [x] CHK001 The stated problem is the one we actually have. [Judgement]
-- [x] CHK002 The flows drawn are the flows that matter. [Judgement]
-"""
-
-
-def _plan(tmp_path: Path, body: str = PLAN, slug: str = "b-014-trace-p95") -> Path:
-    d = tmp_path / "records" / "plans"
-    d.mkdir(parents=True, exist_ok=True)
-    # A registry, because the soft floor only fires where one exists — there is no
-    # bypass to close in a repository the item could not have come from. Tests
-    # that need its ABSENCE build their own tree.
-    (tmp_path / "BACKLOG.md").write_text("## B-001 — a registry exists here\n", encoding="utf-8")
-    p = d / f"{slug}-plan.md"
-    p.write_text(body, encoding="utf-8")
-    return p
-
-
-def _brief(tmp_path: Path, body: str, slug: str = "b-014-trace-p95") -> Path:
-    d = tmp_path / "records" / "alignment"
-    d.mkdir(parents=True, exist_ok=True)
-    p = d / f"{slug}-alignment.md"
-    p.write_text(body, encoding="utf-8")
-    return p
-
-
-def _complete_brief() -> str:
-    """A brief that clears the machine threshold, built from the scorer's fixture."""
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]
-                          / "skills/plan-alignment/tests"))
-    from test_score_alignment import COMPLETE_V2
-    return COMPLETE_V2
+# The fixtures ship with the slice, so the slice's own tests can reach them from an install.
+sys.path.insert(0, str(SCRIPTS.parent / "tests"))
+from alignment_gate_fixtures import (  # noqa: E402 (post-bootstrap)
+    ALIGNED_BRIEF,
+    PLAN,
+    _brief,
+    _complete_brief,
+    _plan,
+)
 
 
 def test_a_plan_citing_a_backlog_item_with_no_brief_is_capped(tmp_path: Path) -> None:
@@ -412,7 +374,7 @@ def test_every_verdict_the_scorer_produces_is_handled_here(tmp_path: Path) -> No
     """
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]
                           / "skills" / "plan-alignment" / "scripts"))
-    import score_alignment  # noqa: PLC0415
+    import score_alignment
 
     source = Path(score_alignment.__file__).read_text(encoding="utf-8")
     verdicts = set(re.findall(r'return "([A-Z_]+)"', source))

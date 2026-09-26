@@ -54,7 +54,14 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _sys_bootstrap.path.insert(0, str(_up))
         break
-from squad.paths import DATA_DIRNAME, LEGACY_RECORDS_ROOTS  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad import shared_file  # noqa: E402 — post-bootstrap import
+from squad.paths import (  # noqa: E402 — post-bootstrap import
+    DATA_DIRNAME,
+    LEGACY_RECORDS_ROOTS,
+)
 
 #: Where a consumer's stream lives: the one write root, then the legacy roots a
 #: project may not have migrated. Readers fall back; writers never do.
@@ -94,8 +101,8 @@ def _statuses_behind_their_records(project_root: Path) -> list[tuple[str, str]]:
     Empty on any failure: this is a report beside a verdict, and a report that cannot be
     produced must not turn a clean run into a failed one.
     """
-    import json as _json  # noqa: PLC0415
-    import subprocess as _sp  # noqa: PLC0415
+    import json as _json
+    import subprocess as _sp
     selector = None
     for up in Path(__file__).resolve().parents:
         candidate = up / "skills" / "backlog-review" / "scripts" / "select_backlog_item.py"
@@ -105,11 +112,19 @@ def _statuses_behind_their_records(project_root: Path) -> list[tuple[str, str]]:
     backlog = project_root / "BACKLOG.md"
     if selector is None or not backlog.is_file():
         return []
+    # NARROW, and the failure is SAID. `except Exception` swallowed a TypeError, a
+    # KeyError or an AttributeError raised by a bug in the parsing below just as readily
+    # as a missing selector — and the caller then prints NOTHING_TO_ADVANCE with no
+    # "NOT EXAMINED HERE" section, which is indistinguishable from a registry that agrees
+    # with its records. A side report that could not be produced must say so.
     try:
         out = _sp.run([sys.executable, str(selector), str(backlog), "--json"],
-                      capture_output=True, text=True, timeout=300).stdout
+                      capture_output=True, text=True, timeout=300, check=False).stdout
         data = _json.loads(out[out.index("{"):])
-    except Exception:  # noqa: BLE001 - a report must never fail the verdict
+    except (OSError, _sp.SubprocessError, ValueError, _json.JSONDecodeError) as exc:
+        print(f"  (the side report could not be produced: {type(exc).__name__}: {exc}. "
+              f"Whether any item's status is behind its records was NOT examined.)",
+              file=sys.stderr)
         return []
     behind = [(i, "an IMPLEMENT record exists; status is still `approved`")
               for i in (data.get("approved_implemented") or [])]
@@ -187,12 +202,40 @@ def _item_id(slug: str) -> str:
     return f"B-{match.group(1)}" if match else ""
 
 
-def advance(backlog: Path, project_root: Path, apply: bool = False) -> Advance:
+def advance(backlog: Path, project_root: Path, apply: bool = False,
+            verified_local: dict[str, list[str]] | None = None) -> Advance:
+    """Advance `planned -> shipped` for released items, and record the LOCAL verdict.
+
+    `verified_local` maps an item to the files its fix changed. `cycle-maintenance.md`
+    § `ITEM_VERIFIED_LOCAL` defines the test as mechanical — `git check-ignore -q` over
+    every one of them — and names `all_changes_are_untracked()` here as its decider. That
+    function had no caller in this module and `Advance.verified_local` was never appended
+    to, so the verdict its own `as_dict()` can return could not be produced: a rule
+    naming a decider that never runs reads as an implemented gate.
+
+    The list is SUPPLIED, never inferred. Deriving it from the working tree would guess
+    which change belongs to which item, and the rule calls this test mechanical.
+    """
     result = Advance()
+    for item, files in sorted((verified_local or {}).items()):
+        if all_changes_are_untracked(project_root, files):
+            result.verified_local.append(item)
     items = released_items(project_root)
     if not items:
         return result
 
+    # The registry is read here and written at the end of this function, and four
+    # modules across `cycle/` and `fleet/` do the same to the same file while the fleet
+    # runs lanes in parallel. Without the lock the two writers that read the same bytes
+    # lose one transition, with nothing in either output saying so.
+    if apply:
+        with shared_file.locked(backlog):
+            return _advance_under_lock(backlog, items, result, apply=True)
+    return _advance_under_lock(backlog, items, result, apply=False)
+
+
+def _advance_under_lock(backlog: Path, items: list[str], result: Advance,
+                        *, apply: bool) -> Advance:
     content = backlog.read_text(encoding="utf-8")
     spans = bs._blocks(content)
 
@@ -216,7 +259,7 @@ def advance(backlog: Path, project_root: Path, apply: bool = False) -> Advance:
         spans = bs._blocks(content)
 
     if apply and result.shipped:
-        backlog.write_text(content, encoding="utf-8")
+        shared_file.write_atomic(backlog, content)
     return result
 
 
@@ -226,6 +269,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--apply", action="store_true",
                         help="write the registry; without it, report and change nothing")
     parser.add_argument("--json", action="store_true")
+    # `cycle-maintenance.md` § ITEM_VERIFIED_LOCAL. The runner that knows which files an
+    # item's fix touched passes them; this module refuses to guess, because guessing is
+    # the one thing the rule forbids by calling the test mechanical.
+    parser.add_argument(
+        "--verified-local", action="append", default=[], metavar="B-NNN=path[,path...]",
+        help="an item and the files its fix changed; ITEM_VERIFIED_LOCAL when all are "
+             "untracked (repeatable)")
     args = parser.parse_args(argv)
 
     root = args.project.resolve()
@@ -234,7 +284,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"FATAL: no BACKLOG.md under {root}", file=sys.stderr)
         return 1
 
-    result = advance(backlog, root, apply=args.apply)
+    supplied: dict[str, list[str]] = {}
+    for pair in args.verified_local:
+        item, sep, files = pair.partition("=")
+        if not sep or not item.strip() or not files.strip():
+            print(f"REFUSED: --verified-local wants `B-NNN=path[,path...]`, got {pair!r}",
+                  file=sys.stderr)
+            return 2
+        supplied[item.strip()] = [f.strip() for f in files.split(",") if f.strip()]
+
+    result = advance(backlog, root, apply=args.apply, verified_local=supplied)
 
     if args.json:
         print(json.dumps(result.as_dict(), indent=2, ensure_ascii=False))
@@ -244,13 +303,17 @@ def main(argv: list[str] | None = None) -> int:
         verb = "shipped" if args.apply else "would ship"
         for item in result.shipped:
             print(f"ITEM_SHIPPED: {item} ({verb})")
+        for item in result.verified_local:
+            print(f"ITEM_VERIFIED_LOCAL: {item} — every file it changed is untracked, "
+                  f"so no release can carry it")
         for item in result.already:
             print(f"  already shipped: {item}")
         for item in result.unknown:
             print(f"  released but not in this registry: {item}")
         for line in result.refused:
             print(f"  REFUSED {line}", file=sys.stderr)
-        if not (result.shipped or result.already or result.unknown or result.refused):
+        if not (result.shipped or result.verified_local or result.already
+                or result.unknown or result.refused):
             print("NOTHING_TO_ADVANCE: no RELEASED event in the stream")
             # And say what this did NOT look at, because "nothing to advance" reads as
             # "the registry agrees with its records" and this examined ONE transition.

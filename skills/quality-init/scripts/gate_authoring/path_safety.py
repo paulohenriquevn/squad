@@ -6,6 +6,19 @@ import sys
 from pathlib import Path
 
 
+def _is_inside(root: Path, target: Path) -> bool:
+    """Is `target` `root` itself or below it? Compared by PATH SEGMENTS.
+
+    `str(target).startswith(str(root))` stood here, and a sibling whose name extends
+    the root's passes it: `<root>-old` starts with `<root>`. A string
+    prefix is not containment — it is a coincidence of spelling — and this function
+    decides where `emit.py` writes executable hook scripts.
+
+    Both paths arrive resolved, so `..` and symlinks are already collapsed.
+    """
+    return root == target or root in target.parents
+
+
 def confine(root: str, target: str) -> str:
     """Resolve *target* and verify it lives inside *root*.
 
@@ -15,7 +28,7 @@ def confine(root: str, target: str) -> str:
     root_abs = Path(root).resolve()
     target_abs = Path(target).resolve()
 
-    if not str(target_abs).startswith(str(root_abs)):
+    if not _is_inside(root_abs, target_abs):
         print(
             f"Path traversal blocked: '{target}' resolves to '{target_abs}' "
             f"which is outside root '{root_abs}'.",
@@ -31,7 +44,7 @@ def confine_or_none(root: str, target: str) -> str | None:
     root_abs = Path(root).resolve()
     target_abs = Path(target).resolve()
 
-    if not str(target_abs).startswith(str(root_abs)):
+    if not _is_inside(root_abs, target_abs):
         return None
     return str(target_abs)
 

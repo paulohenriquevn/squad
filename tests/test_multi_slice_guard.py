@@ -7,7 +7,7 @@ The slices are import-isolated on purpose: in production each skill runs alone w
 What was missing is what happens when somebody does the obvious thing instead. Measured 2026-08-24:
 
     $ python3 -m pytest skills/discover-plan-confidence/tests skills/discover-confidence/tests
-    ERROR skills/discover-plan-confidence/tests/test_check_corner_coverage.py
+    ERROR skills/plan-improve/tests/test_apply_plan_fixes.py
     ERROR skills/discover-plan-confidence/tests/test_check_plan_completeness.py
     ERROR skills/discover-plan-confidence/tests/test_threshold_resolution.py
     !!!!!!!! Interrupted: 3 errors during collection !!!!!!!!
@@ -30,12 +30,12 @@ REPO_ROOT = Path(__file__).parent.parent
 
 
 def _run(*paths: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(  # noqa: PLW1510
+    return subprocess.run(
         [sys.executable, "-m", "pytest", "-p", "no:cacheprovider", "--collect-only", "-q", *paths],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
-    )
+     check=False)
 
 
 def test_two_slices_in_one_run_are_refused_with_the_right_command() -> None:

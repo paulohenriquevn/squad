@@ -46,8 +46,12 @@ def test_every_counted_blocker_appears_in_the_report(tmp_path: Path) -> None:
     nobody can act on."""
     _, stdout, _, report = _run(tmp_path)
     counted = json.loads(stdout)["findings_by_severity"]["BLOCKER"]
-    if counted == 0:
-        return
+    # An ASSERTION, not a `return`. The guard made the body conditional on the fixture
+    # still producing a BLOCKER, so a change in the gate would empty this test in silence
+    # rather than fail it — and an emptied test reports green forever.
+    assert counted > 0, (
+        "the fixture no longer produces a BLOCKER, so the agreement this test exists to "
+        "check is not being checked. Fix the fixture rather than letting the body skip.")
 
     section = report.split("## BLOCKER findings", 1)[1]
     section = section.split("\n## ", 1)[0]
@@ -72,7 +76,8 @@ def test_a_non_zero_exit_says_why_on_stderr(tmp_path: Path) -> None:
     That is exactly how this reached the consumer session that reported it.
     """
     rc, _, stderr, _ = _run(tmp_path)
-    if rc == 0:
-        return
+    assert rc != 0, (
+        "the fixture no longer produces a non-zero exit, so the stderr contract below is "
+        "never exercised. The guard used to `return` here and the test went quiet.")
     assert stderr.strip(), f"exit {rc} with nothing on stderr"
     assert "BLOCKER" in stderr or "verdict" in stderr.lower(), stderr

@@ -33,7 +33,7 @@ Four deterministic checkers, four dimensions:
 
 | Dimension | Checker script | Hard cap | Default weight |
 |---|---|---|---|
-| **corner_coverage** | `scripts/check_corner_coverage.py` | ≤49 if any coverage corner is empty AND no `<!-- DEFER-CORNER: {corner} \| {reason} -->` marker present | 0.30 |
+| **corner_coverage** | `scripts/check_corners_questioned.py` | ≤49 if any coverage corner is empty AND no `<!-- DEFER-CORNER: {corner} \| {reason} -->` marker present | 0.30 |
 | **measurement_targets** | `scripts/check_measurement_targets.py` | ≤49 if ANY cited path in `.claude/records/references/` is fabricated (file does not exist) | 0.30 |
 | **plan_completeness** | `scripts/check_plan_completeness.py` | ≤70 if any of: mandatory section missing, ADR count < 2, question budget violated, method missing | 0.25 |
 | **structural_risk** (smells) | `scripts/check_spec_smells.py` | penalty only (no hard cap) | 0.15 |

@@ -32,7 +32,7 @@ _KIT = Path(__file__).resolve().parents[1]
 def _run(*flags: str) -> subprocess.CompletedProcess:
     return subprocess.run(
         [sys.executable, str(_GATE), "--ecosystem-dir", str(_KIT), *flags],
-        capture_output=True, text=True, timeout=900)
+        capture_output=True, text=True, timeout=900, check=False)
 
 
 def test_the_flag_reaches_the_aggregator_not_only_the_cli() -> None:
@@ -59,6 +59,6 @@ def test_the_help_names_the_flag() -> None:
     """A flag a caller cannot discover is a flag nobody passes — which is how the CLI
     half sat unused for an hour."""
     helped = subprocess.run([sys.executable, str(_GATE), "--help"],
-                            capture_output=True, text=True, timeout=120)
+                            capture_output=True, text=True, timeout=120, check=False)
     assert "--introduced" in helped.stdout
     assert "pre-push" in helped.stdout, "the help does not say which caller wants it"

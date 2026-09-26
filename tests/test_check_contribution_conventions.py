@@ -16,7 +16,10 @@ import pytest
 _REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO / "mechanisms" / "gates"))
 
-from check_contribution_conventions import (  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from check_contribution_conventions import (  # noqa: E402 — post-bootstrap import
     DEFAULT_SUBJECT_MAX,
     Conventions,
     check,
@@ -157,7 +160,165 @@ def test_an_unresolvable_range_is_not_a_clean_range(tmp_path: Path) -> None:
 
 
 def test_this_repository_follows_its_own_conventions() -> None:
+    """DOGFOODING, and it is the only test here whose subject is not the checker.
+
+    Its outcome depends on the checkout's git history rather than on the code under
+    test: somebody with a malformed commit among their last forty fails a test about
+    `check_contribution_conventions`, and the failure names the wrong thing. The
+    thirteen tests above pin the checker itself against fixtures and are what protects
+    it; this one asks whether the kit obeys the rule it ships.
+
+    Kept, because a kit failing its own gate is worth knowing — and the message says
+    which of the two it is, so a reader is not sent to the checker over a commit.
+    """
     report = check(_REPO, "-40")
 
     assert not report.unmeasured_because, report.unmeasured_because
-    assert report.findings == [], [f"{f.sha} {f.code}" for f in report.findings]
+    assert report.findings == [], (
+        "this is a finding about THIS REPOSITORY'S last 40 commits, not about the "
+        "checker — the checker's own behaviour is pinned by the fixtures above: "
+        + str([f"{f.sha} {f.code}" for f in report.findings]))
+
+
+def test_an_override_key_that_reaches_nothing_is_refused(tmp_path) -> None:
+    """`branch_trunk` was accepted, parsed, validated as known — and applied to nothing.
+
+    This checker's subject is COMMITS: header shape, subject length, body. It never read
+    a branch name. `rules/contribution-overrides.txt` documented the key, so a project
+    could set it, see it accepted, and believe it had declared something. An unknown key
+    is refused here precisely so that cannot happen; the key was on the known list.
+    """
+    rules = tmp_path / "rules"
+    rules.mkdir()
+    (rules / "contribution-overrides.txt").write_text("branch_trunk = main\n",
+                                                      encoding="utf-8")
+
+    with pytest.raises(ValueError, match="branch_trunk"):
+        load_conventions(rules / "contribution-overrides.txt")
+
+
+def test_the_rule_file_no_longer_documents_it() -> None:
+    """A key refused by the code and offered by the docs is the same defect, mirrored."""
+    rule = Path(__file__).resolve().parents[1] / "rules" / "contribution-overrides.txt"
+    text = rule.read_text(encoding="utf-8")
+
+    keys_section = text.split("# Keys:", 1)[1].split("# TWO THINGS", 1)[0]
+    assert "branch_trunk    =" not in keys_section, (
+        "the rule file still lists branch_trunk among the keys a project may set")
+
+
+# ------------------------------------------------------- a scope may name two areas
+#
+# `fix(gates,boundary):` and `fix(board,gates):` were refused as `header_shape` — not
+# for the scope's content but for the comma, which the header pattern had no room for.
+# A change genuinely touching two areas then has three options: name one and be
+# incomplete, invent a portmanteau nobody greps for, or drop the scope. All three lose
+# the information the field exists to carry.
+#
+# Each segment is still validated on its own, so the rule that a scope is lowercase
+# kebab-case is unchanged — what changed is that there may be more than one of them.
+
+
+@pytest.mark.parametrize("header", [
+    "fix(gates,boundary): a report from another run",
+    "fix(board,gates): the board showed no work",
+    "feat(a,b,c): three areas, one change",
+])
+def test_a_compound_scope_is_a_scope(header: str) -> None:
+    assert _codes(header + BODY) == set()
+
+
+@pytest.mark.parametrize("header", [
+    "fix(gates, boundary): a space is not a separator",
+    "fix(gates,): a trailing comma names no second area",
+    "fix(,gates): nor does a leading one",
+    "fix(Gates,boundary): segments are still lowercase",
+])
+def test_a_compound_scope_does_not_loosen_the_segment_rule(header: str) -> None:
+    assert "header_shape" in _codes(header + BODY)
+
+
+def test_a_declared_scope_list_is_checked_segment_by_segment() -> None:
+    """`commit_scopes = gates, board` must accept `fix(gates,board):` and refuse a
+    compound carrying one nobody declared — otherwise declaring scopes would silently
+    stop applying the moment a commit named two."""
+    conv = Conventions(scopes=("gates", "board"))
+
+    assert _codes("fix(gates,board): both declared" + BODY, conv) == set()
+    assert "unknown_scope" in _codes("fix(gates,ghost): one is not" + BODY, conv)
+
+
+# ── a scope may name a PATH, not only a name ─────────────────────────────────
+#
+# The comma was added to this pattern because a change touching two areas had three bad
+# options — name one and be incomplete, invent a portmanteau nobody greps for, or drop
+# the scope — and all three lose what the field exists to carry. That argument was written
+# into the file and applies unchanged to a slash.
+#
+# Measured 2026-09-23 on a consumer: five commits scoped `infra/tests`, refused as
+# `header_shape` and reachable by NO override — `commit_scopes` is consulted only after
+# HEADER_RE matches, so a project cannot declare its way out. Renaming it `infra-tests` is
+# the portmanteau the comma fix already rejected: the scope names a directory and its
+# tests, and the hyphen stops matching the path it names.
+
+def test_a_scope_may_name_a_path() -> None:
+    from check_contribution_conventions import HEADER_RE
+
+    m = HEADER_RE.match("docs(infra/tests): state the fail-closed chart contract")
+
+    assert m is not None, "a scope naming a directory and its tests is refused"
+    assert m.group("scope") == "infra/tests"
+
+
+def test_a_path_scope_composes_with_the_comma() -> None:
+    """The two extensions are independent and a change may need both."""
+    from check_contribution_conventions import HEADER_RE
+
+    m = HEADER_RE.match("fix(infra/tests,gates): x")
+
+    assert m is not None
+    assert m.group("scope") == "infra/tests,gates"
+
+
+def test_the_segment_rule_did_not_otherwise_loosen() -> None:
+    """THE CONTROL. Each segment is still lowercase kebab-case; there may now be a slash
+    BETWEEN segments, which is not the same as allowing anything."""
+    from check_contribution_conventions import HEADER_RE
+
+    for bad in ("docs(Infra/tests): x", "docs(infra/): x", "docs(/tests): x",
+                "docs(infra//tests): x", "docs(infra tests): x"):
+        assert HEADER_RE.match(bad) is None, f"{bad} should not parse"
+
+
+def _git(repo: Path, *args: str) -> str:
+    import subprocess
+    return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True,
+                          check=True).stdout.strip()
+
+
+def test_a_commit_on_a_remote_branch_is_pushed_even_without_an_upstream(tmp_path: Path) -> None:
+    """CI checks out a detached HEAD, which has no `@{upstream}`. Reading that as
+    "nothing is pushed" turned every declared exemption into `exemption_is_fixable` on
+    the first CI run in eleven days, while the same commits were CLEAN locally. A commit
+    reachable from any remote-tracking branch can only change by force-push, which is
+    exactly the property an exemption rests on."""
+    from check_contribution_conventions import _pushed_shas
+    remote, work = tmp_path / "remote.git", tmp_path / "work"
+    _git(tmp_path, "init", "-q", "--bare", str(remote))
+    _git(tmp_path, "init", "-q", str(work))
+    _git(work, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q",
+         "--allow-empty", "-m", "chore: seed")
+    _git(work, "remote", "add", "origin", str(remote))
+    _git(work, "push", "-q", "origin", "HEAD:refs/heads/workspace")
+    _git(work, "fetch", "-q", "origin")
+    sha = _git(work, "rev-parse", "HEAD")
+    _git(work, "switch", "-q", "--detach", sha)
+    assert sha[:9] in _pushed_shas(work)
+
+
+def test_a_commit_on_no_remote_is_not_pushed(tmp_path: Path) -> None:
+    from check_contribution_conventions import _pushed_shas
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q",
+         "--allow-empty", "-m", "chore: seed")
+    assert _pushed_shas(tmp_path) == set()

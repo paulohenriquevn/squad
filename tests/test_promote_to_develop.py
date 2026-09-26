@@ -19,7 +19,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "mechanisms" / "cycle"))
 
-import promote_to_develop as promote  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+import promote_to_develop as promote  # noqa: E402 — post-bootstrap import
 
 
 def _gh(responses: dict[str, tuple[int, str, str]]):
@@ -35,13 +38,25 @@ def _gh(responses: dict[str, tuple[int, str, str]]):
     return run
 
 
-def _git(branch: str = "workspace", dirty: str = "", ahead: str = "3"):
+def _git(branch: str = "workspace", dirty: str = "", ahead: str = "3",
+         unpushed: str = "0"):
+    """`unpushed` is the count of commits HEAD has that `origin/<branch>` does not.
+
+    It defaults to "0" — pushed — because every test written before 2026-09-21 assumed
+    it without saying so, and that assumption is exactly what went unchecked in the
+    tool itself.
+    """
     def run(argv: list[str]) -> tuple[int, str, str]:
         joined = " ".join(argv)
         if "rev-parse --abbrev-ref" in joined:
             return 0, branch + "\n", ""
         if "status --porcelain" in joined:
             return 0, dirty, ""
+        # The two counts are DIFFERENT questions and the fake must tell them apart:
+        # `origin/<target>..HEAD` is how much this promotion carries, and
+        # `origin/<branch>..HEAD` is how much of it the remote has never seen.
+        if f"origin/{branch}..HEAD" in joined:
+            return 0, unpushed + "\n", ""
         if "rev-list --count" in joined:
             return 0, ahead + "\n", ""
         return 0, "", ""
@@ -198,8 +213,18 @@ def test_the_repository_is_named_rather_than_inferred_by_gh() -> None:
     """
     source = (Path(__file__).resolve().parents[1] / "mechanisms" / "cycle"
               / "promote_to_develop.py").read_text(encoding="utf-8")
-    for call in ('"pr", "list"', '"pr", "create"'):
-        line = next(l for l in source.splitlines() if call in l)
+    # DERIVED from the source, never enumerated. The first version of this assertion
+    # listed `"pr", "list"` and `"pr", "create"` by hand and was green for as long as it
+    # existed, while `"pr", "merge"` — the third of the three, added later and absent from
+    # the tuple — stayed unscoped. Observed twice on 2026-09-21 promoting a consumer: the
+    # PR opened and then could not be merged, which is the exact failure the docstring
+    # above describes, passing through the one call the test was not looking at.
+    #
+    # A hand-written list of call sites is a claim about the file that stops being true
+    # the next time somebody adds a call. Reading them out of the file cannot go stale.
+    sites = [ln for ln in source.splitlines() if "call(gh" in ln]
+    assert len(sites) >= 3, f"expected at least the three known gh calls, found {len(sites)}"
+    for line in sites:
         assert "*scoped" in line, f"this gh call is still unscoped: {line.strip()}"
 
 
@@ -208,7 +233,7 @@ def test_every_remote_shape_yields_the_slug() -> None:
     after it. The first version keyed on `@`, and the consumer's remote has the user in
     ssh config — `alias-host:owner/repo.git` — so it parsed the alias as the slug.
     """
-    from promote_to_develop import _owner_repo  # noqa: PLC0415
+    from promote_to_develop import _owner_repo
 
     for url, expected in (
         ("alias-host:owner/repo.git", "owner/repo"),
@@ -223,7 +248,95 @@ def test_every_remote_shape_yields_the_slug() -> None:
 def test_an_unparseable_remote_leaves_the_call_unscoped() -> None:
     """None rather than a guess: the call stays exactly as it was, which is the behaviour
     before this existed."""
-    from promote_to_develop import _owner_repo  # noqa: PLC0415
+    from promote_to_develop import _owner_repo
 
     assert _owner_repo(lambda _b, _a: (1, "", "no such remote"), "git") is None
     assert _owner_repo(lambda _b, _a: (0, "not-a-url", ""), "git") is None
+
+
+def test_a_drift_gate_that_could_not_be_loaded_is_not_reported_as_no_reviews(tmp_path, monkeypatch) -> None:
+    """`[], 0` on ImportError made the caller print a specific, false cause.
+
+    "review drift: 0 record(s) examined — no `*-review-*.json` on disk" is a claim about
+    the repository. What actually happened was that the gate module did not import, and
+    the two shared a return value so nothing downstream could tell them apart.
+    """
+    import promote_to_develop as ptd
+
+    monkeypatch.setitem(sys.modules, "check_review_binding", None)
+
+    drifted, examined, why = ptd._reviews_that_drifted(tmp_path)
+
+    assert drifted == []
+    assert examined == ptd.UNCHECKED
+    assert "could not be loaded" in why
+
+
+def test_a_pr_whose_number_cannot_be_read_is_not_handed_to_merge() -> None:
+    """`gh pr create` succeeding with unparseable output produced the literal `"?"`.
+
+    That string went into `report.detail["pr"]` and then into `gh pr merge ?`, whose
+    failure lands in the AWAITING branch — which tells the operator to wait for checks on
+    a PR whose number nothing knows. The PR exists; what failed is reading its number,
+    and that is what the operator has to be told.
+    """
+    report = promote.promote(ROOT, git=_git(), gh=_gh({
+        "pr list": (0, "[]", ""),
+        "pr create": (0, "created, but not a URL\n", ""),
+        "pr merge": (0, "", ""),
+    }))
+
+    assert report.exit_code == promote.UNMEASURED, report.lines
+    joined = "\n".join(report.lines)
+    assert "number could not be read" in joined, joined
+    assert "?" not in report.detail.get("pr", ""), report.detail
+
+
+def test_a_pr_whose_number_reads_is_still_merged() -> None:
+    """The refusal must be about the unreadable output, not about opening a PR."""
+    report = promote.promote(ROOT, git=_git(), gh=_gh({
+        "pr list": (0, "[]", ""),
+        "pr create": (0, "https://github.com/o/r/pull/12\n", ""),
+        "pr merge": (0, "", ""),
+    }))
+
+    assert "opened PR #12" in "\n".join(report.lines)
+
+
+
+# ── the count is local and the action is remote ──────────────────────────────
+
+def test_it_refuses_when_head_has_not_reached_the_remote() -> None:
+    r"""Routed by a consumer session, 2026-09-21, and reproduced here.
+
+    `rev-list --count origin/develop..HEAD` counts LOCAL commits, and nothing verified
+    that HEAD had reached `origin/<branch>` before `gh pr create`. The consumer saw the
+    tool print **"33 commit(s) ahead"** and GitHub answer **"No commits between develop
+    and workspace"** — the success message and the failure describing one state from
+    opposite sides, because all 33 were local.
+
+    A PR carries what the REMOTE has. Counting what the local HEAD has and then acting
+    on the remote is the same shape as a gate that measures one thing and reports
+    another, and the reader is left with two sentences that cannot both be true.
+    """
+    report = promote.promote(ROOT, git=_git(unpushed="33"), gh=_gh({}))
+
+    assert report.exit_code != 0, "a PR opened on unpushed commits cannot contain them"
+    blob = " ".join(report.lines).lower()
+    assert "push" in blob, f"the refusal must name the move that fixes it: {report.lines}"
+    assert "33" in " ".join(report.lines), "say how many are held back, not just that some are"
+
+
+def test_it_proceeds_once_head_is_on_the_remote() -> None:
+    """The guard must not block a promotion that is genuinely ready."""
+    report = promote.promote(ROOT, git=_git(unpushed="0"), gh=_gh({
+        "pr list": (0, "[]", ""),
+        "pr create": (0, "https://github.com/o/r/pull/1\n", ""),
+        "pr merge": (0, "", ""),
+    }))
+
+    # The assertion is about the NEW guard, not about the whole chain: everything after
+    # it needs a repository this fake does not stand in for. What must hold is that the
+    # push check did not fire and the run reached the PR.
+    assert not any("push origin" in line for line in report.lines), report.lines
+    assert report.detail.get("pr"), report.lines

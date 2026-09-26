@@ -7,9 +7,9 @@ the zone, nothing leaves it by command, and no commit message cites it.
 
 TWO THINGS THESE TESTS RECORD
 ------------------------------
-**The zone is `study-material/`, and it was not guarded.** The rule declared
-`study-material/**` while every regex matched `records/(references|tools)/`.
-`study-material/` exists in this repository; neither of the other two does. So
+**The zone is `.squad/study-material/`, and it was not guarded.** The rule declared
+`.squad/study-material/**` while every regex matched `records/(references|tools)/`.
+`.squad/study-material/` exists in this repository; neither of the other two does. So
 the layer that guards the zone guarded nothing at all, and the messages said
 otherwise. Measured 2026-09-01.
 
@@ -46,8 +46,8 @@ def _hook(name: str) -> Path:
 def _run(name: str, payload: dict) -> subprocess.CompletedProcess:
     hook = _hook(name)
     cmd = ["bash", str(hook)] if hook.suffix == ".sh" else [sys.executable, str(hook)]
-    return subprocess.run(cmd, input=json.dumps(payload), capture_output=True,  # noqa: PLW1510
-                          text=True, cwd=REPO)
+    return subprocess.run(cmd, input=json.dumps(payload), capture_output=True,
+                          text=True, cwd=REPO, check=False)
 
 
 def _write(path: str) -> dict:
@@ -64,14 +64,31 @@ def _bash(command: str) -> dict:
 
 
 @pytest.mark.parametrize("path", [
-    "study-material/sometool/config.yaml",
-    ".claude/study-material/tool/main.go",
-    "/abs/project/study-material/vendor/lib.py",
-    "study-material/readme.md",
+    ".squad/study-material/sometool/config.yaml",
+    ".claude/.squad/study-material/tool/main.go",
+    "/abs/project/.squad/study-material/vendor/lib.py",
+    "./.squad/study-material/readme.md",
+    ".squad/study-material/readme.md",
 ])
 def test_writing_into_the_zone_is_blocked(path: str) -> None:
     """The zone stays pristine: it is material we read, never material we edit."""
     assert _run("boundary-check", _write(path)).returncode == 2, path
+
+
+@pytest.mark.parametrize("path", [
+    "study-material/legacy.md",
+    "squad/study-material/not-the-write-root.py",
+    ".squad/records/plans/a-plan.md",
+])
+def test_a_path_outside_the_zone_is_not_blocked(path: str) -> None:
+    """The guard must not widen past the zone.
+
+    `study-material/` at top level is the RETIRED location: a consumer still holding
+    material there is no longer guarded, which `reference-provenance.md` states as the
+    cost of the move rather than leaving it to be discovered. `squad/study-material/`
+    is the package directory and never the zone — it has no leading dot.
+    """
+    assert _run("boundary-check", _write(path)).returncode == 0, path
 
 
 @pytest.mark.parametrize("path", [
@@ -107,11 +124,11 @@ def test_the_retired_path_is_no_longer_guarded() -> None:
 
 
 @pytest.mark.parametrize("command", [
-    "cp study-material/tool/src.py ./mine.py",
-    "mv study-material/a.txt src/",
-    "rsync -a study-material/lib/ ./vendor/",
-    "cat study-material/x.py > mine.py",
-    "cat study-material/x.py | tee mine.py",
+    "cp .squad/study-material/tool/src.py ./mine.py",
+    "mv .squad/study-material/a.txt src/",
+    "rsync -a .squad/study-material/lib/ ./vendor/",
+    "cat .squad/study-material/x.py > mine.py",
+    "cat .squad/study-material/x.py | tee mine.py",
 ])
 def test_copying_content_out_of_the_zone_is_blocked(command: str) -> None:
     """Reading is the zone's purpose; duplicating its bytes is what carries the
@@ -120,9 +137,9 @@ def test_copying_content_out_of_the_zone_is_blocked(command: str) -> None:
 
 
 @pytest.mark.parametrize("command", [
-    "cat study-material/tool/src.py",
-    "grep -r pattern study-material/",
-    "ls study-material/",
+    "cat .squad/study-material/tool/src.py",
+    "grep -r pattern .squad/study-material/",
+    "ls .squad/study-material/",
 ])
 def test_reading_the_zone_stays_allowed(command: str) -> None:
     """§ 3 of the rule: reading, grepping and listing are the entire point."""
@@ -134,7 +151,7 @@ def test_reading_the_zone_stays_allowed(command: str) -> None:
 
 def test_a_commit_message_citing_the_zone_is_blocked() -> None:
     assert _run("validate-command", _bash(
-        'git commit -m "port the approach from study-material/tool/core.py"'
+        'git commit -m "port the approach from .squad/study-material/tool/core.py"'
     )).returncode == 2
 
 

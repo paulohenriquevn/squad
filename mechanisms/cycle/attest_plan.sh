@@ -36,15 +36,21 @@
 #   bash mechanisms/cycle/attest_plan.sh {slug}             # attest plan file by slug
 #   bash mechanisms/cycle/attest_plan.sh --all              # attest all plans in plans/
 #   bash mechanisms/cycle/attest_plan.sh --verify {slug}    # verify (read-only) without re-writing
+#   bash mechanisms/cycle/attest_plan.sh --verify-all       # verify EVERY plan; exits non-zero
+#                                                          # if any attestation is stale
 
 set -eu
 
-PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
-cd "$PROJECT_DIR" || exit 1
-
-# The kit's own root, from this script's location: `mechanisms/cycle/` is two deep.
+# The kit's own root, resolved BEFORE the `cd` below. `BASH_SOURCE[0]` is RELATIVE when
+# the script is invoked by a relative path, so resolving it after changing directory
+# makes the subshell `cd` fail and leaves KIT_ROOT EMPTY — measured 2026-09-16 with
+# `CLAUDE_PROJECT_DIR` pointing elsewhere, which is the hook environment.
+#
 # Only used to put `squad` on the import path — never to decide where DATA goes.
 KIT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
+cd "$PROJECT_DIR" || exit 1
 
 # One resolver, shared with the hooks that read what this writes.
 ECOSYSTEM_DIR="$(PYTHONPATH="$KIT_ROOT${PYTHONPATH:+:$PYTHONPATH}" python3 -c '
@@ -68,7 +74,10 @@ ATTEST_DIR="${PROJECT_DIR}/${ATTEST_REL}"
 # hooks that read them. Shell cannot import the owner, so it asks it.
 PROJECT_DIR="$ECOSYSTEM_DIR"
 case "$ECOSYSTEM_DIR" in */.claude) PROJECT_DIR="$(dirname "$ECOSYSTEM_DIR")" ;; esac
-KIT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# KIT_ROOT is already resolved at the top, before any `cd`. Re-deriving it here is what
+# broke the slice runner's tree banner the same day: two correct expressions and a wrong
+# order, with no line a reviewer could point at. A value a script already holds must not
+# be computed again — that is a property a reader can check, unlike order.
 DATA_REL="$(python3 -c "import sys; sys.path.insert(0, '$KIT_ROOT'); from squad.paths import DATA_DIRNAME, RECORDS; print(f'{DATA_DIRNAME}/{RECORDS}')" 2>/dev/null)"
 [ -n "$DATA_REL" ] || { echo "FATAL: cannot read the write root from squad/paths.py" >&2; exit 2; }
 PLANS_DIR="${PROJECT_DIR}/${DATA_REL}/plans"

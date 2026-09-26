@@ -1,3 +1,4 @@
+# rule-id: SQ-TGT-02
 # No live target declared.
 #
 # The kit used to ship the live target of the ecosystem it was written in — a dev

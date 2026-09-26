@@ -33,7 +33,7 @@ def _install(tmp_path: Path) -> str:
 
 def test_the_manifest_records_the_commit_not_only_the_path(tmp_path: Path) -> None:
     manifest = _install(tmp_path)
-    lines = [l for l in manifest.splitlines() if l.startswith("# kit-commit:")]
+    lines = [ln for ln in manifest.splitlines() if ln.startswith("# kit-commit:")]
     assert lines, "an installed kit cannot say which version it is"
     value = lines[0].split(":", 1)[1].strip()
     assert value, "the marker is present and empty, which answers nothing"
@@ -43,9 +43,9 @@ def test_an_install_from_a_dirty_tree_says_so(tmp_path: Path) -> None:
     """A sha alone would claim a version this copy does not match."""
     dirty = bool(subprocess.run(
         ["git", "-C", str(_KIT), "status", "--porcelain", "--untracked-files=no"],
-        capture_output=True, text=True, timeout=120).stdout.strip())
+        capture_output=True, text=True, timeout=120, check=False).stdout.strip())
     manifest = _install(tmp_path)
-    line = next(l for l in manifest.splitlines() if l.startswith("# kit-commit:"))
+    line = next(ln for ln in manifest.splitlines() if ln.startswith("# kit-commit:"))
     if dirty:
         assert "dirty" in line, \
             "installed from uncommitted changes and claimed the commit anyway"

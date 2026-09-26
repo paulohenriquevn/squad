@@ -26,8 +26,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "mechanisms" / "fleet"))
 sys.path.insert(0, str(ROOT / "mechanisms" / "cycle"))
 
-import backlog_status  # noqa: E402
-from pipeline_orchestrator import (  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+import backlog_status  # noqa: E402 — post-bootstrap import
+from pipeline_orchestrator import (  # noqa: E402 — post-bootstrap import
     STATUS_ON_ENTERING,
     STATUS_ON_SEND_BACK,
     Item,

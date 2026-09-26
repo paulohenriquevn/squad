@@ -37,7 +37,13 @@ _REPO = Path(__file__).parent.parent
 sys.path.insert(0, str(_REPO))
 sys.path.insert(0, str(_REPO / "mechanisms" / "gates"))
 
-from check_prose_write_paths import SCANNED_DIRS, scan  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from check_prose_write_paths import (  # noqa: E402 — post-bootstrap import
+    SCANNED_DIRS,
+    scan,
+)
 
 
 def test_no_executable_prose_instructs_a_legacy_root() -> None:

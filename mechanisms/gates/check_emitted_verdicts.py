@@ -47,7 +47,14 @@ _ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_ROOT))
 sys.path.insert(0, str(_ROOT / "mechanisms" / "cycle"))
 
+# These resolve only after the sys.path bootstrap above: the kit ships as loose
+# scripts, not an installed package, so E402 is suppressed here on purpose.
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
 from cycle_events import declared_verdicts  # noqa: E402
+
+from squad.paths import RULE_BASES  # noqa: E402 — post-bootstrap import
 
 CLEAN, UNDECLARED, UNCHECKED = 0, 1, 2
 
@@ -73,7 +80,7 @@ def _branches(token: str) -> list[str]:
 
 def _rule_exists(root: Path, cycle: str) -> bool:
     return any((root / base / f"cycle-{cycle}.md").is_file()
-               for base in ("rules", ".claude/rules"))
+               for base in RULE_BASES)
 
 
 def scan(root: Path | str) -> list[dict]:
@@ -122,13 +129,26 @@ def main(argv: list[str] | None = None) -> int:
         return UNCHECKED
 
     swept = sum(1 for d in SCANNED_DIRS if (root / d).is_dir())
+
+    # A sweep that matched no directory measured nothing, and this file already owns
+    # the word for that: UNCHECKED, used two lines above for a root that is not a
+    # directory. It used to fall through to the CLEAN return below, so a rename of
+    # any SCANNED_DIRS entry would have made this gate exit 0 forever while covering
+    # nothing — the quiet failure mode a stale glob always takes.
+    if not swept:
+        where = ", ".join(f"{d}/" for d in SCANNED_DIRS)
+        message = f"UNCHECKED  nothing swept: no {where} under {root}"
+        if args.json:
+            print(json.dumps({"findings": [], "count": 0, "dirs_swept": 0,
+                              "unchecked_because": message}, indent=2))
+        else:
+            print(message, file=sys.stderr)
+        return UNCHECKED
+
     findings = scan(root)
     if args.json:
         print(json.dumps({"findings": findings, "count": len(findings),
                           "dirs_swept": swept}, indent=2))
-    elif not swept:
-        where = ", ".join(f"{d}/" for d in SCANNED_DIRS)
-        print(f"CLEAN  nothing swept: no {where} under {root}")
     elif findings:
         print(f"UNDECLARED  {len(findings)} instructed verdict(s) no cycle declares\n")
         for f in findings:

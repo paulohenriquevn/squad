@@ -53,6 +53,10 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from squad.paths import is_cycle_generated_skill
+
 #: The first cell of a table row, and every skill named in it. A row may name two
 #: (`backlog-init`, `backlog-review`) where one line covers both.
 _ROW_RE = re.compile(r"^\|\s*((?:`[a-z0-9-]+`(?:\s*,\s*)?)+)[^|]*\|", re.MULTILINE)
@@ -108,7 +112,15 @@ def check(root: Path) -> list[str]:
     #: The project's own skills leave the comparison entirely: they are not in the
     #: kit's map, they owe it no row, and the count is the kit's count.
     project_owned = declared_by_project(root)
-    on_disk = {p.parent.name for p in skills_dir.glob("*/SKILL.md")} - project_owned
+    #: What the CYCLES wrote leaves the comparison too, and for a different reason
+    #: than the project's own skills: these are output. The exemption is imported
+    #: rather than spelled — `check_xrefs.py` has had it since the day it hoisted
+    #: the predicate out of an inline check, closing with "One definition, two
+    #: consumers: that is what stops the next half from escaping." This gate was
+    #: the next half, and warned about that exact shape in `declared_by_project`
+    #: while being it.
+    on_disk = {p.parent.name for p in skills_dir.glob("*/SKILL.md")
+               if not is_cycle_generated_skill(p.parent.name)} - project_owned
     listed = listed_skills(map_path)
 
     findings = []

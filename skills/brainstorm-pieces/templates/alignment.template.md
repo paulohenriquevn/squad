@@ -7,6 +7,12 @@
 > These four boxes are exactly what the scorer reports as NOT scored, plus coverage.
 > That is the design — the number measures structure, the signature measures
 > agreement, and neither claims to be the other.
+>
+> **Sign as `human/{your-name}`.** The prefix is the kit's vocabulary for "a person
+> gave this", read by `score_alignment.py` at item level and by
+> `score_product_alignment.py` here. A bare name is refused, and so is a deleted
+> checkbox: an empty section has nothing unticked in it, which is not the same as
+> reviewed.
 
 ## Reviewer sign-off
 
@@ -16,3 +22,4 @@
 - [ ] The pieces cover every requirement
 
 <!-- signed-by: -->
+<!-- e.g. human/paulo, or human/paulo (approved in the 2026-09-20 session) -->

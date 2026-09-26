@@ -35,7 +35,7 @@ updated_at: 2026-05-17
 nodes:
   - id: 1
     dimension: completeness
-    description: "Coverage Matrix presente e 100% mapeado (gaps -> tasks)"
+    description: "Coverage Matrix present and 100% mapped (gaps -> tasks)"
     detector: coverage_matrix
     failure_action: hard_cap
     hard_cap_value: 49

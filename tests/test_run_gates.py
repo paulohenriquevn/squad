@@ -13,6 +13,7 @@ the sum, and one hang can no longer eat the budget of the other fifty.
 """
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 
@@ -37,7 +38,14 @@ def test_gates_run_concurrently_not_in_sequence(tmp_path: Path) -> None:
     done = _run(tmp_path, ["sleep 2"] * 3, jobs=3, timeout=30, budget=60)
 
     assert done.returncode == 0, done.stdout + done.stderr
-    assert "wall 2s" in done.stdout or "wall 3s" in done.stdout, done.stdout
+    # The CLAIM, not the clock. Three 2-second gates at jobs=3 have to finish in well
+    # under the 6 seconds running them one after another would take — that inequality
+    # is what this runner exists to deliver. Asserting "wall 2s or wall 3s" pinned two
+    # exact readings with a one-second tolerance, so the test went red on a loaded
+    # machine for a runner that was working perfectly.
+    wall = re.search(r"wall (\d+)s", done.stdout)
+    assert wall, done.stdout
+    assert int(wall.group(1)) < 6, f"no parallelism: {done.stdout}"
     assert "sequential would be 6s" in done.stdout, \
         "the sequential cost must be printed — it is the argument for this runner"
 
@@ -103,3 +111,48 @@ def test_the_runner_says_what_it_refuses_to_do_to_go_faster(word: str) -> None:
     text = _RUNNER.read_text(encoding="utf-8").lower()
 
     assert word in text, f"the header does not rule out {word}"
+
+
+def test_a_quoted_argument_survives_the_dispatcher(tmp_path: Path) -> None:
+    """The dispatcher interpolated each gate into `line="{}"` inside `xargs -I{}`, so
+    the command text was re-parsed by the shell and its quoting was lost.
+
+    Measured: a gate `grep -q "two words" file` over a file containing exactly that
+    became `grep -q two words file`, which printed
+    `bash: words <file>: No such file or directory` — AND the runner then printed
+    "all 1 gate(s) passed" and exited 0, because the mangled worker never wrote its
+    `.rc` and the tally counted only the results that appeared. Two failures in one
+    line: a gate that did not run, reported as a gate that passed.
+    """
+    hay = tmp_path / "hay.txt"
+    hay.write_text("two words\n", encoding="utf-8")
+
+    done = _run(tmp_path, [f'grep -q "two words" {hay}'], jobs=1, timeout=30, budget=60)
+
+    assert "No such file" not in done.stdout + done.stderr, (
+        "the quoting was lost before the gate ran:\n" + done.stdout + done.stderr)
+    assert done.returncode == 0, done.stdout + done.stderr
+
+
+def test_a_gate_whose_pattern_is_absent_still_fails(tmp_path: Path) -> None:
+    """The quoting fix must not make every gate pass."""
+    hay = tmp_path / "hay.txt"
+    hay.write_text("something else\n", encoding="utf-8")
+
+    done = _run(tmp_path, [f'grep -q "two words" {hay}'], jobs=1, timeout=30, budget=60)
+
+    assert done.returncode != 0, done.stdout + done.stderr
+
+
+def test_a_gate_that_left_no_result_is_not_counted_as_passing(tmp_path: Path) -> None:
+    """The runner compared nothing. A gate whose `.rc` never appeared simply vanished
+    from the tally, and the summary reported on the gates that DID report."""
+    done = _run(tmp_path, ['echo one', 'echo two', 'echo three'],
+                jobs=3, timeout=30, budget=60)
+
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "3 gate(s)" in done.stdout
+    # The reconciliation is the proof the runner counted what it DISPATCHED, not what
+    # happened to report back. Without it a worker that died left no `.rc` and simply
+    # vanished from the tally.
+    assert "3 result(s)" in done.stdout, done.stdout

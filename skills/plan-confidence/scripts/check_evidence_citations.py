@@ -19,29 +19,66 @@ Per ADR D1 of `harden-fabrication-and-cq-gate-plan.md`, code-file refs
 from __future__ import annotations
 
 import re
+import sys as _sys
+from pathlib import Path as _P
 
+for _up in _P(__file__).resolve().parents:
+    if (_up / "squad" / "markdown.py").is_file():
+        _sys.path.insert(0, str(_up))
+        break
 # The one owner of every data-root literal. A local copy is what produced six lists in
 # four different orders, and `check_write_containment.py` refuses a second one.
-import sys as _sys_bootstrap
-from dataclasses import dataclass, field
-from pathlib import Path
-from pathlib import Path as _Path_bootstrap
+import sys as _sys_bootstrap  # noqa: E402 — post-bootstrap import
+from dataclasses import dataclass, field  # noqa: E402 — post-bootstrap import
+from pathlib import (  # noqa: E402 — post-bootstrap import
+    Path,  # noqa: E402 — post-bootstrap import
+    Path as _Path_bootstrap,  # noqa: E402 — post-bootstrap import
+)
+
+from squad.markdown import (  # noqa: E402 — post-bootstrap import
+    FENCED_CODE_RE as _FENCED_CODE_OWNER,  # noqa: E402 — post-bootstrap import
+)
 
 for _up in _Path_bootstrap(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _sys_bootstrap.path.insert(0, str(_up))
         break
-from squad.paths import write_records_dir  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import write_records_dir  # noqa: E402 — post-bootstrap import
 
 UNBREAKABLE_RULE_MAX = 13
 
-# Rule refs: `architecture.md` or `architecture.md §1` or `architecture.md §"Some Title"`.
-# Excludes paths containing slashes (e.g. `records/foo.md`) because the resolver below
-# walks the project root; v0.1 keeps the regex conservative. Backtick is explicitly excluded
-# from the section token so that ``architecture.md §1`` strips properly when inline code
-# normalizes to whitespace mid-match.
+# Rule refs: `architecture.md`, `rules/architecture.md`, either with `§1` or
+# `§"Some Title"`. Backtick is explicitly excluded from the section token so that
+# ``architecture.md §1`` strips properly when inline code normalizes to whitespace
+# mid-match.
+#
+# The leading directory segments are read, and for a long time they were not. This said
+# so — "Excludes paths containing slashes … v0.1 keeps the regex conservative" — honest
+# about its scope, and the scope was the wrong one: `rules/<name>.md` is how every rule
+# file and every plan in this kit cites, so the `fabricated_citation` hard cap could not
+# fire on the dominant spelling. Measured by a consumer against 34 plans with the prefix
+# read: four cite a path that does not resolve, three of them one-line repoints to a
+# document that moved.
+#
+# THE LOOKBEHIND IS UNCHANGED, and that is the fix rather than an omission from it. It
+# excludes `-` as well as `/`, so deleting the slash alone would let
+# a nested path whose second-to-last segment ends in `-rules` match as if it named a
+# file directly under the rules directory, and
+# the kit would report its own correct citations as broken. Keeping `/` in the lookbehind
+# is what forbids a match STARTING mid-path; the prefix group is what consumes the path
+# from its beginning. A segment may open with `_` because `_kit-rules` does.
+#
+# `.` joined the lookbehind with the prefix group, and had to. Reading paths made
+# `https://github.com/<owner>/<repo>/blob/main/docs/wiki/decisions/<name>.md` match from
+# `com/...`, because the character before `com` is a dot and nothing forbade it — so every
+# URL to a markdown file in this repository's own rules became an unresolved citation. A
+# citation at the start of a sentence is unaffected: the space after the period is what the
+# lookbehind sees.
 _RULE_REF_RE = re.compile(
-    r"(?<![A-Za-z0-9_/-])([a-z][a-z0-9_-]*\.md)"
+    r"(?<![A-Za-z0-9_./-])((?:[a-z_][a-z0-9_.-]*/)*[a-z][a-z0-9_-]*\.md)"
     r"(?:\s*§\s*(?:\"([^\"]+)\"|([^\s,.;)\"`]+)))?"
 )
 
@@ -76,7 +113,12 @@ _UNBREAKABLE_RULE_RE = re.compile(r"Unbreakable\s+Rule\s+(\d+)")
 _MD_HEADER_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*$", re.MULTILINE)
 
 # Fenced code blocks (``` or ~~~). DOTALL so they span multiple lines.
-_FENCED_CODE_RE = re.compile(r"^(```|~~~)[^\n]*\n.*?^\1", re.MULTILINE | re.DOTALL)
+#: The ONE fenced-code regex, from `squad.markdown`. Eleven scripts each defined
+#: their own, in two forms that do not mask the same input: five saw only backtick
+#: fences, six also saw `~~~`. A plan whose example block used tildes was masked by
+#: six readers and read as prose by the other five, so the same document scored
+#: differently depending on which checker asked.
+_FENCED_CODE_RE = _FENCED_CODE_OWNER
 
 
 @dataclass(frozen=True)
@@ -216,7 +258,19 @@ def _resolve_rule_file(filename: str, project_root: Path) -> Path | None:
     candidates = [
         project_root / "rules" / filename,
         project_root / ".claude" / "rules" / filename,
+        # The installed kit's root. A citation that already carries its directory —
+        # `rules/<name>.md`, the form the kit's own documents use — resolves here in a
+        # consumer; the line above looked one level too deep for it, and every such plan
+        # took the `fabricated_citation` hard cap (theo, 2026-09-26).
+        project_root / ".claude" / filename,
         write_records_dir(project_root) / filename,
+        write_records_dir(project_root).parent / filename,
+        # The DATA root, one level above `records/`. The cycle's own rules cite artifacts
+        # by a path relative to it — `wiki/product/objectives.md`, per
+        # `rules/cycle-brainstorm.md` — and nothing looked there. It did not matter while
+        # a slashed path never matched at all; reading prefixes made it the difference
+        # between a citation this detector resolves and a hard cap it raises on a file the
+        # cycle wrote exactly where it was told to.
         project_root / filename,  # e.g. CHANGELOG.md, CLAUDE.md
     ]
     for c in candidates:
@@ -248,13 +302,29 @@ def _section_exists(file_path: Path, section: str) -> bool:
     except OSError:
         return False
     section_norm = section.strip().lower()
+    bare = section_norm.lstrip("§").strip()
+    # A NUMBERED section is matched at a word boundary, and a NAMED one by substring.
+    # `in` over the whole heading applied to both, so `§1` resolved against
+    # `## 21 — Retry policy` and `## Phase 1` — for a single digit the check
+    # effectively could not fail, and its result feeds `fabricated_citation`, one of
+    # the two caps that force INVALID. A section number is a token; a section name is
+    # prose, and prose is where a substring is the right tool.
+    numbered = re.fullmatch(r"[0-9]+(?:\.[0-9]+)*", bare)
+    # ANCHORED at the start of the heading, after an optional section sign. A bare
+    # boundary match still accepted `## Phase 1 of the rollout` as section 1 — the
+    # digit is a word there, not a section number. Numbered sections are written
+    # `## 1 — Foo` or `## §1 — Foo`, which is what this matches.
+    pattern = (re.compile(rf"^§?\s*{re.escape(bare)}(?![0-9.])") if numbered else None)
     for m in _MD_HEADER_RE.finditer(content):
-        title = m.group(2).strip()
-        title_norm = title.lower()
+        title_norm = m.group(2).strip().lower()
+        if pattern is not None:
+            if bare and pattern.search(title_norm):
+                return True
+            continue
         if section_norm in title_norm:
             return True
         # Tolerate "§N" or just "N" in titles like "## §1 — Foo".
-        if section_norm.lstrip("§").strip() and section_norm.lstrip("§").strip() in title_norm:
+        if bare and bare in title_norm:
             return True
     return False
 

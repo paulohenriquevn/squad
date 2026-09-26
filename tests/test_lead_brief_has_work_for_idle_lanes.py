@@ -73,5 +73,9 @@ def test_the_measurement_that_motivated_it_is_in_the_brief() -> None:
     survives a rewrite; one without it gets trimmed as boilerplate."""
     brief = _brief_text()
 
-    assert "THIRTEEN rounds" in brief and "dispatched" in brief.upper() or "NOTHING" in brief
+    # `A and B or C` is `(A and B) or C`, and C — the bare substring "NOTHING" —
+    # is in the brief unconditionally, so the left half was never evaluated for
+    # its result. Each clause now stands on its own line and fails on its own.
+    assert "THIRTEEN rounds" in brief
+    assert "DISPATCHED" in brief.upper()
     assert "Idle lanes are not evidence of a healthy queue" in _prose()

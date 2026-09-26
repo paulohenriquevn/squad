@@ -108,4 +108,4 @@ def test_the_layout_is_frozen() -> None:
     layout = Layout(Path("/k"), Path("/e"), Path("/p"), "standalone")
 
     with pytest.raises(AttributeError):
-        layout.eco = Path("/other")  # type: ignore[misc]
+        layout.eco = Path("/other")  # type: ignore[misc] — assigning to a frozen field is the behaviour under test

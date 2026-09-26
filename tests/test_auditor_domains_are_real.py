@@ -19,8 +19,11 @@ sys.path.insert(0, str(_REPO / "mechanisms" / "cycle"))
 sys.path.insert(0, str(_REPO / "mechanisms" / "conventions"))
 sys.path.insert(0, str(_REPO / "skills" / "review" / "scripts"))
 
-from detect_domain import DOMAINS  # noqa: E402
-from select_auditors import ALWAYS, parse_registry  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from detect_domain import DOMAINS  # noqa: E402 — post-bootstrap import
+from select_auditors import ALWAYS, parse_registry  # noqa: E402 — post-bootstrap import
 
 
 def _registry() -> list:
@@ -73,6 +76,7 @@ def test_every_auditor_writes_inside_the_write_root() -> None:
 
     project = Path("/tmp/some-project")
     for auditor in _registry():
-        target = auditor.output_dir(project)
+        target = auditor.output_dir(project, "B-014")
         assert contains(project, target), f"{auditor.plugin} writes to {target}"
         assert auditor.plugin in target.parts, target
+        assert "B-014" in target.parts, f"{target} is shared by every item"

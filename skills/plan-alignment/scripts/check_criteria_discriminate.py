@@ -3,10 +3,12 @@
 already pass.
 
     python3 check_criteria_discriminate.py <brief.md> [--repo-root .] [--json]
+        [--intended DIR] [--wrong DIR ...] [--baseline DIR]
 
-    0  every criterion fails today — each one has something to prove
-    1  at least one already passes, or could not be run
-    2  could not measure
+    0  every criterion fails today — each one has something to prove (and, with the
+       state flags, passes when built and rejects every wrong build)
+    1  at least one already passes, could not be run, or does not discriminate
+    2  could not measure — including a --baseline that fails the reconstruction control
 
 ## A criterion that passes before the work is not a criterion
 
@@ -23,25 +25,28 @@ text, and all of it is visible in one run.
 
 ## What this checks, and what it does not
 
-It runs each criterion **once**, against the tree as it is now, and asks a single
-question: does it already pass? A criterion that passes before anything is built cannot
-tell a finished item from an unstarted one, whatever it says.
+By default it runs each criterion **once**, against the tree as it is now, and asks a
+single question: does it already pass? A criterion that passes before anything is built
+cannot tell a finished item from an unstarted one, whatever it says.
 
-That is one of the three states the full method uses. It is not the whole method:
+That is one of the three states the full method uses. The other two, and the control,
+run when the caller supplies the trees — this file reads trees and never builds them:
 
-| State | Question | Here |
+| State | Question | Flag |
 |---|---|---|
-| current tree | does it already pass? | **yes** |
-| intended state | does it pass once built? | no — the state does not exist yet |
-| a deliberately wrong build | does it REJECT that? | no — needs the item's own shape |
+| current tree | does it already pass? | `--repo-root` (always) |
+| intended state | does it pass once built? | `--intended DIR` |
+| a deliberately wrong build | does it REJECT that? | `--wrong DIR` (repeatable) |
+| reconstruction control | does a rebuilt baseline answer as the current tree does? | `--baseline DIR` |
 
 The third is the one that catches a criterion measuring a NAME rather than a behaviour,
 and the formulation worth keeping is a reviewer's: *the minimal artefact that satisfies
 a criterion says exactly what it is sensitive to.* If an empty function body with the
 right name turns it green, it measures the name.
 
-So a green run here means "no criterion is vacuous in the cheapest way". It does not
-mean the criteria are good.
+So a green single-state run means "no criterion is vacuous in the cheapest way". It
+does not mean the criteria are good; a green three-state run with a control is the
+stronger statement, and still only about the wrong builds somebody thought to make.
 
 ## Running commands out of a document is the risk it is
 
@@ -61,6 +66,10 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+#: The runners, shared with `score_alignment._EXECUTABLE_RE` so the two agree (#167).
+from criterion_commands import RUNNERS
+
 #: The bullet's command, in the inline-code span acceptance criteria write it in.
 #: The LAST span on the line rather than the first: a criterion commonly names the
 #: subject in backticks before stating the command that checks it.
@@ -68,8 +77,12 @@ _COMMAND_RE = re.compile(r"`([^`]+)`")
 
 #: A span that is a shell command rather than a filename or an identifier. The same
 #: vocabulary `score_alignment._EXECUTABLE_RE` uses, so the two agree on what counts.
+#: Built on `criterion_commands.RUNNERS` since #167: this list lacked `npx`, `pnpm` and
+#: `yarn`, so `npx vitest run x` was a clause only when its path happened to contain the
+#: word `test` — and `pnpm vitest run` in a directory without one was not read at all.
 _RUNNABLE = re.compile(
-    r"\b(npm|pytest|go|cargo|make|curl|grep|rg|python3|bash|sh|node|test|jq|find|sed"
+    r"\b(" + "|".join(re.escape(n) for n in RUNNERS) +
+    r"|curl|rg|sh|test|jq|find|sed"
     r"|awk|wc|git|ls|cat|diff|echo|printf|true|false|sleep|kubectl|helm|docker)\b")
 
 _UNRESOLVED = re.compile(r"\{\{[A-Z_]+\}\}|<[A-Za-z][A-Za-z0-9_-]{1,40}>|\bTBD\b")
@@ -149,7 +162,7 @@ class Result:
 
 
 def _tree_state(repo_root: Path) -> tuple[str, bool]:
-    """(HEAD sha, is the working tree dirty). Empty sha when this is not a repository.
+    r"""(HEAD sha, is the working tree dirty). Empty sha when this is not a repository.
 
     A verification does not survive the tree it measured, and that is not theoretical:
     on 2026-09-14 the kit wrote `go | api/go.mod | ENABLED` into a consumer's language
@@ -234,15 +247,17 @@ def _bullets(text: str) -> list[str]:
 #: "running commands out of a document is the risk it is", and saying it is not
 #: protecting against it.
 #:
-#: Read-only tools, plus the test runners a criterion legitimately needs. `go test`
+#: Read-only tools, plus the test runners a criterion legitimately needs — those come from
+#: `criterion_commands.RUNNERS`, the list the scorer grades by, so a criterion naming the
+#: project's real test command satisfies both (#167). `go test`
 #: writes a build cache and `pytest` writes `__pycache__`; that is the cost of asking
 #: whether a test passes, and it is contained.
-_ALLOWED_COMMANDS = frozenset({
+_ALLOWED_COMMANDS = frozenset(RUNNERS) | frozenset({
     "grep", "rg", "cat", "ls", "find", "wc", "test", "head", "tail", "awk", "sort",
     "uniq", "cut", "tr", "diff", "echo", "printf", "true", "false", "jq", "stat",
     "basename", "dirname", "realpath", "readlink", "sed", "python3", "python",
     "node", "go", "cargo", "pytest", "npm", "npx", "make", "task", "bash", "sh",
-    "xargs", "tee", "date", "pwd", "env", "which", "command", "yq", "helm",
+    "xargs", "date", "pwd", "env", "which", "command", "yq", "helm",
     "kubectl", "docker", "gofmt", "ruff", "shellcheck",
     # A pure builtin: it changes this shell's working directory and touches nothing
     # else. Refusing it made every criterion scoped to a module unrunnable — measured
@@ -267,19 +282,173 @@ _ALLOWED_GIT = frozenset({
     "remote", "count-objects", "archive", "for-each-ref", "symbolic-ref",
 })
 
-#: A flag that turns a reading command into a writing one.
-_WRITING_FLAGS = ("-i", "--in-place", "-X POST", "-X PUT", "-X DELETE", "--delete",
-                  "-d ", "--force", "--hard", "-o ", "--output")
+#: A flag that turns a reading command into a writing one, read as a TOKEN of the
+#: command it belongs to (#165).
+#:
+#: These were substrings of the whole span until 2026-09-25, so `-i` was found inside
+#: `-invocation` in a kebab-case test file and inside `--ignore-scripts`, `-o` inside
+#: `grep -o` and `-d` inside `ls -d` — each refused as a write. And the substring missed a
+#: real one: `sed -ni` carries `-i` in a cluster and ran.
+#:
+#: LONG flags mean the same thing wherever they appear, so they are refused on any
+#: command, as the whole token or as `--flag=value` — never as a prefix, which is what
+#: made `--output-indicator-new` a write.
+_WRITING_LONG_FLAGS = ("--in-place", "--delete", "--force", "--hard", "--output")
+
+#: SHORT flags mean what their command says. `-i` edits in place for `sed` and loads
+#: `inplace` for `awk`, and is a pattern flag for `grep`; `-o` writes for `sort` and
+#: `go build` and extracts for `grep`; `-d`/`-D` delete for `git branch`/`git tag` and list
+#: directories for `ls`. A short flag is matched inside a cluster (`-ni`, `-i.bak`) only
+#: for the command it writes for.
+_WRITING_SHORT_FLAGS = {
+    "sed": "i", "perl": "i", "yq": "i", "awk": "i", "gawk": "i", "ruby": "i",
+    "sort": "o", "go": "o",
+}
+_GIT_DELETING_SUBCOMMANDS = frozenset({"branch", "tag"})
+
+#: `-X POST` and its siblings: an HTTP method that writes, on any command that takes one.
+_WRITING_METHODS = frozenset({"POST", "PUT", "DELETE", "PATCH"})
+
+#: A flag written in quotes — `sed "-i" …` — is still the flag. Unquoted before the quoted
+#: spans are blanked, or quoting it would have been the way past this check.
+_QUOTED_FLAG_RE = re.compile(r"(['\"])(-[\w.=-]+)\1")
 
 
 #: What a command name can look like. Deliberately narrow: a leading letter, underscore,
 #: dot or slash, then the characters a path or a binary name may carry. A bare number, a
 #: word with a comma in it, or a quoted fragment is an operand, not a command.
+#: Commands that run something this checker cannot see. `sudo` escalates; `eval`,
+#: `exec`, `source` and `.` evaluate text as code — so whatever the allowlist says
+#: about the words after them, it is not what runs.
+_ESCALATES_OR_EVALUATES = frozenset({"sudo", "eval", "exec", "source", "."})
+
+#: Commands whose effect is outside this process: the filesystem, a machine, a network.
+#: Disjoint from the set above, and refused for a DIFFERENT reason — both used to
+#: return the identical sentence, so a reader could not tell which rule had fired or
+#: why, and the two are tested in different places in the chain.
+_CHANGES_THE_WORLD = frozenset({
+    "rm", "mv", "cp", "chmod", "chown", "kill", "curl", "wget", "ssh",
+    "scp", "dd", "mkfs", "shutdown", "reboot",
+})
+
 _COMMAND_NAME_RE = re.compile(r"[A-Za-z_./][\w.@/+-]*")
+
+#: An OUTPUT redirect: `>`, `>>`, `2>`, `1>>`, `&>`. Requires a destination after it, so
+#: a comparison (`-gt 3`) and an awk program's `$1 > 2` — which live inside quotes and
+#: are stripped before this runs — do not match. `<` is absent on purpose: it reads.
+_REDIRECT_RE = re.compile(r"(?:\d|&)?>>?\s*[^\s|&;)]+")
+
+
+def _without_quoted(text: str) -> str:
+    """`text` with quoted spans blanked, preserving length.
+
+    A `>` inside `awk '$1 > 2'` or `grep 'a > b'` is data, not a redirect. Blanking
+    rather than deleting keeps offsets meaningful for anything that reports a position.
+    """
+    return re.sub(r"'[^']*'|\"[^\"]*\"", lambda m: " " * len(m.group(0)), text)
 
 #: Commands whose ARGUMENT is another command. Each is harmless alone and transparent to
 #: whatever it runs, so the payload has to be read rather than inherited.
 _WRAPPERS = frozenset({"timeout", "env", "nice", "nohup", "stdbuf", "xargs", "command"})
+
+
+def _refused_head(part: str) -> str:
+    """Why this ONE command is refused, or "" when it reads.
+
+    Extracted from `_refused_command`, which measured cyclomatic complexity 35: the
+    splitting, this per-command decision and the writing-flag sweep in one body. Pure
+    code movement — the block below is the loop body that was there, for one token.
+
+    Every early `continue` became an early `return ""`, which says the same thing: this
+    fragment is not a command, so it refuses nothing.
+    """
+    words = part.strip().split()
+    if not words:
+        return ""
+    head = words[0].strip("'\"")
+    # A fragment starting with a flag or a comparison operator is the tail of a
+    # command already checked — `-eq 3` after `$(…)` closed. Not a command.
+    if head.startswith("-") or head in ("then", "else", "fi", "do", "done", "!"):
+        return ""
+    # A token the shell could not execute as a command is not one. After a split on
+    # `$(`, `)` and `&&`, the leftovers are operands — `1` from `-eq 1`, `ctx,` from
+    # inside a grep pattern, `e-s` from a broken word. Refusing them reported a
+    # policy decision about something that was never a command, and on a consumer
+    # 2026-09-15 that was the whole remaining refusal set for an item: 6 of 12
+    # clauses, none of them a command at all.
+    #
+    # Skipping is safe in the direction that matters: bash would not run these
+    # either, and every REAL command on the line is still checked.
+    if not _COMMAND_NAME_RE.fullmatch(head):
+        return ""
+    if head in _ESCALATES_OR_EVALUATES:
+        return (f"{head!r} runs something this checker cannot read — it escalates or "
+                f"evaluates, so the allowlist below says nothing about what happens")
+    # A wrapper runs ANOTHER command, so allowing the wrapper without reading its
+    # payload is how `timeout 60 rm -rf /` would have walked through the allowlist.
+    # `env` was already on the list and carried exactly that hole. The payload is
+    # re-checked as its own command; the wrapper's own flags are skipped.
+    if head in _WRAPPERS:
+        payload = [w for w in words[1:]
+                   if not w.startswith("-") and not w.replace(".", "").isdigit()
+                   and "=" not in w]
+        if payload:
+            refused = _refused_command(" ".join(payload))
+            if refused:
+                return refused
+        return ""
+    # `python3 -c` and `node -e` execute arbitrary code, exactly as `bash -c` does.
+    # The difference is that a shell script can be unwrapped and inspected while a
+    # Python one cannot, so the only honest answer for it is no.
+    if head in ("python3", "python", "node", "ruby", "perl") and any(
+            w in ("-c", "-e", "--eval", "--command") for w in words[1:]):
+        return f"`{head} -c` executes arbitrary code; this will not run it"
+    if head == "git":
+        sub = next((w for w in words[1:] if not w.startswith("-")), "")
+        # `git hash-object` computes a hash and writes nothing UNLESS `-w` is given,
+        # which is what stores the object. The blanket refusal charged the safe form
+        # for the dangerous one, and a criterion pinning a file by its hash is a
+        # common and entirely read-only shape.
+        if sub == "hash-object" and "-w" not in words[1:]:
+            return ""
+        if sub and sub not in _ALLOWED_GIT:
+            return f"`git {sub}` moves work; this runs only reading subcommands"
+        return ""
+    if head in _CHANGES_THE_WORLD:
+        return (f"{head!r} changes something outside this process — a file, a machine, "
+                f"a network — and a criterion is meant to READ")
+    # `tee` WRITES. It sat on the allowlist of "readable commands" beside `cat` and
+    # `grep`, and `… | tee ~/.bashrc` is a write through a pipe that no redirect
+    # check would have caught either. Its only purpose is to write.
+    if head == "tee":
+        return "'tee' writes a file; this runs only commands that read"
+    if head and head not in _ALLOWED_COMMANDS and "=" not in head:
+        # A path to a binary the criterion built is the common legitimate case —
+        # `/tmp/project-cli quality --list` appears throughout a real registry. It is
+        # still refused, and the trade is deliberate: that binary can do anything,
+        # and "not verified" is an honest answer while "ran something unknown
+        # against your tree" is not. The reader is told precisely this, so they can
+        # run it themselves if they choose.
+        if head.startswith("/") or head.startswith("./"):
+            return (f"{head!r} is a binary this will not run unattended — run it "
+                    "yourself if you trust it")
+        # A refusal that names no way forward is one an author routes around, and this one is
+        # reached most often by somebody counting lines. Measured on a three-line file:
+        # `grep -c .` returns 2 when a line is blank (it skips them, which is wrong for a
+        # BUDGET), `wc -l <` returns 2 with no trailing newline (it counts newlines),
+        # `awk "END{print NR}"` is correct and was refused by the tokenizer until 2026-09-23,
+        # and `grep -c ""` is correct and was always accepted while being named nowhere. So the
+        # tool steered authors from a wrong instrument to a slightly-wrong one (#188).
+        return (f"{head!r} is not on the allowlist of readable commands. "
+                f'To count lines, `grep -c ""` is exact — `grep -c .` skips blank lines and '
+                f"`wc -l <` undercounts a file with no trailing newline.")
+    return ""
+
+
+#: An interpreter whose quoted argument is a PROGRAM rather than a command list. All three read;
+#: `sed -i` writes and is caught by `_WRITING_FLAGS` against the unmasked span.
+_READONLY_PROGRAM_RE = re.compile(
+    r"\b(awk|sed|jq)\s+(?:-[\w-]+\s+)*(['\"])(?:(?!\2).)*\2", re.DOTALL)
 
 
 def _refused_command(span: str) -> str:
@@ -299,77 +468,92 @@ def _refused_command(span: str) -> str:
     # unknown command `(cd` — a parsing miss reported as a policy decision, which is
     # the worst way to be wrong: the reader is told the command is forbidden when it
     # was never read.
+    # OUTPUT REDIRECTION, checked before anything is split. `>` is not in the token
+    # separator set below, so a redirect stayed glued to the operands of a command that
+    # had already passed: `cat go.mod > /etc/hosts` has head `cat`, which is on the
+    # allowlist, and the write went unread. Every form writes a path the DOCUMENT chose,
+    # on the machine running the check — and the criteria are authored by whoever wrote
+    # the plan, which is the trust boundary this whole allowlist exists to hold.
+    #
+    # `<` is deliberately absent: an input redirect reads. So is `>` inside an awk or
+    # jq program, which `_REDIRECT_RE` avoids by requiring the operator to sit outside
+    # quotes and be followed by a path rather than a number-and-brace.
+    redirect = _REDIRECT_RE.search(_without_quoted(unwrapped))
+    if redirect:
+        return (f"{redirect.group(0).strip()!r} redirects output to a file; this runs "
+                f"only commands that read")
+
+    # AN INTERPRETER'S PROGRAM IS NOT A LIST OF COMMANDS.
+    #
+    # The split below separates on `{` and `}`, so `awk "END{print NR}"` became
+    # `awk "END` / `print NR` / `"` and `print` landed in head position — refused as an unknown
+    # command. `awk` is read-only and `print` is an awk keyword. The cost was specific: an author
+    # who notices that `grep -c .` skips blank lines (wrong for a line BUDGET) reaches for
+    # `awk "END{print NR}"`, which is correct, and the tool refused it while accepting `wc -l <`,
+    # which undercounts a file with no trailing newline. It steered authors from a wrong
+    # instrument to a slightly-wrong one (#188).
+    #
+    # Masked rather than removed from the separator set: dropping `{`/`}` entirely would leave
+    # `{ rm -rf /; }` with heads `['{', '}']` and `rm` never read — measured, and a security
+    # regression in the file whose job is that boundary. A writing FLAG is still caught, because
+    # `_WRITING_FLAGS` is checked against the original `span` below rather than against this.
+    unwrapped = _READONLY_PROGRAM_RE.sub(r"\1 PROGRAM", unwrapped)
     tokens = re.split(r"[|;&\n(]|\$\(|\)|`|\{|\}", unwrapped)
     for part in tokens:
-        words = part.strip().split()
-        if not words:
+        refused = _refused_head(part)
+        if refused:
+            return refused
+
+    return _writing_flag(span)
+
+
+def _writing_flag(span: str) -> str:
+    """The first flag in `span` that makes its command write, as a refusal, or "".
+
+    Read per command, token by token. Quoted operands are blanked first, so a flag named
+    as DATA (`grep -c -- '--force' README.md`) is not the flag.
+    """
+    unwrapped = re.sub(r"\b(?:bash|sh)\s+-c\s+(['\"])(.*?)\1", r" ; \2 ; ", span,
+                       flags=re.DOTALL)
+    visible = _without_quoted(_QUOTED_FLAG_RE.sub(r"\2", unwrapped))
+    for segment in re.split(r"[|;&\n(]|\$\(|\)|`|\{|\}", visible):
+        refused = _writing_flag_in(segment.split())
+        if refused:
+            return refused
+    return ""
+
+
+def _writing_flag_in(words: list[str]) -> str:
+    # The command a short flag belongs to is the last known writer seen before it, so a
+    # wrapper (`xargs sed -i`, `timeout 5 sed -i`) does not hide it.
+    owner = ""
+    git_sub = ""
+    for n, word in enumerate(words):
+        if word in _WRITING_SHORT_FLAGS or word == "git":
+            owner, git_sub = word, ""
             continue
-        head = words[0].strip("'\"")
-        # A fragment starting with a flag or a comparison operator is the tail of a
-        # command already checked — `-eq 3` after `$(…)` closed. Not a command.
-        if head.startswith("-") or head in ("then", "else", "fi", "do", "done", "!"):
+        # `--` ends the options: what follows is an operand, even when it looks like a
+        # flag — `grep -c -- '--force' README.md` searches for the word.
+        if word == "--":
+            break
+        if owner == "git" and not git_sub and not word.startswith("-"):
+            git_sub = word
             continue
-        # A token the shell could not execute as a command is not one. After a split on
-        # `$(`, `)` and `&&`, the leftovers are operands — `1` from `-eq 1`, `ctx,` from
-        # inside a grep pattern, `e-s` from a broken word. Refusing them reported a
-        # policy decision about something that was never a command, and on a consumer
-        # 2026-09-15 that was the whole remaining refusal set for an item: 6 of 12
-        # clauses, none of them a command at all.
-        #
-        # Skipping is safe in the direction that matters: bash would not run these
-        # either, and every REAL command on the line is still checked.
-        if not _COMMAND_NAME_RE.fullmatch(head):
+        for flag in _WRITING_LONG_FLAGS:
+            if word == flag or word.startswith(flag + "="):
+                return f"carries {flag!r}, which writes"
+        if word == "-X" and n + 1 < len(words) and words[n + 1].upper() in _WRITING_METHODS:
+            return f"carries '-X {words[n + 1]}', which writes"
+        if not (word.startswith("-") and not word.startswith("--") and len(word) > 1):
             continue
-        if head in ("sudo", "eval", "exec", "source", "."):
-            return f"{head!r} is not run from a document"
-        # A wrapper runs ANOTHER command, so allowing the wrapper without reading its
-        # payload is how `timeout 60 rm -rf /` would have walked through the allowlist.
-        # `env` was already on the list and carried exactly that hole. The payload is
-        # re-checked as its own command; the wrapper's own flags are skipped.
-        if head in _WRAPPERS:
-            payload = [w for w in words[1:]
-                       if not w.startswith("-") and not w.replace(".", "").isdigit()
-                       and "=" not in w]
-            if payload:
-                refused = _refused_command(" ".join(payload))
-                if refused:
-                    return refused
-            continue
-        # `python3 -c` and `node -e` execute arbitrary code, exactly as `bash -c` does.
-        # The difference is that a shell script can be unwrapped and inspected while a
-        # Python one cannot, so the only honest answer for it is no.
-        if head in ("python3", "python", "node", "ruby", "perl") and any(
-                w in ("-c", "-e", "--eval", "--command") for w in words[1:]):
-            return f"`{head} -c` executes arbitrary code; this will not run it"
-        if head == "git":
-            sub = next((w for w in words[1:] if not w.startswith("-")), "")
-            # `git hash-object` computes a hash and writes nothing UNLESS `-w` is given,
-            # which is what stores the object. The blanket refusal charged the safe form
-            # for the dangerous one, and a criterion pinning a file by its hash is a
-            # common and entirely read-only shape.
-            if sub == "hash-object" and "-w" not in words[1:]:
-                continue
-            if sub and sub not in _ALLOWED_GIT:
-                return f"`git {sub}` moves work; this runs only reading subcommands"
-            continue
-        if head in ("rm", "mv", "cp", "chmod", "chown", "kill", "curl", "wget", "ssh",
-                    "scp", "dd", "mkfs", "shutdown", "reboot"):
-            return f"{head!r} is not run from a document"
-        if head and head not in _ALLOWED_COMMANDS and "=" not in head:
-            # A path to a binary the criterion built is the common legitimate case —
-            # `/tmp/project-cli quality --list` appears throughout a real registry. It is
-            # still refused, and the trade is deliberate: that binary can do anything,
-            # and "not verified" is an honest answer while "ran something unknown
-            # against your tree" is not. The reader is told precisely this, so they can
-            # run it themselves if they choose.
-            if head.startswith("/") or head.startswith("./"):
-                return (f"{head!r} is a binary this will not run unattended — run it "
-                        "yourself if you trust it")
-            return f"{head!r} is not on the allowlist of readable commands"
-    lowered = span.lower()
-    for flag in _WRITING_FLAGS:
-        if flag.strip() and flag.lower() in lowered:
-            return f"carries {flag.strip()!r}, which writes"
+        cluster = re.match(r"-([A-Za-z]+)", word)
+        letters = cluster.group(1) if cluster else ""
+        letter = _WRITING_SHORT_FLAGS.get(owner, "")
+        if letter and letter in letters:
+            return f"carries '-{letter}' for `{owner}`, which writes"
+        if owner == "git" and git_sub in _GIT_DELETING_SUBCOMMANDS and (
+                "d" in letters or "D" in letters):
+            return f"carries '{word}' for `git {git_sub}`, which deletes"
     return ""
 
 
@@ -541,11 +725,25 @@ def _decide(result, expected: str) -> tuple[bool | None, str]:
     if said_nothing and result.exit_code == 0:
         return None, ("exit 0 today, and the runner reports it executed nothing — "
                       "the criterion did not measure what it claims to")
-    if result.exit_code != 0:
-        return False, "exits non-zero today"
+    # THE ASSERTION DECIDES, and the exit code is context.
+    #
+    # This returned False on any non-zero exit before the output was ever compared, and this
+    # ecosystem writes `… | grep -c pattern` prints `0` routinely — a form that prints `0` and
+    # exits `1`. So such a criterion read `fails today` in the FIXED state exactly as in the
+    # broken one: not discriminating, stuck. Measured on one consumer plan, this and the awk
+    # tokenizer left six of thirteen criteria unable to flip, while the plan's own central
+    # metric counted `[fails today]` going to zero — unsatisfiable by construction (#188).
+    #
+    # A criterion that states no expected output is still exit-code-only, below. The two are
+    # different measurements, and reading one as the other is this file's own subject.
     if not value:
+        if result.exit_code != 0:
+            return False, "exits non-zero today, and the text states no expected output"
         return None, "exit 0 today, and the text does not state an expected output"
     out = result.stdout.strip()
+    #: Carried into every verdict below, so a reader can see that a command exited non-zero and
+    #: its asserted output held anyway. Hiding it would trade one confusion for another.
+    exit_note = f"exit {result.exit_code}"
     #: A stated BOUND is compared as one. Comparing `prints 4 or more` for equality made a
     #: correct `6` read as a failure — and worse than the false verdict is its direction:
     #: the check reported "discriminates" because the number DIFFERED, not because the
@@ -563,17 +761,26 @@ def _decide(result, expected: str) -> tuple[bool | None, str]:
         ok = {">=": actual >= limit, ">": actual > limit,
               "<=": actual <= limit, "<": actual < limit}[op]
         if ok:
-            return True, f"already prints {actual}, which satisfies {op} {limit}"
-        return False, f"prints {actual} today, needs {op} {limit}"
+            return True, (f"already prints {actual}, which satisfies {op} {limit} "
+                          f"({exit_note})")
+        return False, f"prints {actual} today, needs {op} {limit} ({exit_note})"
     if out == value or out.splitlines()[:1] == [value]:
-        return True, f"already prints {value!r}"
-    return False, f"prints {out[:40]!r}, expects {value!r}"
+        return True, f"already prints {value!r} ({exit_note})"
+    return False, f"prints {out[:40]!r}, expects {value!r} ({exit_note})"
 
 
 def run(brief: Path, repo_root: Path, timeout: float = 60.0) -> Report:
     rep = Report()
     rep.head, rep.dirty = _tree_state(repo_root)
-    for bullet in _bullets(brief.read_text(encoding="utf-8-sig")):
+    rep.results = _evaluate(_bullets(brief.read_text(encoding="utf-8-sig")), repo_root,
+                            timeout)
+    return rep
+
+
+def _evaluate(bullets: list[str], repo_root: Path, timeout: float) -> list:
+    """Every criterion, clause by clause, against ONE tree. The unit each state repeats."""
+    rep = Report()
+    for bullet in bullets:
         r = Result(criterion=bullet[:110], is_guard=bool(_GUARD_RE.search(bullet)))
         if _UNRESOLVED.search(bullet):
             r.note = "carries an unresolved placeholder — cannot run whatever it names"
@@ -616,7 +823,132 @@ def run(brief: Path, repo_root: Path, timeout: float = 60.0) -> Report:
             c.passes_today, c.note = _decide(c, expected)
             r.clauses.append(c)
         rep.results.append(r)
-    return rep
+    return rep.results
+
+
+# ── the other two states, and the control ────────────────────────────────────────────
+#
+# `run` reads ONE state. What a criterion is FOR takes three: it must fail on the tree as
+# it is, pass on the tree as intended, and fail on a tree built WRONG — plus a control,
+# because a rebuilt tree that answers differently from the tree it was rebuilt from makes
+# every other difference unattributable. The consumer that reported #96 measured exactly
+# this way, and the forms only execution catches (`go test -run <nothing>` exiting 0, a
+# `grep` counting its own error line) are all ones a wrong build would have turned green.
+#
+# The trees are DIRECTORIES the caller builds — a worktree at the implementation commit, a
+# copy with a deliberately wrong body, a second checkout of the base. Building them is not
+# this file's job: doing it here would mean applying patches and moving commits, and this
+# executor's allowlist exists because a criterion once moved somebody's work. It reads
+# trees; it never makes them.
+
+#: What each verdict means, in the order a criterion is checked against them. Printed on
+#: refusal so the reader does not have to open this file to learn what would pass.
+VERDICTS = {
+    "discriminates": "fails today, passes when built, rejects every wrong build",
+    "passes_before_work": "already passes on the current tree",
+    "fails_when_built": "does not pass on the intended tree",
+    "non_discriminating": "passes on a WRONG build — it measures a name, not a behaviour",
+    "undecidable": "could not be decided in at least one state",
+    "guard": "a declared guard; must pass when built, and is not asked to reject",
+}
+
+
+@dataclass(frozen=True)
+class StateVerdict:
+    criterion: str
+    verdict: str
+    #: `{state: passes}` — True, False, or None when undecidable there.
+    answers: dict
+
+
+@dataclass
+class StatesReport:
+    verdicts: list = field(default_factory=list)
+    #: None when no baseline was given; False is a failed control, not a failed criterion.
+    control_reproduced: bool | None = None
+    #: Criteria whose answer on the baseline differs from their answer on the current tree.
+    control_differs: list = field(default_factory=list)
+
+    @property
+    def defects(self) -> list:
+        return [v for v in self.verdicts if v.verdict not in ("discriminates", "guard")]
+
+
+def _classify(result, answers: dict) -> str:
+    if any(a is None for a in answers.values()):
+        return "undecidable"
+    if result.is_guard:
+        return "fails_when_built" if answers.get("intended") is False else "guard"
+    if answers["current"]:
+        return "passes_before_work"
+    if answers.get("intended") is False:
+        return "fails_when_built"
+    if any(ok for state, ok in answers.items() if state.startswith("wrong")):
+        return "non_discriminating"
+    return "discriminates"
+
+
+def run_states(brief: Path, current_root: Path, intended_root: Path | None = None,
+               wrong_roots: list | tuple = (), baseline_root: Path | None = None,
+               timeout: float = 60.0) -> StatesReport:
+    """Every criterion against every supplied state, classified by `VERDICTS`.
+
+    A state that is not supplied is not asked about — a run with only `wrong_roots` still
+    tells a criterion that accepts a wrong build from one that rejects it.
+    """
+    bullets = _bullets(brief.read_text(encoding="utf-8-sig"))
+    trees = {"current": current_root}
+    if intended_root is not None:
+        trees["intended"] = intended_root
+    for n, root in enumerate(wrong_roots, 1):
+        trees[f"wrong-{n}" if len(wrong_roots) > 1 else "wrong"] = root
+    readings = {state: _evaluate(bullets, root, timeout) for state, root in trees.items()}
+
+    report = StatesReport()
+    for i, current in enumerate(readings["current"]):
+        answers = {state: results[i].passes_today for state, results in readings.items()}
+        report.verdicts.append(
+            StateVerdict(current.criterion, _classify(current, answers), answers))
+
+    if baseline_root is not None:
+        baseline = _evaluate(bullets, baseline_root, timeout)
+        report.control_differs = [
+            now.criterion for now, rebuilt in zip(readings["current"], baseline)
+            if now.passes_today != rebuilt.passes_today]
+        report.control_reproduced = not report.control_differs
+    return report
+
+
+def render_states(rep: StatesReport, brief: Path) -> str:
+    states = list(rep.verdicts[0].answers) if rep.verdicts else []
+    mark = {True: "pass", False: "fail", None: "?   "}
+    lines = [f"acceptance criteria across states — {brief.name}",
+             "  " + " · ".join(states), ""]
+    for v in rep.verdicts:
+        cells = " ".join(f"{s}={mark[v.answers[s]].strip()}" for s in states)
+        lines.append(f"  [{v.verdict}] {v.criterion[:80]}")
+        lines.append(f"      {cells}")
+    lines.append("")
+    if rep.control_reproduced is False:
+        lines += ["CONTROL FAILED: the rebuilt baseline does not answer as the current "
+                  "tree does, for:", ""]
+        lines += [f"  · {c[:86]}" for c in rep.control_differs]
+        lines += ["", "  Every difference above is unattributable: \"the change moved "
+                  "this\" cannot be told", "  from \"the rebuild is broken\". Rebuild the "
+                  "baseline the way the other states were", "  built, from the commit the "
+                  "current tree is on, and run again."]
+        return "\n".join(lines) + "\n"
+    if rep.defects:
+        lines.append(f"REFUSED: {len(rep.defects)} of {len(rep.verdicts)} criteria do not "
+                     "discriminate. What each verdict means:")
+    else:
+        lines.append(f"All {len(rep.verdicts)} criteria discriminate. What each verdict "
+                     "means:")
+    lines += [f"  {name:<20} {meaning}" for name, meaning in VERDICTS.items()]
+    if rep.control_reproduced is None:
+        lines += ["", "  No --baseline was given, so no reconstruction control ran: a "
+                  "difference", "  between states is attributed to the change on trust."]
+    return "\n".join(lines) + "\n"
 
 
 def render(rep: Report, brief: Path) -> str:
@@ -699,9 +1031,10 @@ def render(rep: Report, brief: Path) -> str:
     else:
         lines.append(f"All {n} criteria fail today — each has something to prove."
                      + (f" ({len(rep.guards)} guard(s) excluded)" if rep.guards else ""))
-    lines += ["", "  This ran each CLAUSE once, against the tree as it is. It does not",
+    lines += ["", "  This ran each CLAUSE once, against the tree as it is. It did not",
               "  check that a criterion REJECTS a wrong implementation, which is the state",
-              "  that catches one measuring a name rather than a behaviour.",
+              "  that catches one measuring a name rather than a behaviour — pass",
+              "  `--intended DIR --wrong DIR --baseline DIR` for that.",
               "",
               "  And it does not survive the tree it measured. A criterion that",
               "  discriminated yesterday can be inert today because something else",
@@ -721,11 +1054,30 @@ def main() -> int:
     parser.add_argument("--repo-root", type=Path, default=Path("."))
     parser.add_argument("--timeout", type=float, default=60.0)
     parser.add_argument("--json", action="store_true")
+    parser.add_argument(
+        "--intended", type=Path,
+        help="a tree in the INTENDED state (e.g. a worktree at the implementation "
+             "commit); every criterion must pass there")
+    parser.add_argument(
+        "--wrong", type=Path, action="append", default=[],
+        help="a tree carrying a deliberately WRONG implementation; every criterion "
+             "must fail there. Repeatable")
+    parser.add_argument(
+        "--baseline", type=Path,
+        help="the current tree REBUILT the way the other states were built; it must "
+             "answer as --repo-root does, or the run is not a measurement (exit 2)")
     args = parser.parse_args()
 
     if not args.brief.is_file():
         print(f"NOT MEASURED: no brief at {args.brief}", file=sys.stderr)
         return 2
+    for label, tree in (("--intended", args.intended), ("--baseline", args.baseline),
+                        *(("--wrong", w) for w in args.wrong)):
+        if tree is not None and not tree.is_dir():
+            print(f"NOT MEASURED: {label} {tree} is not a directory", file=sys.stderr)
+            return 2
+    if args.intended or args.wrong or args.baseline:
+        return _main_states(args)
 
     rep = run(args.brief, args.repo_root.resolve(), args.timeout)
     if not rep.results:
@@ -744,6 +1096,30 @@ def main() -> int:
     else:
         print(render(rep, args.brief), end="")
     return 1 if (rep.already_passing or rep.unrunnable or rep.undecidable) else 0
+
+
+def _main_states(args) -> int:
+    rep = run_states(args.brief, args.repo_root.resolve(),
+                     args.intended.resolve() if args.intended else None,
+                     [w.resolve() for w in args.wrong],
+                     args.baseline.resolve() if args.baseline else None, args.timeout)
+    if not rep.verdicts:
+        print(f"NOT MEASURED: {args.brief} has no acceptance-criteria section",
+              file=sys.stderr)
+        return 2
+    if args.json:
+        print(json.dumps({
+            "control_reproduced": rep.control_reproduced,
+            "control_differs": rep.control_differs,
+            "verdicts": [{"criterion": v.criterion, "verdict": v.verdict,
+                          "answers": v.answers} for v in rep.verdicts],
+            "accepted_verdicts": VERDICTS,
+        }, indent=2, ensure_ascii=False))
+    else:
+        print(render_states(rep, args.brief), end="")
+    if rep.control_reproduced is False:
+        return 2
+    return 1 if rep.defects else 0
 
 
 if __name__ == "__main__":

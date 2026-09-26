@@ -1,3 +1,4 @@
+# rule-id: SQ-VRD-03
 # Which band each verdict is in — one table, one owner
 #
 # WHY THIS FILE EXISTS
@@ -98,6 +99,7 @@ VALIDATED                     | clean      | the acceptance run established the 
 # ---- caveats ----------------------------------------------------------------
 ACCEPTED_WITH_CAVEATS         | caveats    | accepted, and every caveat is a filed issue rather than a note
 ITEM_IN_FLIGHT                | caveats    | held on a material impediment; the work stands and the queue moves on
+ITEM_EXTERNALLY_BLOCKED       | caveats    | the id names a constraint nobody here can clear — a sponsor decision, a ratification, a vendor fix. The same band as ITEM_IN_FLIGHT and for the same reason: the work stands, the queue moves on, and the impediment is real rather than a defect in the item
 PASS_WITH_CAVEATS             | caveats    | passed with soft caps recorded
 PARTIAL                       | caveats    | `run_validation.py` exits 0 with checks it could not run; the verdict covers what ran and says so
 PRE_RELEASED                  | caveats    | an -rc.N batch: installable, scope unfinished. The caveat is permanent for that tag — an rc never becomes a release, it is superseded by one
@@ -135,3 +137,4 @@ NOT_VALIDATED                 | structural | the run could not establish either 
 AWAITING_HUMAN                | orthogonal | the phase ran and stopped at a material impediment; no artifact was scored
 AWAITING_REVIEW               | orthogonal | the structure is complete and the judgement has not been made; not a failure and not a pass
 BACKLOG_EMPTY                 | orthogonal | nothing raw or triaged. A prompt to sweep, not a finish line — a backlog is not a scope
+BACKLOG_INVALID               | structural | an id does not name exactly one item — `duplicate_id` or `renumbered`. SELECT returns nothing because every id it could return is ambiguous, and no phase below it can run against an id that resolves to two blocks. Structural rather than redo: the registry's ids are the contract every citation rests on, and a `traces_to` or a `blocked_by` pointing at an ambiguous id is the same broken pointer INVALID names one level down

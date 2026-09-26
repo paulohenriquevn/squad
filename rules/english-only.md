@@ -1,4 +1,5 @@
 # English only
+<!-- rule-id: SQ-LNG-01 -->
 
 **Skill:** every skill · **Mechanised by:** `mechanisms/gates/check_english_only.py`
 
@@ -73,16 +74,33 @@ Anything else is a translation waiting to happen.
   express "this list is data, not prose")_. The two that did were fixed on
   2026-08-27, and this line is what a reviewer reads before adding a third.
 
-## Detection is precise, not exhaustive
+## Detection scores a line, not a word list
 
-The checker matches function words that cannot plausibly appear in English
-technical prose. It deliberately does **not** match `para`, `com`, `de`, `mode`
-or `data`: those are English, or live inside identifiers, paths and URLs.
+The checker used to match a closed list of Portuguese words, and missed every line built
+from words the list did not carry — an `install.sh` section header survived four months
+(#130). It now scores each line of prose: a Portuguese function word with no English
+reading, or a suffix English does not produce (`-ção`, `-mente`), counts fully;
+ambiguous function words (`o`, `de`, `com`), diacritics and shared suffixes count less;
+a capitalised word whose only signal is an accent counts almost nothing, because it is
+nearly always a name. A line is Portuguese when its score clears a floor AND outweighs
+the English function words on the same line. Paths, identifiers, URLs and code spans
+are not prose and do not count.
 
-That choice is about where this runs. The gate ships to every consumer, and the
-person who meets a false positive there did not write the gate and has no reason
-to trust it — the first thing anyone does with a noisy gate is turn it off.
-Missing some Portuguese is recoverable. Being ignored is not.
+Measured on this repository when it changed: 130 Portuguese lines in 43 files the old
+list called clean, and no English line flagged. "café", "São Paulo" and "José and
+João" inside an English sentence do not fire.
+
+It still misses a one-word line with no accent or Portuguese suffix. The choice is
+about where this runs: the gate ships to every consumer, and the person who meets a
+false positive there did not write it and has no reason to trust it. Missing a word is
+recoverable. Being ignored is not.
+
+Two ways to say Portuguese is intended:
+
+- `# english-only: <reason>` on the line — a quotation, a data value, a fixture line.
+  The surrounding code is still checked.
+- `rules/english-only-allowlist.txt` — `<glob> | <reason>` for a path that ships
+  Portuguese on purpose, such as product copy. A row without a reason is refused.
 
 ## Anti-patterns
 

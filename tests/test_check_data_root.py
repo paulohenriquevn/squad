@@ -14,13 +14,18 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 _REPO = Path(__file__).parent.parent
 sys.path.insert(0, str(_REPO / "mechanisms" / "gates"))
 sys.path.insert(0, str(_REPO))
 
-from check_data_root import check_project  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from check_data_root import check_project  # noqa: E402 — post-bootstrap import
 
-from squad.paths import write_records_dir  # noqa: E402
+from squad.paths import write_records_dir  # noqa: E402 — post-bootstrap import
 
 
 def _states(root: Path) -> dict[str, str]:
@@ -118,6 +123,19 @@ def test_data_written_inside_the_installed_kit_is_seen(tmp_path: Path) -> None:
     assert states.get(".claude/.squad") == "INSIDE_KIT", states
 
 
+
+def test_a_write_root_nested_inside_the_write_root_is_seen(tmp_path: Path) -> None:
+    """No migration produces `.squad/.squad/`; only a writer that took the write root for
+    a project does. SPLIT compares the write root with roots BESIDE it, so a copy INSIDE
+    it was invisible here — measured on a consumer 2026-09-25 with 39 events in the
+    nested stream and nothing reporting them.
+    """
+    _file(write_records_dir(tmp_path, "plans"))
+    _file(tmp_path / ".squad" / ".squad" / "records", "cycle-events.jsonl")
+
+    assert _states(tmp_path).get(".squad/.squad") == "NESTED"
+
+
 def test_a_clean_project_does_not_gain_the_new_state(tmp_path: Path) -> None:
     """Widening a scan must not invent findings. A kit tree with no data under it is the
     normal case and stays silent."""
@@ -127,3 +145,25 @@ def test_a_clean_project_does_not_gain_the_new_state(tmp_path: Path) -> None:
     (tmp_path / ".claude" / "skills" / "x.md").write_text("a skill\n", encoding="utf-8")
 
     assert not any(r.state == "INSIDE_KIT" for r in check_project(tmp_path))
+
+
+@pytest.mark.parametrize("state_maker", ["nested", "unmigrated"])
+def test_the_ecosystem_verifier_fails_on_every_state_the_gate_fails_on(
+    tmp_path: Path, state_maker: str,
+) -> None:
+    """`verify_ecosystem` kept its own list of failing states, `UNMIGRATED` and `SPLIT`,
+    and every state added to this gate since — `INSIDE_KIT`, `NESTED`, `SHARED`,
+    `COMMITTABLE` — passed the ecosystem check while the gate itself exited 1. One
+    question, two lists, and the second one never heard about the additions."""
+    sys.path.insert(0, str(_REPO / "mechanisms" / "gates"))
+    from verify_ecosystem import check_data_root as verify
+
+    if state_maker == "nested":
+        _file(write_records_dir(tmp_path, "plans"))
+        _file(tmp_path / ".squad" / ".squad" / "records", "cycle-events.jsonl")
+    else:
+        _file(tmp_path / ".claude" / "records" / "plans")
+
+    ok, detail = verify(tmp_path)
+
+    assert not ok, detail

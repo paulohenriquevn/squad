@@ -16,7 +16,10 @@ from pathlib import Path
 SCRIPTS = Path(__file__).parent.parent / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-import check_criteria_discriminate as cd  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+import check_criteria_discriminate as cd  # noqa: E402 — post-bootstrap import
 
 
 def _brief(tmp_path: Path, *bullets: str) -> Path:
@@ -477,7 +480,7 @@ class _Ran:
 
 
 def test_a_criterion_that_states_a_bound_is_compared_as_one() -> None:
-    """`prints 4 or more` was compared for EQUALITY, so a correct `6` read as a failure.
+    r"""`prints 4 or more` was compared for EQUALITY, so a correct `6` read as a failure.
 
     Worse than the false verdict is its direction: the check reported "discriminates"
     because the number DIFFERED, not because the criterion was unmet. A discrimination
@@ -529,3 +532,34 @@ def test_every_comparative_form_in_the_vocabulary_is_recognised() -> None:
         ("exits 0", None),
     ):
         assert cd._bound_of(text) == expected, text
+
+
+def test_a_writing_flag_is_a_whole_token_not_a_substring():
+    """`-i` was matched anywhere two characters appeared, so `-invocation` in a kebab-case
+    test file and `--ignore-scripts` were refused as `sed -i`. Found on a real brief whose
+    criterion named `a-limit-survives-a-cold-invocation.test.ts`."""
+    for reads in ("npx vitest run tests/a-cold-invocation.test.ts",
+                  "npm ci --ignore-scripts",
+                  "git log --output-indicator-new=x -1",
+                  "grep -c -- '--force' README.md"):
+        assert cd._refused_command(reads) == "", (reads, cd._refused_command(reads))
+
+
+def test_a_short_flag_is_read_against_the_command_it_belongs_to():
+    """`-o` writes for `sort` and extracts for `grep`; `-d` deletes for `git branch` and
+    lists directories for `ls`. A flag means what its command says it means."""
+    for reads in ("grep -o foo f.txt", "ls -d src", "mktemp -d", "git diff -D HEAD"):
+        assert cd._refused_command(reads) == "", (reads, cd._refused_command(reads))
+
+
+def test_the_writing_flags_are_still_refused_after_tokenising():
+    """The control: reading flags as tokens must not loosen the guard it replaces."""
+    for writes in ("sed -i s/a/b/ f.txt", "sed -ni p f.txt", "sed -i.bak s/a/b/ f.txt",
+                   "sed 's/a/b/' -i f.txt", "sed --in-place s/a/b/ f.txt",
+                   "bash -c 'sed -i s/a/b/ f.txt'", "xargs sed -i s/a/b/",
+                   "yq -i '.a = 1' f.yaml", "awk -i inplace '{print}' f.txt",
+                   "sort -o out.txt in.txt", "git log --output=out.txt",
+                   "git branch -d feature", "git branch -D feature",
+                   "git tag --delete v1", "git branch --force main HEAD~1",
+                   "sed \"-i\" s/a/b/ f.txt"):
+        assert cd._refused_command(writes), writes

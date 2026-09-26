@@ -13,7 +13,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "mechanisms" / "conventions"))
 
-import touched_slices  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+import touched_slices  # noqa: E402 — post-bootstrap import
 
 KNOWN = frozenset({"backlog-review", "plan-confidence", "review", "implement"})
 

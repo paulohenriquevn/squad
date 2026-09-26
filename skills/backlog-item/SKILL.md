@@ -39,6 +39,36 @@ DO NOT invoke when:
 
 Unlike its Cycle ancestor `/roadmap-feature`, this skill **does not refuse hotfixes, one-line fixes, or refactors with no user-visible change.** Those are the Squad's core workload, not exceptions routed elsewhere.
 
+## An impediment nobody here can clear is also an item
+
+A sponsor decision, a ratification, a vendor fix, a regulatory hold. Filing it as
+`blocked_by: the sponsor must decide` is prose no graph resolves — measured, seven of
+eight impediments were exactly that, and each one freed its item only when somebody
+remembered to delete the line.
+
+File the constraint itself, with `source: external-blocker`:
+
+```markdown
+## B-900 — The sponsor must ratify the data-retention change
+
+domain: data-plane-ts
+repo: promptly
+source: external-blocker
+evidence: none-yet
+why_now: the retention window cannot change until legal signs the policy off
+status: raw
+dod:
+  - legal has signed the retention policy, or has refused it in writing
+```
+
+Then the blocked item names it: `blocked_by: B-900`. The edge is verifiable, and closing
+the stub frees every item naming it **with no second edit**.
+
+Three things differ from an ordinary item, and nothing else does: no `suggested_mode`
+(it never reaches DISCOVER), no `traces_to` (it is not work, so it serves no objective),
+and SELECT never hands it out — asking for it by name returns `ITEM_EXTERNALLY_BLOCKED`.
+The contract is `rules/cycle-backlog.md § An impediment nobody here can clear`.
+
 ## Process
 
 ### Step 0 — Pre-flight (MANDATORY, fail-fast)
@@ -82,7 +112,7 @@ python3 "$ECO/skills/backlog-item/scripts/check_intake_gates.py" \
 
 One script, both mechanizable gates:
 
-- **G1** delegates to `mechanisms/cycle/route_domain.py` — the routing table is parsed from `rules/cycle-backlog.md`, so there is one table and one truth. Exit `1` = the repo is not in it, verdict `ITEM_REJECTED`.
+- **G1** delegates to `mechanisms/cycle/route_domain.py`, which resolves the routing table by PRECEDENCE, not from one file: `.squad/domain-routing.txt` first, then the pre-2026-09-11 locations under `rules/` and `.claude/rules/`, and `cycle-backlog.md` last of all. `squad.paths.routing_table` is the authority on the name; `_TABLE_LOCATIONS` on the order. This line named `cycle-backlog.md` as the single source until 2026-09-23 (#172), which was wrong twice: the table moved out of that file, and it is read LAST — so a table written there is shadowed by any of the three ahead of it, or works by accident until someone adds one. Exit `1` = the repo is not in the winning table, verdict `ITEM_REJECTED`.
 - **G2** searches `BACKLOG.md` for every term **plus the repo name** (always added — the repo is the term that collides most across a registry spanning 21 of them) and returns each matching block with its status and the action the rule prescribes for it. Exit `3` = candidates found.
 
 Running it IS the evidence that G2 happened; the old instruction was a `grep` whose execution nobody could verify afterwards. Then read every `B-NNN` block it returned — a keyword hit is a candidate, not a verdict.
@@ -98,7 +128,28 @@ Skipping this step is a G2 violation. The single-registry decision only holds if
 
 ### Step 3 — Detect next id
 
-Extract every `## B-(\d+)` from `BACKLOG.md`, take `max(N) + 1`, format as `B-{N:03d}`.
+Run the allocator. Do NOT read the file and take `max(N) + 1`:
+
+```bash
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/next_backlog_id.py" BACKLOG.md
+```
+
+`BACKLOG.md` is unversioned by policy (`rules/records-location.md`), so a checkout can hold a
+registry that lost blocks another checkout still has — and `max(N) + 1` then hands out an id
+somebody already used. Observed 2026-09-18 in a consumer: a second session registered `B-016`, an id
+that registry had already spent; 138 of its cited ids carried no block.
+
+The script reads the blocks present, recovers every id that ever HAD a block from the registry's git
+history, and rejects ids that never did — a template placeholder, a test fixture, an example in
+prose. It prints the three counts, so the id it hands you is auditable rather than asserted.
+
+With no history it falls back to the present blocks and says `history unavailable`, which is a
+different claim from `0 recovered`.
+
+**If this checkout has no `BACKLOG.md` at all** — a fresh clone, or a second worktree — that is a
+normal state, not a failure, and `rules/records-location.md § A checkout with no registry` is the
+procedure. The short of it: do not reconstruct the file from citations, take the id from the
+allocator above, and read G2's `not_searched` line rather than its empty `candidates`.
 
 ```
 Existing items: 27 (18 shipped, 4 planned, 3 triaged, 2 killed)
@@ -157,7 +208,7 @@ Record the decision (`g5_reformulated` / `g5_false_positive` / `g5_rejected`) in
 Emit the START of this phase before doing the work:
 
 ```bash
-python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" start \
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" start \
     --cycle backlog --slug {B-NNN}
 ```
 
@@ -179,7 +230,7 @@ Only after Steps 2–5 pass. Four writes, in this order:
 4. **The phase event** — the transition, into the stream rather than a file someone reconstructs later:
 
    ```bash
-   python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" end \
+   python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" end \
        --cycle backlog --slug B-NNN --verdict ITEM_REGISTERED
    ```
 

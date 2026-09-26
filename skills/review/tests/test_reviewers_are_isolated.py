@@ -30,8 +30,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import pytest
-
 SKILL = Path(__file__).resolve().parents[1] / "SKILL.md"
 
 
@@ -73,10 +71,13 @@ def test_the_detector_is_still_there() -> None:
     """
     src_path = SKILL.parent / "scripts" / "consolidate_findings.py"
     src = src_path.read_text(encoding="utf-8")
-    if "def capture_tree_state" not in src:
-        pytest.skip(
-            "this kit ships no tree-state detector — it has the isolation fix and "
-            "no way to notice if the isolation stops working. Named in "
-            "skills/_kit-rules/parallelism-shapes.md; porting it is a decision, not a chore."
-        )
-    assert "def capture_tree_state" in src
+
+    # Asserted, not skipped. `pytest.skip` stood here on exactly the condition this
+    # test exists to detect — so the absence of the detector would have made the test
+    # about that absence disappear, and the gap would have read as covered. The
+    # detector IS present, which is what makes the plain assertion the right shape:
+    # the day it is removed, this fails instead of vanishing.
+    assert "def capture_tree_state" in src, (
+        "this kit ships no tree-state detector — it would have the isolation fix and "
+        "no way to notice if the isolation stopped working. Named in "
+        "skills/_kit-rules/parallelism-shapes.md.")

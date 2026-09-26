@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import sys
 from enum import Enum
@@ -45,14 +46,16 @@ from pathlib import Path
 from typing import Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "cycle"))
-from convene_panel import agents_dir, repo_root, resolve_seat
+from convene_panel import agents_dir, repo_root, resolve_seat, seat_family
 from review_panel import (
     HOME_FAMILY,
     PANEL_SIZE,
     Seat,
+    panel_size_for,
     parse_panel_phases,
     parse_roster,
     seats_for,
+    single_family_waived,
 )
 
 #: Resolve an executable name to a path, or None. Injected so the gate is testable
@@ -89,6 +92,50 @@ def default_panel_path() -> Path:
     return Path(__file__).resolve().parents[2] / "rules" / "review-panel.txt"
 
 
+#: Why each seat could not be filled on the LAST run: `(phase, agent, reason)`. A
+#: module-level record rather than a changed return type — `PanelCapability` is what six
+#: readers compute from, and widening it to a tuple would rewrite all of them to carry a
+#: detail only `main` prints. `unfillable_seats()` is the addition.
+unfillable: list[tuple[str, str, str]] = []
+
+
+def unfillable_seats() -> list[tuple[str, str, str]]:
+    """`(phase, agent, reason)` for every seat the last check could not fill."""
+    return list(unfillable)
+
+
+#: CLIs that put a non-Anthropic family within reach. Deliberately short: each entry
+#: is a binary whose presence REFUTES "no provider is configured", so a wrong one turns
+#: an honest waiver into a false alarm — and a gate that cries wolf gets deleted.
+PROVIDER_BINARIES = ("codex", "gemini", "ollama")
+
+#: The one waiver reason that is a checkable claim about THIS MACHINE. Anything else —
+#: a broken CLI, an expired key, a model the account refuses — is a claim about the
+#: provider's BEHAVIOUR, and probing that costs a live call on every gate run.
+_CLAIMS_NO_PROVIDER = re.compile(r"\bno\s+(?:\S+\s+){0,3}provider\b", re.IGNORECASE)
+
+
+def waiver_contradicted(reason: str, *, which=shutil.which) -> str:
+    """The binary that refutes this waiver reason, or "" when nothing refutes it.
+
+    A waiver carries a reason so a reader can weigh it. Nothing re-read that reason, so
+    it outlived the fact it named: it said no non-Anthropic provider was configured for
+    nine days while `codex` sat on PATH, authenticated, with `judge-codex` installed
+    (measured 2026-09-21). The panel was single-family for a real reason the whole time
+    — the CLI is too old for every model the account exposes — and the file named the
+    wrong one, which is the difference between a cost somebody chose and one nobody saw.
+
+    Only the "no provider" class is decided here. A reason naming a broken CLI is not
+    refuted by that CLI being present: its presence is the reason's own premise.
+    """
+    if not _CLAIMS_NO_PROVIDER.search(reason or ""):
+        return ""
+    for binary in PROVIDER_BINARIES:
+        if which(binary):
+            return binary
+    return ""
+
+
 def check_panel_capability(
     panel_path: Path | None = None,
     *,
@@ -103,6 +150,7 @@ def check_panel_capability(
     then every item in that phase would halt on an `access` impediment for a cause
     knowable before the first was selected, which is the entire point of asking here.
     """
+    named_by_caller = panel_path is not None
     path = panel_path or default_panel_path()
     resolve = which or shutil.which
     agents = agents_dir(project or repo_root())
@@ -112,7 +160,19 @@ def check_panel_capability(
     except OSError:
         # A project with no panel declaration cannot form a panel. Determinable,
         # therefore a fact rather than a failure to look.
-        return PanelCapability.VIOLATED
+        #
+        # That argument holds for the DEFAULT path and only there. When the CALLER
+        # named the roster, an unreadable file says nothing about the project's panel
+        # — it says the gate was pointed somewhere else, and the two were collapsed
+        # until 2026-09-21. Measured that day: `--panel discover` (a phase name where a
+        # path belongs) printed PREMISE VIOLATED, naming `rules/review-panel.txt` as
+        # the file that cannot form a panel while never having opened it. The roster
+        # it accused HOLDS. `check_auditor_coverage.py` already refuses this shape on
+        # its own side — "the gate was pointed at the wrong tree — it has NOT
+        # established that no audit is required" — and the sentence governs both: an
+        # inability to measure must not become a passing measurement, and it must not
+        # become a failing one either.
+        return PanelCapability.UNCHECKED if named_by_caller else PanelCapability.VIOLATED
 
     try:
         gated = parse_panel_phases(text)
@@ -123,23 +183,60 @@ def check_panel_capability(
     if not gated:
         return PanelCapability.VIOLATED
 
-    for seats in by_phase.values():
-        if len(seats) != PANEL_SIZE:
+    # A project may declare, in the roster the installer preserves, that it runs a
+    # one-family panel and what that costs it. The kit's rule does not move: which
+    # models a project can reach is not the kit's business, and a project with no
+    # second provider chooses between running no panel and running one that says what
+    # it is worth. DECLARED, never inferred — a roster that happens to be one family
+    # and one that was meant to be read the same on disk, and only one is a decision.
+    waived, _reason = single_family_waived(text)
+
+    for _phase, seats in by_phase.items():
+        if len(seats) != panel_size_for(_phase):
             return PanelCapability.VIOLATED
-        families = {s.family for s in seats}
-        if not (families - {HOME_FAMILY, "unknown"}):
+        # The family rule guards a MAJORITY, and a single seat has none.
+        #
+        # Its reason is that correlated models are fooled together: "a plausible fabrication that
+        # survives one tends to survive its siblings". That is an argument about two of three
+        # agreeing, and it does not reach a phase with one reviewer, where the guarantee that
+        # matters is a different one — NOT THE AUTHOR — and is enforced immediately above.
+        #
+        # Measured 2026-09-23, because the opposite claim was available and had to be tested: two
+        # same-family sessions reviewing each other's work that day refuted three claims between
+        # them, and one of those refutations found a root cause neither had seen. Same-family
+        # review is not empty review; it is correlated VOTING that the rule exists to prevent.
+        #
+        # A single-seat phase that COULD be filled from another family still should be, and the
+        # signature vocabulary keeps the distinction visible either way: `judge/…` and `human/…`
+        # are different claims to any reader, and `score_alignment` reports the weakest of a set.
+        # The family a seat WILL RUN, not the one its roster row names. For a `builtin`
+        # seat the roster's model is a claim about a Claude sub-agent, and the agent's
+        # own frontmatter is what selects the model — see `seat_family`. This gate
+        # asserted diversity on the unread string for as long as it existed.
+        families = {seat_family(s, config_dir=config_dir)[0] for s in seats}
+        if not (families - {HOME_FAMILY, "unknown"}) and not waived and len(seats) > 1:
             return PanelCapability.VIOLATED
 
     # Reachability is checked LAST and reported separately, because it is the only
     # question here whose answer depends on the machine rather than on the repository.
-    for seats in by_phase.values():
+    #
+    # EVERY unfillable seat, with the reason `resolve_seat` gave. This returned on the
+    # first one and discarded the string it had just been handed — `no agent \`X\` in
+    # <dir>`, `plugin \`X\` is not installed`, `\`X\` is not on PATH` — so the operator
+    # read "no such agent, or no such binary on PATH" and had to go find out which, for
+    # a seat the gate had already identified.
+    unfillable.clear()
+    for phase, seats in by_phase.items():
         for seat in seats:
-            # The panel is short a member here. When it is the orthogonal one, this
-            # also removes the only thing the diversity rule was protecting — so it
-            # still stops a real run, it just is not the repository's fault.
-            if resolve_seat(seat, agents=agents, which=resolve,
-                            config_dir=config_dir):
-                return PanelCapability.UNREACHABLE
+            reason = resolve_seat(seat, agents=agents, which=resolve,
+                                  config_dir=config_dir)
+            if reason:
+                # The panel is short a member here. When it is the orthogonal one, this
+                # also removes the only thing the diversity rule was protecting — so it
+                # still stops a real run, it just is not the repository's fault.
+                unfillable.append((phase, seat.agent, reason))
+    if unfillable:
+        return PanelCapability.UNREACHABLE
 
     return PanelCapability.HOLDS
 
@@ -187,18 +284,27 @@ _MESSAGES = {
         "VIOLATED: `rules/review-panel.txt` is fine and this machine is missing a tool."
     ),
     PanelCapability.UNCHECKED: (
-        "NOT CHECKED — rules/review-panel.txt exists and does not parse.\n"
+        "NOT CHECKED — the roster could not be read: it does not parse, or the "
+        "path this gate was given is not there.\n"
         "\n"
-        "This is not a pass. A reviewer row that announces a reviewer without "
-        "describing one would silently shrink the panel, so it is refused rather "
-        "than skipped."
+        "This is not a pass, and it is not a VIOLATED either. A reviewer row that "
+        "announces a reviewer without describing one would silently shrink the "
+        "panel, so it is refused rather than skipped — and a roster the caller "
+        "named and that is absent establishes nothing about the project's panel, "
+        "so it must not be reported as one that cannot be formed."
     ),
 }
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Check that a review panel can be formed.")
-    ap.add_argument("--panel", type=Path, default=None)
+    ap.add_argument("--panel", type=Path, default=None,
+                    help="PATH to the roster file, not a phase name "
+                         "(default: rules/review-panel.txt)")
+    # `--root`, per the contract in `_contract.py`: a caller that does not know
+    # which gate it is talking to passes this and it works. This gate resolved the
+    # tree implicitly from the working directory, so it could not be pointed at one.
+    ap.add_argument("--root", type=Path, default=Path.cwd())
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
 
@@ -222,13 +328,61 @@ def main(argv: list[str] | None = None) -> int:
         home=HOME_FAMILY,
     )
 
+    # The waiver never passes silently. A panel of one family HOLDS only because this
+    # project declared it does, and the line that reports HOLDS has to carry that or a
+    # reader takes it for a panel that spans families.
+    _waived, _reason = (False, "")
+    try:
+        _waived, _reason = single_family_waived(text)
+    except (OSError, ValueError, NameError):  # pragma: no cover - text may be unread
+        pass
+    if _waived and result is PanelCapability.HOLDS:
+        message += (
+            "\n\n  SINGLE FAMILY, BY DECLARATION. `rules/review-panel.txt` waives the "
+            f"cross-family requirement: {_reason}.\n"
+            "  Correlated reviewers share failure modes — a plausible fabrication that "
+            "survives one tends to survive its siblings — so an APPROVED from this panel "
+            "is a weaker claim than one spanning two families, and `review_panel.tally()` "
+            "carries the same note into every outcome. Remove both keys from the roster "
+            "the day a second provider is reachable."
+        )
+        _refuted_by = waiver_contradicted(_reason)
+        if _refuted_by:
+            message += (
+                f"\n\n  THE DECLARED REASON IS REFUTED HERE: it claims no provider is "
+                f"configured, and `{_refuted_by}` is on PATH. The panel may still be "
+                "single-family for a real reason — but this file no longer names it, so "
+                "nobody can weigh what the waiver costs. Re-measure and rewrite the "
+                "reason, or fill the seat."
+            )
+
+    if result is PanelCapability.UNREACHABLE and unfillable_seats():
+        message += "\n\nWhich seats, and why:\n" + "\n".join(
+            f"  {phase}/{agent}: {reason}" for phase, agent, reason in unfillable_seats())
+
+    # Resolved once per seat, here, because `main` has no `config_dir` of its own:
+    # the check takes one for testability and defaults to this machine's. Calling
+    # `seat_family` inline in the payload read a name that does not exist in this
+    # scope, and the gate died with a NameError under `--json` — the shape the
+    # report is meant to prevent, in the reporter.
+    verified = {id(s): seat_family(s) for s in seats}
+
     if args.json:
         print(json.dumps({
             "result": result.value,
+            "unfillable_seats": [{"phase": p, "agent": a, "reason": r}
+                                 for p, a, r in unfillable_seats()],
             "panel_phases": gated,
             "seats": [{"phase": s.phase, "agent": s.agent, "model": s.model,
-                       "family": s.family, "via": s.invocation} for s in seats],
-            "families": sorted({s.family for s in seats}),
+                       # The verified family and where it was established — the same
+                       # answer the verdict above was computed from. Reporting the
+                       # roster's string beside a verdict derived from the frontmatter
+                       # is two readers of one table, which is the defect this gate
+                       # was built to stop happening elsewhere.
+                       "family": verified[id(s)][0],
+                       "family_source": verified[id(s)][1],
+                       "via": s.invocation} for s in seats],
+            "families": sorted({fam for fam, _src in verified.values()}),
             "message": message,
         }, indent=2))
     else:

@@ -35,7 +35,7 @@ def _run(tmp_path: Path, section: str) -> subprocess.CompletedProcess:
         [sys.executable, str(_SCRIPT), "--changelog", str(changelog),
          "--section", section],
         capture_output=True, text=True, timeout=120,
-    )
+     check=False)
 
 
 def test_a_present_but_empty_section_says_so(tmp_path: Path) -> None:
@@ -62,5 +62,5 @@ def test_a_missing_changelog_is_a_third_thing(tmp_path: Path) -> None:
         [sys.executable, str(_SCRIPT), "--changelog", str(tmp_path / "nope.md"),
          "--section", "Unreleased"],
         capture_output=True, text=True, timeout=120,
-    )
+     check=False)
     assert result.returncode == 2

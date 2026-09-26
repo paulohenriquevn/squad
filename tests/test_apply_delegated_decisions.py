@@ -2,6 +2,8 @@
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent / "mechanisms" / "cycle"))
 
 from apply_delegated_decisions import apply, plan
@@ -90,3 +92,39 @@ def test_every_item_survives_the_pass(tmp_path):
     text, _ = apply(reg, DECISIONS)
     for item in ("B-165", "B-139", "B-060"):
         assert f"## {item}" in text
+
+
+@pytest.mark.parametrize("body,fragment", [
+    ('[{"decision": "x", "rationale": "y"}]', "not an object"),
+    ('{"B-1": "just a string"}', "not an object with"),
+    ('{"B-1": {"decision": "keep it"}}', "`rationale`"),
+    ('{"B-1": {"decision": "", "rationale": "y"}}', "`decision`"),
+    ('{not json at all', "not valid JSON"),
+])
+def test_a_decisions_file_of_the_wrong_shape_is_refused_by_name(
+        body: str, fragment: str, tmp_path, capsys) -> None:
+    """`json.loads` accepts any JSON; `plan()` and `apply()` then index it.
+
+    A file that is a list, or an object whose entry is missing `rationale`, left this
+    tool as a TypeError or KeyError traceback. A hand-written decisions file getting one
+    key wrong is the ordinary case, and a traceback is the worst way to say so.
+    """
+    import apply_delegated_decisions as add
+
+    registry = tmp_path / "BACKLOG.md"
+    registry.write_text("## B-1\n\nstatus: planned\n", encoding="utf-8")
+    decisions = tmp_path / "decisions.json"
+    decisions.write_text(body, encoding="utf-8")
+
+    import sys as _sys
+
+    argv = _sys.argv
+    _sys.argv = ["apply_delegated_decisions.py", "--registry", str(registry),
+                 "--decisions", str(decisions)]
+    try:
+        code = add.main()
+    finally:
+        _sys.argv = argv
+
+    assert code == 2
+    assert fragment in capsys.readouterr().err

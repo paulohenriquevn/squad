@@ -1,4 +1,5 @@
 # Cycle: AUTO-PLAN (sub-cycle of cycle-maintenance)
+<!-- rule-id: SQ-CYC-08 -->
 
 Source of Truth for the end-to-end autonomous orchestrator. Sits **below** `cycle-maintenance` in the cycle hierarchy: `cycle-maintenance` selects the next milestone and delegates one full `cycle-idea-to-release` run per milestone.
 
@@ -80,6 +81,17 @@ Ad-hoc (`/idea-to-release {topic-slug}` with arbitrary slug):
 - Before RELEASE starts: review verdict ∈ {`READY_TO_MERGE`, `READY_TO_MERGE_WITH_FOLLOWUPS`}. The second is not a softening: it is only reachable when zero BLOCKER remain and every HIGH is a *registered* followup, which `consolidate_findings.py` verifies against the plan's `## Followups` before emitting it.
 - Final gate: the release PR merges only when its whole chain passed — envelope floor 2. It pauses at `PR_OPEN_AWAITING_APPROVAL` when **a gate did not pass** — the system declining to merge its own work. A remote whose branch protection requires a human reviewer is no longer a supported configuration but a **violated premise**, reported by `check_merge_autonomy.py` before the first item is selected (envelope floor 2).
 - Before ACCEPTANCE starts: `cycle-release` emitted `RELEASED` AND the plan carries a `milestone_id` — the id is injected by `inject_milestone_id.py` and the transition is confronted by `check_phase_drift.py`. No `milestone_id` → the chain ends at `RELEASED`; there is no milestone to accept.
+
+**`check_phase_drift.py` is not invoked by anything today** _(not mechanized: debt —
+since 2026-09-17)_. Five rows above name it as the mechanism that confronts a transition
+with the declared chain, and it is written, tested and correct — but no entry point runs
+it, with or without `--expect-complete`. The caller it needs is the maintenance runner
+that owns ADVANCE, which `cycle-maintenance.md § Verdicts` records as not existing yet.
+Until that runner exists, those five lines describe an after-the-fact check that nothing
+performs: the pre-conditions themselves are enforced by the scripts each row names first
+(`assess_confidence.py`, `check_alignment_gate.py`, `run_structural.py`,
+`run_code_quality.py`, `consolidate_findings.py`), and the drift sweep that would catch a
+phase entered out of order is the part that is missing.
 
 Any gate failure → pause + record the blocking finding. The orchestrator does NOT loop indefinitely; after 1 fix-and-retry attempt at the same gate it halts with `BLOCKED`, **returns the item to the registry with the finding on it, and the queue takes the next item** (`autonomy-envelope.md § A loop ran out of attempts`). It does not wait for a person: an orchestrator parked mid-chain holds a worktree and a branch as well as the item.
 

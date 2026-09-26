@@ -71,20 +71,38 @@ _stamp() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 _route_loop() {
   while :; do
     echo "── $(_stamp) ── route ──"
+    # The ${VAR:+--flag "$VAR"} forms must word-split to vanish when unset.
     # shellcheck disable=SC2086
     python3 "$_here/fleet_router.py" --lanes "$LANES" --kit-path "$KIT" \
         ${KIT_REPO:+--kit-repo "$KIT_REPO"} ${PROJECT:+--project "$PROJECT"} $APPLY
+    _rc=$?
+    _say_step_result route "$_rc"
     echo "── $(_stamp) ── route done (next in ${ROUTE_INTERVAL}s) ──"
     [ "$ONCE" -eq 1 ] && break
     sleep "$ROUTE_INTERVAL"
   done
 }
 
+_say_step_result() {
+  # Every step's exit code, said out loud. None of the three was read: a supervisor
+  # that cannot tell a finished step from a failed one reports the same thing either
+  # way, and this kit's most-found defect is an inability to work published as work.
+  #
+  # NOT fatal. The loop repeats every interval and one failed pass is a pass to retry,
+  # not a reason to stop supervising — so the code is reported and the loop continues.
+  # What changes is that a reader of the log can see which passes did nothing.
+  if [ "${2:-0}" -ne 0 ]; then
+    echo "   !! $1 exited $2 — this pass did NOT do its work; the loop continues" >&2
+  fi
+}
+
 _land_loop() {
   while :; do
     echo "── $(_stamp) ── land ──"
+    # The ${VAR:+--flag "$VAR"} forms must word-split to vanish when unset.
     # shellcheck disable=SC2086
     python3 "$_here/fleet_lander.py" --repo "$KIT" $APPLY
+    _say_step_result land $?
 
     # The third step, and it was missing entirely until 2026-09-08. The loop's own
     # docstring said "route -> land -> label/close" and the suite asserted the
@@ -97,7 +115,11 @@ _land_loop() {
     # what it would do rather than doing it.
     echo "── $(_stamp) ── issues ──"
     if [ -n "$APPLY" ]; then
-      python3 "$_here/issue_lifecycle.py" --repo "$KIT" || true
+      # `|| true` kept the loop alive, which is right — one failed tracker write must
+      # not stop the fleet — and it also threw the answer away. A gh auth expiry, a
+      # rate limit and a crash all left the same trace as success.
+      python3 "$_here/issue_lifecycle.py" --repo "$KIT"
+      _say_step_result issues $?
     else
       echo "   (dry run: the tracker is not touched)"
     fi
@@ -115,5 +137,24 @@ _land_pid=$!
 # Both, not either. A supervisor that keeps printing because one loop survived
 # reads as working while half of it is dead — this kit's most-found defect
 # wearing a new hat.
+#
+# The comment said that and the code did the opposite: `wait "$_route_pid" "$_land_pid"`
+# blocks until BOTH children have exited and returns the status of the LAST one. If the
+# route loop is killed — OOM, a stray signal, a `kill` aimed at a child pid — the
+# supervisor waits on the land loop as if nothing happened, and the land loop keeps
+# printing. `wait -n` returns when the FIRST one goes, which is the event that matters.
 trap 'kill "$_route_pid" "$_land_pid" 2>/dev/null' EXIT INT TERM
-wait "$_route_pid" "$_land_pid"
+wait -n "$_route_pid" "$_land_pid"
+_first_status=$?
+
+if kill -0 "$_route_pid" 2>/dev/null; then
+  _dead="the LAND loop"
+else
+  _dead="the ROUTE loop"
+fi
+echo "── $(_stamp) ── $_dead exited ($_first_status) ──" >&2
+echo "   A supervisor with one loop left is half a supervisor, and the half that keeps" >&2
+echo "   printing reads as a supervisor that works. Stopping the other and exiting." >&2
+kill "$_route_pid" "$_land_pid" 2>/dev/null
+wait "$_route_pid" "$_land_pid" 2>/dev/null
+exit "${_first_status:-1}"

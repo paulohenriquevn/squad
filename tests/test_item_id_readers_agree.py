@@ -30,11 +30,14 @@ for _rel in ("skills/review/scripts", "skills/backlog-review/scripts"):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from backlog_status import _ID_IN_TEXT_RE as STATUS_ITEM_RE  # noqa: E402
-from board_server import __file__ as _BOARD_SERVER_FILE  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from backlog_status import _ID_IN_TEXT_RE as STATUS_ITEM_RE  # noqa: E402 (bootstrap)
+from board_server import __file__ as _BOARD_SERVER_FILE  # noqa: E402 (post-bootstrap)
 from check_backlog_structure import _ID_IN_TEXT_RE as STRUCTURE_ITEM_RE  # noqa: E402
-from check_record_scope import _ITEM_RE as REVIEW_ITEM_RE  # noqa: E402
-from squad_lead import _ITEM_RE as LEAD_ITEM_RE  # noqa: E402
+from check_record_scope import _ITEM_RE as REVIEW_ITEM_RE  # noqa: E402 (post-bootstrap)
+from squad_lead import _ITEM_RE as LEAD_ITEM_RE  # noqa: E402 — post-bootstrap import
 
 #: Every reader that extracts an item id from prose, named by the module that
 #: owns it. The names are the private constants each script already defines; the

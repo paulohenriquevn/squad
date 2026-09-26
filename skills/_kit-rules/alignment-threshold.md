@@ -42,6 +42,33 @@ So:
 - A brief with no checklist is not signed off either. An absent gate is not a
   passed one.
 
+### A reply approves the artifact it was shown, and no other
+
+Imported 2026-09-20 from a cross-read of [`obra/superpowers`](https://github.com/obra/superpowers)
+`skills/brainstorming`, whose `<HARD-GATE>` states it plainly: *"A reply approves
+the stage actually presented. Approval of an idea or feature scope does not
+approve artifacts that do not exist yet."*
+
+The kit had the signature and not the rule, which leaves the most common way past
+a human gate unaddressed — not forging a signature, but **carrying one forward**.
+A person agreeing that an idea is worth doing has not approved the brief describing
+it, and a person approving the brief has not approved the plan derived from it. Each
+artifact is a separate claim about a separate document, and an approval quoted from
+a conversation about something else is a signature nobody gave.
+
+So:
+
+- **Approval is per artifact, and it names the artifact.** `human/paulo` on
+  `alignment.md` says nothing about `trd.md`; `PRODUCT_ALIGNED` says nothing about
+  any plan.
+- **An enthusiastic yes is not a wider yes.** "This is exactly right, ship it" about
+  a vision approves the vision. It does not authorise the backlog it implies.
+- **Resume at the earliest unapproved artifact**, never at the furthest one the
+  conversation reached.
+- **A revised artifact loses its approval.** Editing a signed document withdraws the
+  signature it carried — `sign-off: WITHDRAWN` and `RESTORED` exist so a reviewer can
+  say so, and `score_product_alignment.py` refuses a cascade whose boxes were cleared.
+
 ### Amended 2026-09-01 — the reviewer need not be a person
 
 This rule said *"a human, never the agent"* for most of its life, and the sentence

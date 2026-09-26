@@ -47,8 +47,17 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "mechanisms" / "cycle"))
 sys.path.insert(0, str(REPO_ROOT / "mechanisms" / "gates"))
 
-from check_phase_drift import check_phase_drift, load_declared_phases  # noqa: E402
-from cycle_events import emit_phase_end, emit_phase_start  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from check_phase_drift import (  # noqa: E402 — post-bootstrap import
+    check_phase_drift,
+    load_declared_phases,
+)
+from cycle_events import (  # noqa: E402 — post-bootstrap import
+    emit_phase_end,
+    emit_phase_start,
+)
 
 _PLAN = """\
 # comment
@@ -323,13 +332,27 @@ def test_this_repository_declares_a_readable_phase_plan() -> None:
     assert [p.name for p in phases][:5] == ["brainstorm", "design", "backlog", "discover", "plan"]
     assert any(p.required for p in phases), "a plan where nothing is required checks nothing"
 
-    # `brainstorm` is deliberately `conditional` while the two after it are `required`,
-    # and the asymmetry is the contract rather than an oversight: the kit is adopted
-    # into repositories that predate the cycle, and reporting every one of them as
-    # missing a phase is how a drift report teaches its reader to ignore it.
+    # The asymmetry is the contract rather than an oversight. `brainstorm` is
+    # `conditional` because the kit is adopted into repositories that predate the
+    # cycle, and reporting every one of them as missing a phase is how a drift
+    # report teaches its reader to ignore it.
+    #
+    # `backlog` stays `required`: every unit of maintenance enters through it, so a
+    # run with no backlog event is a run whose subject is unaccounted for.
+    #
+    # `discover` was `required` here until 2026-09-19 and is now `conditional`, for
+    # the same reason `brainstorm` is: an item arriving with the evidence the phase
+    # would produce — a reproduced bug with a failing test — has nothing to gain
+    # from it, and `cycle-plan.md` already said so in its own pre-conditions
+    # ("otherwise, run DISCOVER first"). The guard against planning on a hunch was
+    # never this word; it is `triaged_without_evidence`, a BLOCKER that asks for
+    # the evidence rather than for the ceremony that usually produces it.
     by_name = {p.name: p for p in phases}
     assert not by_name["brainstorm"].required
-    assert by_name["backlog"].required and by_name["discover"].required
+    assert by_name["backlog"].required, (
+        "nothing would be required, and a plan where nothing is required checks "
+        "nothing")
+    assert not by_name["discover"].required
 
 
 # ── going back is not going out of order ──────────────────────────────────────
@@ -448,3 +471,85 @@ def test_the_shipped_plan_marks_the_phase_run_validation_invokes() -> None:
     assert by_name["code-quality"].nested_in == "implement"
     assert not by_name["implement"].nested_in
     assert not by_name["review"].nested_in
+
+
+def test_the_rule_says_nothing_invokes_this_gate_today() -> None:
+    """Five pre-conditions in `cycle-idea-to-release.md` name this gate as their enforcer.
+
+    It is written, tested and correct — and no entry point runs it, with or without
+    `--expect-complete`. A rule naming a mechanism that nothing invokes reads as an
+    enforced gate, which is the defect `check_gate_mechanisms` exists to catch from the
+    other side. The claim now carries the debt, dated, and names the caller it needs.
+    """
+    rule = Path(__file__).resolve().parents[1] / "rules" / "cycle-idea-to-release.md"
+    text = rule.read_text(encoding="utf-8")
+
+    assert "not invoked by anything today" in text, (
+        "the rule still presents check_phase_drift as an enforced gate")
+    assert "not mechanized: debt" in text, "the debt carries no class"
+
+
+def test_nothing_has_started_invoking_it_without_updating_the_rule() -> None:
+    """The mirror: the day a caller appears, the note above becomes false and must go."""
+    root = Path(__file__).resolve().parents[1]
+    callers = []
+    for base in ("mechanisms", "skills", "hooks"):
+        directory = root / base
+        for path in list(directory.rglob("*.py")) + list(directory.rglob("*.sh")):
+            if "tests" in path.parts or "__pycache__" in path.parts:
+                continue
+            if path.name == "check_phase_drift.py":
+                continue
+            body = path.read_text(encoding="utf-8", errors="replace")
+            # The gate being RUN, not mentioned. `board_state.py` names it in a comment
+            # about which file declares the chain, and also happens to import subprocess
+            # for unrelated reasons — "both strings appear in this file" is not evidence
+            # of a call, and reading it as one is the same conflation this suite exists
+            # to refuse.
+            import re as _re
+            if _re.search(r'["\']?check_phase_drift(\.py)?["\']?\s*[,)\]]', body) \
+                    and "run(" in body:
+                callers.append(str(path.relative_to(root)))
+
+    assert not callers, (
+        f"something now invokes the gate; the rule's debt note is stale: {callers}")
+
+
+# ── a consumer's own verdicts, banded in `verdict-bands.local.txt` ──────────
+#
+# `check_verdict_bands` has read the `.local` sibling since the consumer's registry
+# was added, and the reason given for adding it was this checker: it "has to classify
+# every verdict that reaches the event stream". This checker went on reading the kit's
+# file alone, so a consumer's own success verdict — banded `clean` where the kit told it
+# to band it — still fell to the not-clean default, and a step repeated after it read
+# as rework. The disorder check stayed switched off for exactly the verdicts the local
+# file exists to classify.
+
+
+def _with_local_bands(root: Path, rows: str) -> Path:
+    (root / "rules" / "verdict-bands.local.txt").write_text(rows, encoding="utf-8")
+    return root
+
+
+def test_a_step_repeated_after_a_consumer_clean_verdict_is_out_of_order(tmp_path: Path) -> None:
+    root = _with_local_bands(_project(tmp_path),
+                             "ON_TRACK | clean | the consumer's own cycle passed\n")
+    for cycle in ("backlog", "discover", "plan", "implement"):
+        _ran(root, cycle)
+    _ran(root, "code-quality", verdict="ON_TRACK")
+    _ran(root, "implement")
+
+    assert "phase_out_of_order" in _kinds(check_phase_drift(root))
+
+
+def test_a_local_row_cannot_reband_a_verdict_the_kit_classifies(tmp_path: Path) -> None:
+    """The kit stays authoritative: `PASS | redo` locally must not turn a repeated
+    step after PASS into legitimate rework. `check_verdict_bands` reports the clash;
+    this checker must not act on it."""
+    root = _with_local_bands(_project(tmp_path), "PASS | redo | disagreeing with the kit\n")
+    for cycle in ("backlog", "discover", "plan", "implement"):
+        _ran(root, cycle)
+    _ran(root, "code-quality", verdict="PASS")
+    _ran(root, "implement")
+
+    assert "phase_out_of_order" in _kinds(check_phase_drift(root))

@@ -14,7 +14,15 @@ import subprocess
 import sys
 from pathlib import Path
 
-from scripts.utils import parse_skill_md
+# The kit ships as loose scripts, so `scripts.…` resolves only when the process
+# happens to start in `skills/skill-creator/`. Running the file by its path — from a
+# test, from CI, from the repository root — died on ModuleNotFoundError. A tool that
+# only works from one directory is a tool nobody runs from the place they are standing.
+_SKILL_ROOT = Path(__file__).resolve().parents[1]
+if str(_SKILL_ROOT) not in sys.path:
+    sys.path.insert(0, str(_SKILL_ROOT))
+
+from scripts.utils import parse_skill_md  # noqa: E402 — post-bootstrap import
 
 
 def _call_claude(prompt: str, model: str | None, timeout: int = 300) -> str:
@@ -32,14 +40,14 @@ def _call_claude(prompt: str, model: str | None, timeout: int = 300) -> str:
     # programmatic subprocess usage is safe. Same pattern as run_eval.py.
     env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
 
-    result = subprocess.run(  # noqa: PLW1510
+    result = subprocess.run(
         cmd,
         input=prompt,
         capture_output=True,
         text=True,
         env=env,
         timeout=timeout,
-    )
+     check=False)
     if result.returncode != 0:
         raise RuntimeError(
             f"claude -p exited {result.returncode}\nstderr: {result.stderr}"
@@ -179,6 +187,18 @@ Please respond with only the new description text in <new_description> tags, not
         transcript["rewrite_response"] = shorten_text
         transcript["rewrite_description"] = shortened
         transcript["rewrite_char_count"] = len(shortened)
+        # The retry's output is CHECKED, not assumed. This assigned unconditionally, so
+        # a rewrite that was also over the limit replaced one that was over the limit
+        # and the caller — `run_loop`, which writes the returned string into the
+        # SKILL.md frontmatter — shipped it. The only record that it might be too long
+        # was `rewrite_char_count`, written to a log nothing in the loop reads.
+        if len(shortened) > 1024:
+            transcript["rewrite_still_over_limit"] = True
+            raise ValueError(
+                f"the shortening retry returned {len(shortened)} characters, still over "
+                f"the 1024-character hard limit. Refusing to return a description that "
+                f"cannot be written to a SKILL.md — the caller writes this straight into "
+                f"the frontmatter.")
         description = shortened
 
     transcript["final_description"] = description
@@ -191,7 +211,7 @@ Please respond with only the new description text in <new_description> tags, not
     return description
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(description="Improve a skill description based on eval results")
     parser.add_argument("--eval-results", required=True, help="Path to eval results JSON (from run_eval.py)")
     parser.add_argument("--skill-path", required=True, help="Path to skill directory")

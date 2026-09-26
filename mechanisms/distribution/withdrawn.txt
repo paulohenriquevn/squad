@@ -1,0 +1,89 @@
+# What this kit SHIPPED and later WITHDREW — read by install.sh, never by absence.
+#
+# A withdrawal is invisible to a consumer. `install.sh` preserves any skill directory the
+# source kit does not ship, and the rule in its own comment is right for the case it was
+# written for: "whatever the SOURCE kit does not ship is the project's, whatever its shape."
+# A withdrawn skill and a project's own skill are indistinguishable on disk —
+# `check_install_drift` says so in its own output: "yours, or work to harvest — this check
+# cannot tell". So a retirement removes the file here and removes nothing anywhere, and the
+# next install copies the old copy back out of the way and restores it.
+#
+# Measured on a consumer 2026-09-23: eight withdrawn skills still installed, every one of
+# them with its retirement written in prose in a document this kit ships, and nothing
+# reading that prose. They are not inert — the stale `shared-understanding` breaks
+# `check_xrefs` for the WHOLE install (it cites `rules/alignment-threshold.md`, which moved
+# to `skills/_kit-rules/`), and its `score_alignment.py`, which predates `--depth`, produced
+# a BLOCKED verdict on an item the current copy scores ALIGNED at 92%. A stale install does
+# not merely lag; it ANSWERS.
+#
+# REMOVAL IS BY NAME ON THIS LIST AND NEVER BY ABSENCE. Absence is how a project's own skill
+# would get deleted, and deleting somebody's work is the one outcome no convenience is worth.
+# `install.sh` REPORTS these by default and removes them only under `--remove-withdrawn`.
+#
+# Format: NAME | WITHDRAWN-IN | SUCCESSOR-OR-NONE | the kit document that records it
+# A skill's successor is a skill name; a rule's is the kit path it moved to.
+# `tests/test_a_withdrawn_name_is_one_the_kit_no_longer_ships.py` asserts every NAME here is
+# absent from the kit, so an entry can never name something that is still shipping — and
+# that every `skills/<name>` or top-level `rules/<file>` git history shows leaving the kit
+# is either here or on that test's list of declared exceptions, with the reason.
+#
+# The first eight rows were written from memory; `git log --diff-filter=DR` showed the kit
+# had shipped and withdrawn 27 skills and 18 rule files. `rules/` matters as much as
+# `skills/`: a stale rule is not merely drift, it is loaded into every session. Measured on
+# a consumer 2026-09-23: `rules/cycle-auto-plan.md` ("Auto-merge is forbidden") in context
+# beside the current `cycle-release.md` ("the system merges a PR whose whole chain passed"),
+# two contradictory contracts both presented as current.
+
+skills/grill-me             | 2026-08-31 | plan-alignment    | rules/cycle-plan.md
+skills/session-goal         | 77501b0    | none              | rules/records-location.md
+skills/sop-author           | 2026-09    | none              | rules/sop-schema.md
+skills/sop-review           | 2026-09    | none              | rules/sop-schema.md
+skills/sop-run              | 2026-09    | none              | rules/sop-schema.md
+skills/shared-understanding | 2026-09    | plan-alignment    | skills/plan-alignment/SKILL.md
+skills/to-plan              | 2026-09    | plan-write        | skills/plan-write/SKILL.md
+skills/edge-case-plan       | 2026-09    | plan-edge-cases   | skills/plan-edge-cases/SKILL.md
+
+# Skills, from `git log --diff-filter=DR -- skills/` (renamed away, or deleted).
+skills/analysis                | 7d6f228    | none              | CHANGELOG.md
+skills/auto-plan               | 7d6f228    | idea-to-release   | CHANGELOG.md
+skills/backpressure-specialist | e5527e6    | none              | CHANGELOG.md
+skills/cap-theorem-specialist  | e5527e6    | none              | CHANGELOG.md
+skills/commands-help           | 77501b0    | skills/map.md     | CHANGELOG.md
+skills/cycle-goal              | 7d6f228    | none              | CHANGELOG.md
+skills/deck                    | 7d6f228    | none              | CHANGELOG.md
+skills/dogfood                 | 7d6f228    | honesty-gate      | CHANGELOG.md
+skills/excalidraw              | e5527e6    | none              | CHANGELOG.md
+skills/frontend-design         | e5527e6    | none              | CHANGELOG.md
+skills/marp-slide              | e5527e6    | none              | CHANGELOG.md
+skills/plan-grill              | 77501b0    | plan-alignment    | CHANGELOG.md
+skills/plan-help               | 7d6f228    | skills/map.md     | CHANGELOG.md
+skills/resilience-specialist   | e5527e6    | none              | CHANGELOG.md
+skills/roadmap-feature         | 93393e0    | none              | CHANGELOG.md
+skills/roadmap-init            | 93393e0    | none              | CHANGELOG.md
+skills/roadmap-review          | 93393e0    | none              | CHANGELOG.md
+skills/slide-deck              | e5527e6    | none              | CHANGELOG.md
+skills/trajectory-review       | 77501b0    | none              | CHANGELOG.md
+
+# Top-level rules, from `git log --diff-filter=DR -- rules/`. Four `.txt` files among them
+# are configuration the installer otherwise preserves as the project's; they are listed
+# because no reader of theirs ships any more. `rules/domain-routing.txt` is NOT listed:
+# it holds the project's derived routing table, which `squad.paths.routing_table` still
+# reads there.
+rules/alignment-threshold.md            | 2a1749f | skills/_kit-rules/alignment-threshold.md          | skills/_kit-rules/README.md
+rules/analysis-config.txt               | 7d6f228 | none                                              | CHANGELOG.md
+rules/analysis-golden-rule.md           | 7d6f228 | none                                              | CHANGELOG.md
+rules/audit-trail-rotation.md           | 2a1749f | skills/_kit-rules/audit-trail-rotation.md         | skills/_kit-rules/README.md
+rules/cycle-analysis.md                 | 7d6f228 | none                                              | CHANGELOG.md
+rules/cycle-auto-plan.md                | 7d6f228 | rules/cycle-idea-to-release.md                    | CHANGELOG.md
+rules/cycle-roadmap.md                  | 93393e0 | none                                              | CHANGELOG.md
+rules/cycle-trajectory-review.md        | 77501b0 | none                                              | CHANGELOG.md
+rules/discover-blueprint-golden-rule.md | 422c051 | rules/discover-opportunity-golden-rule.md         | CHANGELOG.md
+rules/discover-blueprint-thresholds.txt | 422c051 | rules/discover-opportunity-thresholds.txt         | CHANGELOG.md
+rules/discover-plan-golden-rule.md      | 2a1749f | skills/_kit-rules/discover-plan-golden-rule.md    | skills/_kit-rules/README.md
+rules/dogfood-golden-rule.md            | 7d6f228 | rules/honesty-gate-golden-rule.md                 | CHANGELOG.md
+rules/knowledge-base-location.md        | f45e68b | rules/records-location.md                         | CHANGELOG.md
+rules/parallelism-shapes.md             | 2a1749f | skills/_kit-rules/parallelism-shapes.md           | skills/_kit-rules/README.md
+rules/prompt-text-is-not-behaviour.md   | 2a1749f | skills/_kit-rules/prompt-text-is-not-behaviour.md | skills/_kit-rules/README.md
+rules/review-model-routing.txt          | 2a1749f | skills/_kit-rules/review-model-routing.txt        | skills/_kit-rules/README.md
+rules/trajectory-review-config.txt      | 77501b0 | none                                              | CHANGELOG.md
+rules/trajectory-review-golden-rule.md  | 77501b0 | none                                              | CHANGELOG.md

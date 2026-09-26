@@ -3,11 +3,11 @@
 Skill Packager - Creates a distributable .skill file of a skill folder
 
 Usage:
-    python utils/package_skill.py <path/to/skill-folder> [output-directory]
+    python scripts/package_skill.py <path/to/skill-folder> [output-directory]
 
 Example:
-    python utils/package_skill.py skills/public/my-skill
-    python utils/package_skill.py skills/public/my-skill ./dist
+    python scripts/package_skill.py skills/public/my-skill
+    python scripts/package_skill.py skills/public/my-skill ./dist
 """
 
 import fnmatch
@@ -15,7 +15,15 @@ import sys
 import zipfile
 from pathlib import Path
 
-from scripts.quick_validate import validate_skill
+# The kit ships as loose scripts, so `scripts.…` resolves only when the process
+# happens to start in `skills/skill-creator/`. Running the file by its path — from a
+# test, from CI, from the repository root — died on ModuleNotFoundError. A tool that
+# only works from one directory is a tool nobody runs from the place they are standing.
+_SKILL_ROOT = Path(__file__).resolve().parents[1]
+if str(_SKILL_ROOT) not in sys.path:
+    sys.path.insert(0, str(_SKILL_ROOT))
+
+from scripts.quick_validate import validate_skill  # noqa: E402 — post-bootstrap import
 
 # Patterns to exclude when packaging skills.
 EXCLUDE_DIRS = {"__pycache__", "node_modules"}
@@ -40,7 +48,7 @@ def should_exclude(rel_path: Path) -> bool:
     return any(fnmatch.fnmatch(name, pat) for pat in EXCLUDE_GLOBS)
 
 
-def package_skill(skill_path, output_dir=None):
+def package_skill(skill_path: str | Path, output_dir: str | Path | None = None) -> Path | None:
     """
     Package a skill folder into a .skill file.
 
@@ -87,9 +95,14 @@ def package_skill(skill_path, output_dir=None):
 
     skill_filename = output_path / f"{skill_name}.skill"
 
-    # Create the .skill file (zip format)
+    # Written to a TEMPORARY name and renamed on success. Writing straight to
+    # `skill_filename` left a partial, unopenable archive at the published path whenever
+    # anything failed mid-loop — and the failure path returned None without removing it,
+    # so the next reader found a `.skill` file that exists and cannot be opened. A
+    # half-written artifact at the real name is worse than no artifact.
+    partial = skill_filename.with_suffix(".skill.partial")
     try:
-        with zipfile.ZipFile(skill_filename, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        with zipfile.ZipFile(partial, 'w', zipfile.ZIP_DEFLATED) as zipf:
             # Walk through the skill directory, excluding build artifacts
             for file_path in skill_path.rglob('*'):
                 if not file_path.is_file():
@@ -101,20 +114,26 @@ def package_skill(skill_path, output_dir=None):
                 zipf.write(file_path, arcname)
                 print(f"  Added: {arcname}")
 
+        partial.replace(skill_filename)
         print(f"\n✅ Successfully packaged skill to: {skill_filename}")
         return skill_filename
 
-    except Exception as e:  # noqa: BLE001
-        print(f"❌ Error creating .skill file: {e}")
+    # NARROW, and the cause is named. `except Exception` reported an OSError on a member
+    # file, a corrupt-archive error and any programming mistake inside the loop with one
+    # identical line, so the operator could not tell "this file is unreadable" from "this
+    # script has a bug" — and the two take opposite actions.
+    except (OSError, zipfile.BadZipFile, zipfile.LargeZipFile) as e:
+        print(f"❌ Could not write {skill_filename.name}: {type(e).__name__}: {e}")
+        partial.unlink(missing_ok=True)
         return None
 
 
-def main():
+def main() -> int:
     if len(sys.argv) < 2:
-        print("Usage: python utils/package_skill.py <path/to/skill-folder> [output-directory]")
+        print("Usage: python scripts/package_skill.py <path/to/skill-folder> [output-directory]")
         print("\nExample:")
-        print("  python utils/package_skill.py skills/public/my-skill")
-        print("  python utils/package_skill.py skills/public/my-skill ./dist")
+        print("  python scripts/package_skill.py skills/public/my-skill")
+        print("  python scripts/package_skill.py skills/public/my-skill ./dist")
         sys.exit(1)
 
     skill_path = sys.argv[1]

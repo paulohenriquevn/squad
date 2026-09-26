@@ -15,15 +15,35 @@ from pathlib import Path
 SCRIPT = Path(__file__).parent.parent / "scripts" / "detect_domain.py"
 
 sys.path.insert(0, str(SCRIPT.parent))
-from detect_domain import count_domain_hits  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from detect_domain import count_domain_hits  # noqa: E402 — post-bootstrap import
+
+
+def _repo_with_integration_branch(root: Path) -> Path:
+    """A repository whose `develop` resolves and whose change is empty.
+
+    An unresolvable review base is refused (exit 2), so these plan-only cases need a
+    base that resolves; with no commit on top of it, the plan is the only signal.
+    """
+    repo = root / "repo"
+    if not repo.exists():
+        repo.mkdir()
+        for args in (("init", "-q", "-b", "develop"),
+                     ("-c", "user.email=t@example.com", "-c", "user.name=t",
+                      "commit", "-q", "--allow-empty", "-m", "seed")):
+            subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+    return repo
 
 
 def _run(plan: Path) -> tuple[int, dict]:
-    result = subprocess.run(  # noqa: PLW1510
-        [sys.executable, str(SCRIPT), "--plan", str(plan)],
+    repo = _repo_with_integration_branch(plan.parent)
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "--plan", str(plan), "--project-root", str(repo)],
         capture_output=True,
         text=True,
-    )
+     check=False)
     try:
         data = json.loads(result.stdout)
     except json.JSONDecodeError:

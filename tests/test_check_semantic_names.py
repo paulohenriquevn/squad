@@ -5,9 +5,9 @@ WHY THIS GATE EXISTS
 `~/.claude/CLAUDE.md` § 5 makes it a rule of the house — quoted verbatim below,
 in the language it is written in:  <!-- english-only: verbatim quotation -->
 *"Escolha sempre o nome  <!-- english-only: verbatim quote of CLAUDE.md -->
-mais específico e descritivo. Melhor um nome longo e claro do que um nome curto
+mais específico e descritivo. Melhor um nome longo e claro do que um nome curto  <!-- english-only: verbatim quote of CLAUDE.md -->
 e problemático."* It names the anti-pattern too — *"Classes 'Manager', 'Helper'
-ou 'Utils' que viram lixeira de métodos sem relação"* — and the same failure
+ou 'Utils' que viram lixeira de métodos sem relação"* — and the same failure  <!-- english-only: verbatim quote of CLAUDE.md -->
 applies to a directory: `lib/` tells the reader nothing except that someone had
 files left over.
 
@@ -42,7 +42,10 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "mechanisms" / "gates"))
 
-from check_semantic_names import check_semantic_names  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from check_semantic_names import check_semantic_names  # noqa: E402 (post-bootstrap)
 
 
 def _repo(tmp_path: Path, *relative: str) -> Path:
@@ -183,6 +186,32 @@ def test_an_executable_with_no_stated_purpose_is_reported(tmp_path: Path) -> Non
     path = tmp_path / "scripts" / "attest-plan.sh"
     path.parent.mkdir(parents=True)
     path.write_text("#!/usr/bin/env bash\nset -euo pipefail\necho hi\n", encoding="utf-8")
+
+    assert "purpose_not_stated" in _kinds(check_semantic_names(tmp_path))
+
+
+def test_a_raw_docstring_states_a_purpose(tmp_path: Path) -> None:
+    r"""A docstring with a STRING PREFIX is still a docstring.
+
+    The pattern matched a triple quote only when it opened the line, so the `r`, `f`
+    and `b` prefixed forms read as no docstring at all. That is not a rare spelling:
+    any module whose
+    purpose is explained with a regex — which is most of this directory — needs the
+    raw prefix to write `\d` without an escape warning. Measured on
+    `tests/test_a_release_tag_is_what_the_rule_promised.py`, whose docstring is 18
+    lines long: reported `purpose_not_stated`.
+
+    A gate that accuses a compliant file teaches its readers to ignore it.
+    """
+    script = tmp_path / "cut_release.py"
+    script.write_text('r"""Cut a release, matching \\d+ in the tag."""\n', encoding="utf-8")
+
+    assert "purpose_not_stated" not in _kinds(check_semantic_names(tmp_path))
+
+
+def test_a_file_that_really_says_nothing_is_still_caught(tmp_path: Path) -> None:
+    """Widening the pattern must not turn the check into decoration."""
+    (tmp_path / "helper.py").write_text("x = 1\n", encoding="utf-8")
 
     assert "purpose_not_stated" in _kinds(check_semantic_names(tmp_path))
 

@@ -54,7 +54,14 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _sys_bootstrap.path.insert(0, str(_up))
         break
-from squad.paths import DATA_DIRNAME, LEGACY_RECORDS_ROOTS  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import (  # noqa: E402 — post-bootstrap import
+    DATA_DIRNAME,
+    LEGACY_RECORDS_ROOTS,
+    rules_dir,
+)
 
 
 #: The board's columns, in cycle order, READ FROM THE DECLARATION rather than copied.
@@ -71,7 +78,7 @@ from squad.paths import DATA_DIRNAME, LEGACY_RECORDS_ROOTS  # noqa: E402
 #: Found by exercising `board_server.py` for real: `/api/state` reported eight phases
 #: starting at `backlog`. No test caught it because every test asserted against
 #: `PHASES` itself, which agrees with itself no matter what it says.
-def _declared_phases() -> tuple[str, ...]:
+def _declared_phases() -> tuple[tuple[str, ...], str]:
     """The chain from `rules/cycle-phases.txt`, in declared order.
 
     Falls back to the historical eight only when the file cannot be read — a board
@@ -88,12 +95,16 @@ def _declared_phases() -> tuple[str, ...]:
             if line and "|" in line:
                 names.append(line.split("|")[0].strip())
         if names:
-            return tuple(names)
-    return ("backlog", "discover", "plan", "implement", "code-quality", "review",
-            "release", "acceptance")
+            return tuple(names), "declared"
+    # The fallback is NAMED. `PHASES` drives what the board draws and which events are
+    # placed, so a chain nobody read produced a board that looks exactly like a board
+    # drawn from the contract — and the eight names here are a snapshot of one moment
+    # in a file that changes.
+    return (("backlog", "discover", "plan", "implement", "code-quality", "review",
+             "release", "acceptance"), "fallback")
 
 
-PHASES = _declared_phases()
+PHASES, PHASES_SOURCE = _declared_phases()
 
 #: What a registry status implies about position when no stream exists: the last
 #: phase the status proves ENDED. Not the next one — entering a phase is a guess.
@@ -196,15 +207,22 @@ _ARTEFACT_DIRS = (
 _VERDICTS_RULE = "blocking-verdicts.txt"
 
 
-def blocking_verdicts(project_root: Path) -> frozenset[str]:
-    """Read `rules/blocking-verdicts.txt`.
+def blocking_verdicts(project_root: Path) -> frozenset[str] | None:
+    """The verdicts `rules/blocking-verdicts.txt` declares, or None when it is absent.
+
+    The docstring promised this and the code did the opposite: an absent file returned
+    `frozenset()`, and an empty set makes `verdict.upper() in blocking` false for every
+    verdict — so the panel rendered "nothing is holding this item" over a rule file it
+    never found. None is what lets the caller tell the two apart, which is the whole
+    sentence below.
 
     An absent file returns nothing and the panel says so, rather than claiming the
     item is unheld: the board reports what it can read, and a missing rule file is
     something it could not read — not evidence that no gate is closed.
     """
-    for relative in ("rules", ".claude/rules"):
-        candidate = project_root / relative / _VERDICTS_RULE
+    # `squad.paths.rules_dir` owns the order; six sites used one and three the other.
+    directory = rules_dir(project_root)
+    for candidate in ([directory / _VERDICTS_RULE] if directory else []):
         if candidate.is_file():
             verdicts = {
                 line.split("#", 1)[0].strip().upper()
@@ -213,7 +231,7 @@ def blocking_verdicts(project_root: Path) -> frozenset[str]:
             }
             verdicts.discard("")
             return frozenset(verdicts)
-    return frozenset()
+    return None
 
 
 #: The progress file is named `.progress-<slug>.json`, so the slug is not simply the
@@ -336,7 +354,7 @@ def stage_on_disk(project_root: Path) -> dict[str, str]:
     # matched `B-022-plan.md` and missed `b022-descriptive-words-plan.md`, so this MODULE
     # held two readers of one question and only `_slug_for` had been corrected.
     try:
-        from squad_boss import records_by_item  # noqa: PLC0415
+        from squad_boss import records_by_item
     except ImportError:
         return {}
     reached: dict[str, str] = {}
@@ -346,6 +364,10 @@ def stage_on_disk(project_root: Path) -> dict[str, str]:
             # with both records is reported at the later one.
             reached.setdefault(item_id, stage)
     return reached
+
+
+#: `B-NNN` as a plan body writes it.
+_ITEM_CITATION_RE = re.compile(r"\bB-\d{3,}\b")
 
 
 def planned_items(project_root: Path) -> dict[str, str]:
@@ -373,7 +395,37 @@ def planned_items(project_root: Path) -> dict[str, str]:
             # item number in its name would land here under its own name.
             if item.startswith("B-"):
                 found.setdefault(item, slug)
+                continue
+            # The filename did not carry one. The BODY usually does: a plan realising
+            # B-003 and B-011 names them, and reading it costs one file per plan.
+            #
+            # Measured on a consumer 2026-09-18: two plans, `composition-di-plan.md` and
+            # `ci-coverage-plan.md`, neither carrying an item number in its name, and 37
+            # of the stream's 38 events invisible on the board because of it. The owner
+            # opened the page while a review was ending READY_TO_MERGE_WITH_FOLLOWUPS and
+            # saw no work at all.
+            #
+            # `item_id_of`'s own docstring records the smaller version of this from an
+            # earlier run and fixed it by teaching one more filename shape. A third
+            # pattern would postpone the next occurrence rather than end it; the body is
+            # where the link actually lives.
+            for cited in _items_cited_in(entry):
+                found.setdefault(cited, slug)
     return found
+
+
+def _items_cited_in(path: Path) -> list[str]:
+    """Every `B-NNN` a plan names in its body, in order of appearance.
+
+    Deliberately not filtered by section or proximity: a plan that mentions an item at
+    all is evidence of a link the filename lost, and over-linking shows work on the
+    board while under-linking hides it. The two failures are not symmetric.
+    """
+    try:
+        body = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+    return list(dict.fromkeys(_ITEM_CITATION_RE.findall(body)))
 
 
 def _item_block(project_root: Path, item_id: str) -> str | None:
@@ -403,30 +455,14 @@ def _in_registry(project_root: Path, item_id: str) -> bool:
         return False
 
 
-def item_detail(project_root: Path, item_id: str) -> dict:
-    """Everything the cycle left behind for one item.
+def _detail_plan_phases(out: dict, records: Path | None, slug: str | None) -> None:
+    """the plan's own phases, and the tasks under them
 
-    Loaded on demand rather than folded into the board: one registry here carries 167
-    items, and reading every plan and every progress file to render a column of cards
-    would spend the whole page budget on work nobody asked to see.
+    Extracted from `item_detail`, which measured cyclomatic complexity 44 across 180
+    lines holding six independent readings of one item. Pure code movement: the block
+    below is the block that was there. Each fills its own keys on `out`, which is what
+    it did before — through a shared scope rather than through an argument.
     """
-    records = _records_dir(project_root)
-    out: dict = {"id": item_id, "slug": None, "phases": [], "tasks": [],
-                 "artefacts": [], "verdicts": [], "blocking": [],
-                 "done_ratio": None, "specialist": None, "domain": None,
-                 "halted": None, "attest": None,
-                 # Whether the REGISTRY carries this id at all. Without it the shape
-                 # above is returned for an id nobody ever filed, and a caller cannot
-                 # tell "no records yet" from "no such item" — the two states this
-                 # board exists to keep apart, since it draws position by evidence and
-                 # labels derived what it inferred.
-                 "in_registry": _in_registry(project_root, item_id)}
-    if records is None:
-        return out
-
-    slug = _slug_for(item_id, records)
-    out["slug"] = slug
-
     # ── the plan's own phases, and the tasks under them ────────────────────
     if slug:
         plan = records / "plans" / f"{slug}-plan.md"
@@ -472,6 +508,15 @@ def item_detail(project_root: Path, item_id: str) -> dict:
                     "bytes": entry.stat().st_size,
                 })
 
+
+def _detail_halt_report(out: dict, records: Path | None, slug: str | None) -> None:
+    """a phase that halted and wrote down why
+
+    Extracted from `item_detail`, which measured cyclomatic complexity 44 across 180
+    lines holding six independent readings of one item. Pure code movement: the block
+    below is the block that was there. Each fills its own keys on `out`, which is what
+    it did before — through a shared scope rather than through an argument.
+    """
     # ── a phase that halted and wrote down why ────────────────────────────
     # `/implement` writes `{slug}-BLOCKED.md` when it stops and needs a person. That
     # file is the phase's own statement of what holds the item — stronger evidence
@@ -500,6 +545,15 @@ def item_detail(project_root: Path, item_id: str) -> dict:
                 }
                 break
 
+
+def _detail_attestation_drift(out: dict, records: Path | None, slug: str | None) -> None:
+    """was the plan changed after it was attested?
+
+    Extracted from `item_detail`, which measured cyclomatic complexity 44 across 180
+    lines holding six independent readings of one item. Pure code movement: the block
+    below is the block that was there. Each fills its own keys on `out`, which is what
+    it did before — through a shared scope rather than through an argument.
+    """
     # ── was the plan changed after it was attested? ───────────────────────
     # The implementation record states the sha it was built against. If the plan on
     # disk hashes to something else, the work was done against a plan that has since
@@ -519,6 +573,15 @@ def item_detail(project_root: Path, item_id: str) -> dict:
                     "drifted": match.group(1) != current,
                 }
 
+
+def _detail_progress(out: dict) -> None:
+    """how much of the plan is finished
+
+    Extracted from `item_detail`, which measured cyclomatic complexity 44 across 180
+    lines holding six independent readings of one item. Pure code movement: the block
+    below is the block that was there. Each fills its own keys on `out`, which is what
+    it did before — through a shared scope rather than through an argument.
+    """
     # ── how much of the plan is finished ──────────────────────────────────
     # Counted from task status, which is the only place that knows. `committed` is the
     # terminal one this repository writes; the others are treated as not-done rather
@@ -527,6 +590,15 @@ def item_detail(project_root: Path, item_id: str) -> dict:
         done = sum(1 for t in out["tasks"] if t["status"] in _DONE_TASK_STATUS)
         out["done_ratio"] = round(done / len(out["tasks"]), 3)
 
+
+def _detail_owner(out: dict, project_root: Path, item_id: str) -> None:
+    """who owns this work
+
+    Extracted from `item_detail`, which measured cyclomatic complexity 44 across 180
+    lines holding six independent readings of one item. Pure code movement: the block
+    below is the block that was there. Each fills its own keys on `out`, which is what
+    it did before — through a shared scope rather than through an argument.
+    """
     # ── who owns this work ────────────────────────────────────────────────
     # The item's `domain` routes to a specialist, and that file is the closest thing
     # to a name. It is the ASSIGNED specialist, not proof of who ran the last command:
@@ -543,10 +615,18 @@ def item_detail(project_root: Path, item_id: str) -> dict:
                     out["specialist"] = f"{base}/{match.group(1)}.md"
                     break
 
+
+def _detail_verdicts(out: dict, project_root: Path, item_id: str, blocking: frozenset[str] | None) -> None:
+    """every verdict, not only the last
+
+    Extracted from `item_detail`, which measured cyclomatic complexity 44 across 180
+    lines holding six independent readings of one item. Pure code movement: the block
+    below is the block that was there. Each fills its own keys on `out`, which is what
+    it did before — through a shared scope rather than through an argument.
+    """
     # ── every verdict, not only the last ──────────────────────────────────
     # The board's card shows one. This item ended `code-quality` ten times, and a
     # single FAIL_SOFT hides that it was iterating rather than advancing.
-    blocking = blocking_verdicts(project_root)
     for event in read_events(project_root):
         if event.get("type") != "cycle:phase:end":
             continue
@@ -556,7 +636,7 @@ def item_detail(project_root: Path, item_id: str) -> dict:
         out["verdicts"].append({
             "phase": event.get("cycle"), "verdict": verdict, "at": event.get("timestamp"),
         })
-        if verdict and verdict.upper() in blocking:
+        if verdict and blocking is not None and verdict.upper() in blocking:
             out["blocking"].append({"phase": event.get("cycle"), "verdict": verdict,
                                     "at": event.get("timestamp")})
 
@@ -572,6 +652,51 @@ def item_detail(project_root: Path, item_id: str) -> dict:
         if last and last.upper() in blocking:
             still_blocking.append(entry)
     out["blocking"] = still_blocking
+    return out
+
+
+def item_detail(project_root: Path, item_id: str) -> dict:
+    """Everything the cycle left behind for one item.
+
+    Loaded on demand rather than folded into the board: one registry here carries 167
+    items, and reading every plan and every progress file to render a column of cards
+    would spend the whole page budget on work nobody asked to see.
+    """
+    records = _records_dir(project_root)
+    out: dict = {"id": item_id, "slug": None, "phases": [], "tasks": [],
+                 "artefacts": [], "verdicts": [], "blocking": [],
+                 "done_ratio": None, "specialist": None, "domain": None,
+                 "halted": None, "attest": None,
+                 # Whether the REGISTRY carries this id at all. Without it the shape
+                 # above is returned for an id nobody ever filed, and a caller cannot
+                 # tell "no records yet" from "no such item" — the two states this
+                 # board exists to keep apart, since it draws position by evidence and
+                 # labels derived what it inferred.
+                 "in_registry": _in_registry(project_root, item_id)}
+
+    # Determined BEFORE the early return below. Whether the blocking-verdicts rule could
+    # be read has nothing to do with whether this item has records, and a reader of the
+    # early-return payload sees the same empty `blocking` list — which renders as "no
+    # gate is holding this item" rather than as "the rule was not found".
+    blocking = blocking_verdicts(project_root)
+    if blocking is None:
+        out["blocking_unknown"] = (
+            f"no {_VERDICTS_RULE} under {project_root} — whether a verdict holds this "
+            f"item was not determined")
+
+    if records is None:
+        return out
+
+    slug = _slug_for(item_id, records)
+    out["slug"] = slug
+
+    _detail_plan_phases(out, records, slug)
+    _detail_halt_report(out, records, slug)
+    _detail_attestation_drift(out, records, slug)
+    _detail_progress(out)
+    _detail_owner(out, project_root, item_id)
+    _detail_verdicts(out, project_root, item_id, blocking)
+
     return out
 
 
@@ -835,24 +960,504 @@ def _last_activity(events: list[dict]) -> dict | None:
     return None
 
 
-def build_state(project_root: Path, lead_log: Path | None = None,
-                lead_marker: Path | None = None) -> dict:
-    backlog = project_root / "BACKLOG.md"
-    if not backlog.is_file():
-        return {"error": f"no BACKLOG.md under {project_root}", "items": [],
-                "phases": list(PHASES), "lead": read_lead(lead_log, lead_marker)}
+def _wall_owner(wall: str) -> tuple[str, str]:
+    """`(owner, class)` for a `blocked_by` line — who can clear it, and what kind it is.
 
-    items = _parse_items(backlog.read_text(encoding="utf-8-sig"))
-    statuses = {i.item_id: i.fields.get("status", "") for i in items}
-    events = read_events(project_root)
-    plans = planned_items(project_root)
-    halted = halted_items(project_root)
-    on_disk = stage_on_disk(project_root)
+    The board drew seven identical amber cards for seven held items, and the reader's
+    real question — *which of these is waiting on ME* — had no answer on screen. On the
+    consumer measured 2026-09-18, three of those seven were the queue's own work and
+    four needed a person. Reading "7 blocked" as "7 things I must do" is how an owner
+    concludes the system is stuck when it is not.
 
-    # A phase that STARTED and has not ended is work happening right now. Without it
-    # the board can only draw what finished, which is a picture of the past: an item
-    # under active work showed the verdict of a phase that was already over, and
-    # nothing on the page said anything was running.
+    `delegated_decision.classify_wall` already answers it, against
+    `rules/decision-delegation.txt`. This renders what it said and decides nothing: an
+    unmatched wall stays `unclassified` and belongs to the person, because
+    `on_no_match = retain` is the registry's rule and a view that softened it would be
+    claiming a consent nobody gave.
+
+    Returns `("", "")` when the classifier is unavailable — a board that cannot ask must
+    not answer, and drawing every wall as the system's would be the worst of the three
+    possible wrong answers.
+    """
+    if not wall or not wall.strip():
+        return "", ""
+    # `delegated_decision` lives in `mechanisms/cycle/`, which is not on the path a
+    # skill script starts with. Located by walking up for the directory rather than by
+    # a fixed number of `parents[N]`: the kit sits at the root in its own repository
+    # and under `.claude/` in a consumer, and a hardcoded depth is right in exactly one
+    # of the two.
+    for up in Path(__file__).resolve().parents:
+        cycle_dir = up / "mechanisms" / "cycle"
+        if cycle_dir.is_dir():
+            if str(cycle_dir) not in sys.path:
+                sys.path.insert(0, str(cycle_dir))
+            break
+    try:
+        from delegated_decision import classify_wall
+    except ImportError:
+        return "", ""
+    try:
+        verdict = classify_wall(wall)
+    except Exception:  # noqa: BLE001 — a classifier that raises must not take the board down
+        return "", ""
+    return ("system" if verdict.delegated else "person"), verdict.klass.value
+
+
+def _unattributed_work(events: list[dict], known: set[str],
+                       plan_slugs: set[str]) -> list[dict]:
+    """Stream slugs that match no item, with what the stream says about each.
+
+    A board that silently discards what it cannot place reports an idle system while
+    the system is working — this kit's governing defect, rendered in HTML. Measured on
+    one consumer 2026-09-18: **37 of 38 events dropped**, the page blank, and a `review`
+    phase ending `READY_TO_MERGE_WITH_FOLLOWUPS` at that exact minute.
+
+    Shown rather than resolved, deliberately. An unattributable event is a fact about
+    the STREAM — a plan whose name carries no item number, a slug nobody registered —
+    and inventing an owner for it would replace a visible gap with an invisible lie.
+    What the reader needs is the slug, so they can go and look.
+    """
+    seen: dict[str, dict] = {}
+    for event in events:
+        raw = event.get("slug") or ""
+        # Attributed two ways, and both count. Either the slug carries the item number
+        # in its name (`b003-something`), or it is a plan slug the registry links to an
+        # item through the plan's body. Checking only the first is what made a linked
+        # plan's work look orphaned.
+        if not raw or item_id_of(raw) in known or raw in plan_slugs:
+            continue
+        entry = seen.setdefault(raw, {
+            "slug": raw, "events": 0, "phases": [],
+            "last_verdict": None, "last_at": None, "since": event.get("timestamp"),
+        })
+        entry["events"] += 1
+        cycle = event.get("cycle")
+        if cycle and cycle not in entry["phases"]:
+            entry["phases"].append(cycle)
+        # Last write wins: the stream is append-only and ordered, so the final verdict
+        # for a slug is the one a reader is asking about.
+        if event.get("verdict"):
+            entry["last_verdict"] = event["verdict"]
+        if event.get("timestamp"):
+            entry["last_at"] = event["timestamp"]
+    return sorted(seen.values(), key=lambda e: e["last_at"] or "", reverse=True)
+
+
+#: How long a column may go untouched before it is called stalled rather than queued.
+#: Thirty minutes because a phase that is running emits something inside that window —
+#: a start, an end, a verdict — so silence past it is silence about work, not a gap
+#: between two events. Not a threshold anybody has to tune: it separates two readings
+#: of the same fact and both readings are shown.
+STALL_AFTER_MINUTES = 30
+
+#: How long a start may stay open before the board stops calling it work.
+#:
+#: Four hours, not thirty minutes: a phase legitimately runs longer than the stall
+#: window — an implement slice can occupy an afternoon — and calling it abandoned
+#: because it went quiet would hide the one thing the board exists to show. Past four
+#: hours with no end and nothing else on the stream, "still running" is a claim the
+#: evidence stopped supporting.
+ABANDON_AFTER_HOURS = 4
+
+
+def _delivery(items: list[dict], events: list[dict], now: datetime) -> dict:
+    """Has anything shipped, how fast, and over what window.
+
+    A reader could see ten lanes, eight blockers and a WIP figure and still not answer
+    the question the person paying for the work has: *are we delivering?* On one consumer
+    the answer was nothing in twenty-two hours — fifteen items, zero shipped — and no
+    field said so. Absence read as an empty column, which looks the same as a column
+    nobody has reached yet.
+
+    NONE IS NOT ZERO, and the distinction is the point. `0 items/day` is a measurement:
+    the system ran and delivered nothing. `None` says nothing has finished yet, which on
+    a three-day-old registry is a different and far less alarming fact. Collapsing them
+    would make a young project look like a failing one and a failing one look measured.
+
+    `killed` is counted apart. `cycle-backlog.md` is explicit that "killing one is the
+    cycle working" — the item leaves the queue and nobody received anything, so folding
+    it into delivery would inflate the figure with work that was correctly abandoned.
+    """
+    shipped = [i for i in items if i.get("status") == "shipped"]
+    killed = [i for i in items if i.get("status") == "killed"]
+
+    stamps = sorted(
+        t for t in (_parse_stamp(e.get("timestamp")) for e in events) if t is not None)
+    window_days = ((stamps[-1] - stamps[0]).total_seconds() / 86400) if len(stamps) > 1 else None
+
+    throughput = None
+    if shipped and window_days and window_days > 0:
+        throughput = round(len(shipped) / window_days, 2)
+
+    # LEAD TIME, from the date the registry already carried. `registered_on` is a DATE —
+    # midnight — and the end is a real timestamp, so the arithmetic is exact and the INPUT
+    # is not: every figure carries ±1 day from the start side. Days rather than hours for
+    # that reason, and NOT rounded to whole days, which would hide the arithmetic without
+    # removing the uncertainty.
+    #
+    # The end is the item's last recorded event, because half a measurement is not one —
+    # an item with an entry date and no event on the stream is not measured rather than
+    # measured as zero. `killed` is excluded for the reason it is excluded above: nobody
+    # received anything, and timing how long the system took to abandon something is not
+    # delivery.
+    last_event: dict[str, datetime] = {}
+    for e in events:
+        slug = str(e.get("slug") or "")
+        stamp = _parse_stamp(e.get("timestamp"))
+        if slug and stamp and (slug not in last_event or stamp > last_event[slug]):
+            last_event[slug] = stamp
+    spans: list[float] = []
+    for i in shipped:
+        raw = i.get("registered_on")
+        end = last_event.get(str(i.get("id") or ""))
+        if not raw or end is None:
+            continue
+        try:
+            start = datetime.fromisoformat(str(raw)).replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+        spans.append(round((end - start).total_seconds() / 86400, 2))
+    spans.sort()
+    p50 = None
+    if spans:
+        mid = len(spans) // 2
+        p50 = spans[mid] if len(spans) % 2 else round((spans[mid - 1] + spans[mid]) / 2, 2)
+
+    return {
+        "shipped": len(shipped),
+        "killed": len(killed),
+        #: Days, not hours — see the note above. None while nothing could be measured,
+        #: which is a different fact from a lead time of zero.
+        "lead_time_p50_days": p50,
+        #: The subset the p50 is over. Most items predate the registration line, so a
+        #: median over "the ones that had a date" is a median over a subset, and a number
+        #: that travels without its coverage is read as a number about everything.
+        "lead_time_measured_over": len(spans),
+        "lead_time_terminal_total": len(shipped),
+        #: None while nothing has shipped — see the docstring. Never rendered as 0.
+        "throughput_per_day": throughput,
+        "window_days": round(window_days, 1) if window_days else None,
+    }
+
+
+def _headline(items: list[dict], columns: list[dict], wip: dict) -> dict:
+    """One state and one sentence: what a reader with four minutes needs first.
+
+    The page opened with ten lanes and a search box. Everything on it was true and none
+    of it was a conclusion, so the reader had to assemble one — count the amber cards,
+    notice which lanes had not moved, remember that four items in review with no
+    implement event is not ordinary. Somebody who opens a board between meetings does
+    not assemble; they read the top line.
+
+    ORDERED BY URGENCY, NOT BY COUNT. The first match wins:
+
+        blocked    something needs a person, and nothing downstream moves until it comes
+        at_risk    the record disagrees with itself — work happened that nothing logged
+        working    a phase is running right now
+        stalled    items are sitting and nobody is on them
+        idle       nothing here to do
+
+    One item waiting on a person outranks nine sitting in backlog, because the nine will
+    move on their own and the one will not. `idle` on an empty registry is deliberate:
+    a page that shouts about having no work trains its reader to ignore the headline.
+
+    Asserts nothing the rest of the page does not already show — every input is a field
+    computed above, and the detail names where to look rather than summarising it away.
+    """
+    needs_person = [i for i in items if i.get("blocked_owner") == "person"]
+    gaps = {p for i in items for p in (i.get("phases_without_record") or [])}
+    working = [c for c in columns if c["activity"] == "working"]
+    stalled = [c for c in columns if c["activity"] == "stalled"]
+    live = sum(c["items"] for c in columns)
+
+    if needs_person:
+        ids = ", ".join(i["id"] for i in needs_person[:3])
+        more = f" and {len(needs_person) - 3} more" if len(needs_person) > 3 else ""
+        return {"state": "blocked", "needs_person": len(needs_person),
+                "detail": f"{len(needs_person)} item(s) wait on a person — {ids}{more}. "
+                          f"Nothing behind them moves until those are answered."}
+    stale = (wip or {}).get("abandoned_detail") or []
+    if stale and not gaps:
+        first = stale[0]
+        more = f" and {len(stale) - 1} more" if len(stale) > 1 else ""
+        return {"state": "at_risk", "needs_person": 0,
+                "detail": f"{first['cycle']} opened on {first['slug']} {first['hours']}h "
+                          f"ago and never closed{more} — not counted as work, and the "
+                          f"phase owes an end."}
+    if gaps:
+        named = ", ".join(sorted(gaps))
+        return {"state": "at_risk", "needs_person": 0,
+                "detail": f"items have moved past {named} with no event on the stream — "
+                          f"either those phases ran without emitting, or they were "
+                          f"skipped. The record cannot say which."}
+    if working:
+        where = ", ".join(c["phase"] for c in working)
+        flight = wip.get("current") or 0
+        return {"state": "working", "needs_person": 0,
+                "detail": f"{flight} in flight · {where}"}
+    if stalled and live:
+        oldest = max((c for c in stalled if c["idle_minutes"] is not None),
+                     key=lambda c: c["idle_minutes"], default=None)
+        when = (f", longest {round(oldest['idle_minutes'])} min in {oldest['phase']}"
+                if oldest else "")
+        return {"state": "stalled", "needs_person": 0,
+                "detail": f"{live} item(s) sitting and no phase running{when}."}
+    return {"state": "idle", "needs_person": 0,
+            "detail": "nothing registered to work on."}
+
+
+def _wip(events: list[dict], now: datetime) -> dict:
+    """Items in flight over the window, and the smallest concurrency that kept it fed.
+
+    WIP is not a card count. It is how many items are INSIDE a phase at a moment —
+    started and not ended — and it was uncomputable until the emitters recorded starts:
+    the stream held 37 ends against 1 start, so every instant read as zero in flight.
+
+    `minimum` answers one question and refuses the others. Over the measured window, it
+    is the smallest concurrency at which no idle gap appeared. When the window HAS an
+    idle gap there is no such number, and this returns None rather than the lowest
+    non-zero level — a system that stopped was not kept fed by any concurrency it ran at,
+    and naming one would be an assertion dressed as a measurement.
+
+    It is DERIVED, never prescribed. Four items waiting on a work tenant are not helped
+    by starting a fifth, and a figure that implied otherwise would be worse than none.
+    `peak` and `observed` travel with it so the reader can judge where it came from.
+    """
+    spans: list[tuple[datetime, int]] = []
+    open_at: dict[tuple[str, str], datetime] = {}
+    opened_by: dict[tuple[str, str], dict] = {}
+    for event in events:
+        slug = event.get("slug") or ""
+        cycle = event.get("cycle") or ""
+        when = _parse_stamp(event.get("timestamp"))
+        if not slug or not cycle or when is None:
+            continue
+        key = (item_id_of(slug), cycle)
+        if event.get("type") == "cycle:phase:start":
+            open_at[key] = when
+            opened_by[key] = {"slug": slug, "cycle": cycle, "at": when}
+            spans.append((when, +1))
+        elif event.get("type") == "cycle:phase:end" and key in open_at:
+            del open_at[key]
+            opened_by.pop(key, None)
+            spans.append((when, -1))
+
+    # A start older than the window is not work in flight. It is a phase that died
+    # without emitting its end, and counting it as WIP makes the figure grow
+    # monotonically as lanes die — the opposite of what it measures.
+    #
+    # `_phases_running` already learned this: "B-001 opened `plan` on 09-12 and never
+    # closed it… Four days later the board still reported `running plan`, and the owner
+    # read the column as where the work was." This pass counted raw starts and did not
+    # inherit it. Measured 2026-09-18: a `brainstorm` opened 22 hours earlier held the
+    # board at "1 in flight" while no item was being worked at all.
+    abandoned = []
+    for key, opened in sorted(opened_by.items()):
+        # `_abandoned`, not a second age computation. This pass and `_phases_running`
+        # both decide "is this start still work", and computing it twice is how the
+        # headline and the notices panel came to disagree about B-184.
+        if not _abandoned(opened["at"], now):
+            continue
+        age_hours = (now - opened["at"]).total_seconds() / 3600
+        abandoned.append({"slug": opened["slug"], "cycle": opened["cycle"],
+                          "hours": round(age_hours, 1)})
+        # Withdraw its +1 so neither `current` nor `peak` carries it. Removing the span
+        # rather than adding a -1: a phantom close would put a fake drop on the series
+        # and invent an idle gap that never happened.
+        for i, (when, delta) in enumerate(spans):
+            if delta == +1 and when == opened["at"]:
+                spans.pop(i)
+                break
+
+    if not spans:
+        # No start ever reached the stream. Absence, never zero-in-flight: the two look
+        # identical in a number and mean opposite things about the system.
+        return {"measured": False, "current": 0, "peak": 0, "minimum": None,
+                "idle_gaps": 0, "observed": [], "abandoned": len(abandoned),
+                "abandoned_detail": abandoned}
+
+    spans.sort(key=lambda p: p[0])
+    level = 0
+    peak = 0
+    seen: set[int] = set()
+    idle_gaps = 0
+    for i, (_, delta) in enumerate(spans):
+        level += delta
+        peak = max(peak, level)
+        seen.add(level)
+        # A drop to zero with more work after it is a window where the system stopped
+        # and then started again. The final drop to zero is not a gap — it is now.
+        if level == 0 and i < len(spans) - 1:
+            idle_gaps += 1
+
+    observed = sorted(x for x in seen if x > 0)
+    return {
+        "measured": True,
+        "current": level,
+        "peak": peak,
+        #: None when the window idled: no concurrency it ran at avoided stopping.
+        "minimum": (observed[0] if observed else None) if idle_gaps == 0 else None,
+        "idle_gaps": idle_gaps,
+        "observed": observed,
+        #: Starts the stream never closed and that are too old to be work. Named, not
+        #: just counted: the reader's next move is to close them, which needs the slug.
+        "abandoned": len(abandoned),
+        "abandoned_detail": abandoned,
+    }
+
+
+def _parse_stamp(raw) -> datetime | None:
+    if not raw:
+        return None
+    try:
+        when = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return when if when.tzinfo else when.replace(tzinfo=timezone.utc)
+
+
+def _columns(items: list[dict], phases: tuple[str, ...] | list[str],
+             uncarded: list[dict], now: datetime) -> list[dict]:
+    """Per phase: how many items sit there, and whether anything is happening.
+
+    The board drew ten lanes and left the reader to infer activity from card count. On
+    one consumer that inference was wrong in the direction that matters — `plan` held
+    four cards and nothing had touched them in over two hours. "There is work in plan"
+    and "plan is where the work is" are different claims, and the page supported only
+    the first while looking like it supported the second.
+
+        working   a phase started here and has not ended, OR uncarded work moved recently
+        queued    items here, none running, something moved inside the stall window
+        stalled   items here, none running, nothing moved — or nothing ever did
+        empty     no items and no uncarded work
+
+    Undated counts as stalled, never as fresh: an item the stream has never mentioned has
+    not just moved, and treating "never" as "recently" would mark a registry nobody has
+    touched as a queue in flight.
+    """
+    orphan_by_phase: dict[str, list[dict]] = {}
+    for entry in uncarded:
+        for phase in entry.get("phases") or []:
+            orphan_by_phase.setdefault(phase, []).append(entry)
+
+    out: list[dict] = []
+    for phase in phases:
+        here = [i for i in items if i.get("phase") == phase]
+        orphans = orphan_by_phase.get(phase, [])
+        running = sum(1 for i in here if i.get("running_phase") == phase)
+
+        ages = [_minutes_since(i.get("last_at"), now) for i in here]
+        dated = [a for a in ages if a is not None]
+        orphan_ages = [_minutes_since(o.get("last_at"), now) for o in orphans]
+        fresh_orphan = any(a is not None and a <= STALL_AFTER_MINUTES for a in orphan_ages)
+
+        if running or fresh_orphan:
+            activity = "working"
+        elif not here and not orphans:
+            activity = "empty"
+        elif dated and min(dated) <= STALL_AFTER_MINUTES:
+            activity = "queued"
+        else:
+            activity = "stalled"
+
+        out.append({
+            "phase": phase,
+            "activity": activity,
+            "items": len(here),
+            "running": running,
+            #: Work the stream records in this phase under no item. Counted separately
+            #: because it is real and belongs to nobody — hiding it is what made the
+            #: board report an idle system while the system was working.
+            "uncarded": len(orphans),
+            #: Minutes since anything here last moved; None when nothing ever has.
+            #: None is NOT zero, and the page must not render it as recent.
+            "idle_minutes": round(min(dated)) if dated else None,
+        })
+    return out
+
+
+def _minutes_since(stamp: str | None, now: datetime) -> float | None:
+    if not stamp:
+        return None
+    try:
+        when = datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    return max(0.0, (now - when).total_seconds() / 60)
+
+
+def _fan_out_by_plan(events: list[dict], plans: dict[str, str]) -> list[dict]:
+    """Every event, plus a copy addressed to each item its plan slug realises.
+
+    `planned_items` learned to read the plan body, so the board knows B-003's plan is
+    `composition-di`. The stream passes carry the link no further: they resolve a slug
+    through `item_id_of`, which sees no item number in `composition-di` and drops all
+    twenty-two of its events. The visible symptom is a card that cannot say when it last
+    moved — and "how long has this been sitting" is the difference between a queue moving
+    and a queue stopped.
+
+    Copies rather than rewrites: one plan can realise several items and each of them is
+    genuinely at that phase. Rewriting the slug would pick one and silently orphan the
+    rest, which is the shape of the defect this whole review started from.
+    """
+    if not plans:
+        return events
+    by_slug: dict[str, list[str]] = {}
+    for item, slug in plans.items():
+        by_slug.setdefault(slug, []).append(item)
+    out: list[dict] = []
+    for event in events:
+        out.append(event)
+        raw = event.get("slug") or ""
+        if item_id_of(raw).startswith("B-"):
+            continue          # already addressed to an item; nothing to fan out
+        for item in by_slug.get(raw, ()):
+            out.append({**event, "slug": item})
+    return out
+
+
+def _abandoned(since, now: datetime) -> bool:
+    """Whether a start that old has stopped being evidence of work.
+
+    One predicate, used by everything that has to make this call. `_wip` computed the
+    same age inline and `_working_item` never computed it at all — which is how the two
+    came to disagree about B-184 on one screen.
+
+    An unparseable or absent stamp is NOT abandoned: the window is a claim about
+    elapsed time, and without a time there is nothing to elapse. Guessing `True` would
+    silently drop real work whose timestamp a producer wrote badly.
+    """
+    started = _parse_stamp(since)
+    if started is None:
+        return False
+    return (now - started).total_seconds() / 3600 > ABANDON_AFTER_HOURS
+
+
+def _phases_running(events: list[dict], now: datetime | None = None) -> dict[str, dict]:
+    """Which item is inside which phase right now, from the event stream.
+
+    Extracted from `build_state`, which measured cyclomatic complexity 41 across 206
+    lines. Pure code movement: the block below is the block that was there, reading the
+    same stream. What changed is that each pass declares what it reads and what it
+    produces, instead of leaving both in a shared scope.
+
+    ## The window is applied HERE, and that placement is the fix
+
+    A start with no end is a fact about the STREAM; calling it running is a claim about
+    the WORK. Two defences against that claim already existed and both sat in consumers:
+    the orphan-close below, and `ABANDON_AFTER_HOURS` inside `_wip`. Neither covered
+    `_working_item`, and on 2026-09-21 a consumer's board headlined `WORKING B-184` over
+    a start that had died 20 hours and 26 events earlier — while its own notices panel
+    said the same start was "not counted as work in flight".
+
+    Eleven readers consume `running_phase`: two here and nine in `board.html`. Any of
+    them could have been the fourth to miss the lesson. So a start past the window is
+    not reported as running to ANY of them — the field is built without it, and no
+    consumer can disagree about a value none of them is given.
+    """
+    now = now or datetime.now(timezone.utc)
     running: dict[str, dict] = {}
     for event in events:
         slug = item_id_of(event.get("slug") or "")
@@ -885,8 +1490,24 @@ def build_state(project_root: Path, lead_log: Path | None = None,
             # not evidence the item moved on, and clearing on it would hide work actually
             # in flight. Later-or-equal is the line, and the chain order is what decides.
             running.pop(slug, None)
+    # Past the window, a start is not work. `_wip` reports it under `abandoned` so the
+    # reader's next move — close it, or emit the end it owes — still has the slug.
+    for slug in [s for s, open_phase in running.items()
+                 if _abandoned(open_phase.get("since"), now)]:
+        running.pop(slug, None)
 
     # Last finished phase per item, from the stream.
+    return running
+
+
+def _phases_reached(events: list[dict]) -> dict[str, dict]:
+    """Last FINISHED phase per item, from the same stream.
+
+    Extracted from `build_state`, which measured cyclomatic complexity 41 across 206
+    lines. Pure code movement: the block below is the block that was there, reading the
+    same stream. What changed is that each pass declares what it reads and what it
+    produces, instead of leaving both in a shared scope.
+    """
     reached: dict[str, dict] = {}
     for event in events:
         slug = item_id_of(event.get("slug") or "")
@@ -908,10 +1529,78 @@ def build_state(project_root: Path, lead_log: Path | None = None,
             reached[slug] = {"phase": cycle, "verdict": event.get("verdict"),
                              "at": event.get("timestamp")}
 
+    return reached
+
+
+#: Phases whose absence is never an item's gap.
+#:
+#: `brainstorm` and `design` belong to a SCOPE, not to an item — `cycle-phases.txt`
+#: marks both "absent for a scope aligned in an earlier session, and for a repo that
+#: adopted the kit before this phase existed". Every item in such a repository would
+#: carry both as findings, on two phases that were correctly never run for it.
+#:
+#: `backlog` is where an item is registered rather than worked, and a registry holding
+#: the item is its own evidence. Flagging it would fire on every item ever filed.
+_NOT_PER_ITEM = frozenset({"brainstorm", "design", "backlog"})
+
+
+def _phases_recorded(events: list[dict]) -> dict[str, set[str]]:
+    """Which chain phases the stream has an event for, per item."""
+    seen: dict[str, set[str]] = {}
+    for event in events:
+        slug = item_id_of(event.get("slug") or "")
+        cycle = event.get("cycle") or ""
+        if slug.startswith("B-") and cycle in PHASES:
+            seen.setdefault(slug, set()).add(cycle)
+    return seen
+
+
+def _gaps_behind(phase: str, recorded: set[str]) -> list[str]:
+    """Chain phases BEHIND this item that the stream never recorded.
+
+    `rules/cycle-phases.txt` states the dependency in its own column — *"review |
+    conditional | absent when implement never ran"* — and the board drew an item in
+    review with no implement event as an ordinary card. On one consumer four items sat
+    there while the stream held no implement, plan, backlog, release or acceptance event
+    at all, and 53 lines of TypeScript on disk said code had been written.
+    "Four items are in review" and "four items are in review and the phase that produces
+    what review reads left no trace" are different sentences, and only the page could
+    tell the reader which one was true.
+
+    Phases AHEAD are never flagged: one the item has not reached is not a gap, and
+    flagging them would turn every card into a wall of findings nobody reads.
+
+    This reports what the STREAM shows and says so in those words. A conditional phase
+    can be legitimately absent — implement is "absent for a killed item, and for an item
+    whose fix is documentation only" — and nothing here can tell that from a phase that
+    ran and emitted nothing. Both are worth surfacing; neither is called a defect.
+    """
+    if phase not in PHASES:
+        return []
+    behind = PHASES[:PHASES.index(phase)]
+    return [p for p in behind if p not in recorded and p not in _NOT_PER_ITEM]
+
+
+def _board_items(items: list, statuses: dict, running: dict, reached: dict,
+                 plans: set, halted: set, on_disk: dict,
+                 recorded: dict[str, set[str]] | None = None) -> list[dict]:
+    """One row per registry item: its status, its phase, and what holds it.
+
+    Extracted from `build_state`, which measured cyclomatic complexity 41 across 206
+    lines. Pure code movement: the block below is the block that was there, reading the
+    same stream. What changed is that each pass declares what it reads and what it
+    produces, instead of leaving both in a shared scope.
+    """
+    out_items: list[dict] = []
     out_items = []
     for item in items:
         iid = item.item_id
         status = item.fields.get("status", "")
+        # `_parse_items` already reads `Registrado|registered YYYY-MM-DD` into this, and
+        # this function dropped it — so `_delivery` measured lead time against a field it
+        # could not see and reported None with a comment saying the item had no entry
+        # date. It had one, two calls up.
+        registered_on = item.registered_on.isoformat() if item.registered_on else None
         raw_block = item.fields.get("blocked_by", "")
         blockers = parse_blocked_by(raw_block)
         live = [b for b in blockers if statuses.get(b, "") in OPEN_STATUS]
@@ -958,6 +1647,7 @@ def build_state(project_root: Path, lead_log: Path | None = None,
 
         out_items.append({
             "id": iid,
+            "registered_on": registered_on,
             # The phase being worked on NOW, if any.
             "running_phase": (in_flight or {}).get("phase"),
             "running_since": (in_flight or {}).get("since"),
@@ -968,6 +1658,14 @@ def build_state(project_root: Path, lead_log: Path | None = None,
             "blocked": impeded,
             "blockers": live,
             "blocked_note": raw_block.strip() if impeded and not live else "",
+            #: Who can clear it, and the class the delegation file puts it in. Empty
+            #: when nothing is in the way, so a card with no blocker draws no chip.
+            #: Chain phases behind this one with no event on the stream. Named rather
+            #: than counted: "implement" tells the reader what to go and look at.
+            "phases_without_record": _gaps_behind(
+                phase, (recorded or {}).get(iid, set())),
+            "blocked_owner": _wall_owner(raw_block)[0] if impeded else "",
+            "blocked_class": _wall_owner(raw_block)[1] if impeded else "",
             "domain": item.fields.get("domain", ""),
             "repo": item.fields.get("repo", ""),
             "evidence": item.fields.get("evidence", ""),
@@ -982,6 +1680,36 @@ def build_state(project_root: Path, lead_log: Path | None = None,
             "halted": iid in halted,
         })
 
+    return out_items
+
+
+def build_state(project_root: Path, lead_log: Path | None = None,
+                lead_marker: Path | None = None) -> dict:
+    backlog = project_root / "BACKLOG.md"
+    if not backlog.is_file():
+        return {"error": f"no BACKLOG.md under {project_root}", "items": [],
+                "phases": list(PHASES), "phases_source": PHASES_SOURCE,
+                "lead": read_lead(lead_log, lead_marker)}
+
+    items = _parse_items(backlog.read_text(encoding="utf-8-sig"))
+    statuses = {i.item_id: i.fields.get("status", "") for i in items}
+    events = read_events(project_root)
+    plans = planned_items(project_root)
+    halted = halted_items(project_root)
+    on_disk = stage_on_disk(project_root)
+
+    # A phase that STARTED and has not ended is work happening right now. Without it
+    # the board can only draw what finished, which is a picture of the past: an item
+    # under active work showed the verdict of a phase that was already over, and
+    # nothing on the page said anything was running.
+    # Fanned out first: an event under a plan slug belongs to every item that plan
+    # realises, and both passes below key on the item.
+    addressed = _fan_out_by_plan(events, plans)
+    running = _phases_running(addressed)
+    reached = _phases_reached(addressed)
+    out_items = _board_items(items, statuses, running, reached, plans, halted, on_disk,
+                             _phases_recorded(addressed))
+
     # ── what the stream carries and this board cannot place ──────────────
     # Measured on 2026-08-31 against theo: 3 of 28 events had `slug: null` and two
     # more named cycles outside the declared chain. All five were dropped in silence.
@@ -995,24 +1723,51 @@ def build_state(project_root: Path, lead_log: Path | None = None,
     for event in events:
         if event.get("type") not in ("cycle:phase:start", "cycle:phase:end"):
             continue
-        slug = item_id_of(event.get("slug") or "")
+        raw = event.get("slug") or ""
+        slug = item_id_of(raw)
         cycle = event.get("cycle") or ""
-        if not slug or not slug.startswith("B-"):
+        # A plan slug the registry links to an item through the plan's body IS placed —
+        # the card for that item carries it. Counting it as unplaced made the page warn
+        # about 38 of 38 events while 36 of them had a home, which teaches the reader
+        # that the warning means nothing.
+        if (not slug or not slug.startswith("B-")) and raw not in set(plans.values()):
             unplaced_no_item += 1
         elif cycle not in PHASES:
             unplaced_off_chain[cycle] = unplaced_off_chain.get(cycle, 0) + 1
 
     out_items.sort(key=lambda d: _number(d["id"]))
+    unattributed = _unattributed_work(
+        events, {d["id"] for d in out_items}, set(plans.values()))
+    _now = datetime.now(timezone.utc)
+    columns = _columns(out_items, PHASES, unattributed, _now)
+    wip = _wip(addressed, _now)
     return {
         "project": project_root.name,
         "project_path": str(project_root),
         "phases": list(PHASES),
+        #: `declared` when `rules/cycle-phases.txt` was read, `fallback` when it was not
+        #: found and the eight hardcoded names are being drawn instead. A board drawn
+        #: from a chain nobody read looks exactly like one drawn from the contract.
+        "phases_source": PHASES_SOURCE,
         "items": out_items,
         "events": events[-200:],
         "event_total": len(events),
         "lead": read_lead(lead_log, lead_marker),
         "running": sorted(running.keys()),
         "has_stream": _events_path(project_root) is not None,
+        #: Work the stream records under a slug that resolves to no item. NEVER empty
+        #: for convenience: an empty list is the claim that every event on the stream
+        #: found its item, and it has to be true.
+        "unattributed": unattributed,
+        #: One row per phase, in chain order, saying whether work is happening there.
+        "columns": columns,
+        #: Items in flight, and the smallest concurrency the window shows kept the
+        #: system fed. Derived from start/end pairs — never a limit, never advice.
+        "wip": wip,
+        #: One state and one sentence, first thing on the page.
+        "headline": _headline(out_items, columns, wip),
+        #: Has anything shipped, how fast, over what window.
+        "delivery": _delivery(out_items, events, _now),
         #: When the cycle last did something to an ITEM, and what it was.
         #:
         #: The board drew positions and never said WHEN. A registry four days idle and

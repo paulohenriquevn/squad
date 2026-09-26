@@ -74,7 +74,13 @@ for _up in Path(__file__).resolve().parents:
         sys.path.insert(0, str(_up / "mechanisms" / "gates"))
         sys.path.insert(0, str(_up))
         break
-from squad.paths import routing_table, write_routing_table  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import (  # noqa: E402 — post-bootstrap import
+    routing_table,
+    write_routing_table,
+)
 
 #: The fourteen roles `agents/README.md` calls "mechanism": each describes a DECISION
 #: rather than a repository, which is why they may be versioned in the kit when a
@@ -141,7 +147,11 @@ def agents_dir(project: Path) -> Path:
     body is the fallback for a consumer install that copied skills without mechanisms.
     """
     try:
-        from convene_panel import agents_dir as _canonical  # type: ignore
+        # Optional sibling: absent in a skills-only install,
+        # which is what the ImportError below handles.
+        from convene_panel import agents_dir  # type: ignore[import-not-found]
+
+        _canonical = agents_dir
     except ImportError:
         nested = project / ".claude" / "agents"
         return nested if nested.is_dir() else project / "agents"
@@ -186,7 +196,9 @@ def diagnose_agents(project: Path) -> Section:
                 "assert a violation the evidence does not support"))
 
     try:
-        from route_domain import parse_routing_table  # type: ignore
+        # Optional sibling: absent in a skills-only install,
+        # which is what the ImportError below handles.
+        from route_domain import parse_routing_table  # type: ignore[import-not-found]
         table = parse_routing_table(table_path)
     except ImportError:
         return Section(
@@ -484,7 +496,11 @@ def diagnose_panel(project: Path,
     """
     if runner is None:
         try:
-            from check_panel_capability import check_panel_capability  # type: ignore
+            # Optional sibling: absent in a skills-only install,
+            # which is what the ImportError below handles.
+            from check_panel_capability import (  # type: ignore[import-not-found]
+                check_panel_capability,
+            )
             runner = check_panel_capability
         except ImportError:
             return Section(

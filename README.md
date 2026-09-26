@@ -21,6 +21,7 @@ A development squad that keeps a running ecosystem healthy: domain specialists y
 ## Table of contents
 
 - [Why this exists](#why-this-exists)
+- [Where this ends](#where-this-ends)
 - [The one phase with a human in it](#the-one-phase-with-a-human-in-it)
 - [What you get](#what-you-get)
 - [How it works](#how-it-works)
@@ -47,6 +48,37 @@ Maintaining a live multi-repo ecosystem fails in ways that building a new one do
 
 Squad addresses each with a phase, a gate, or a specialist who knows the difference.
 
+## Where this ends
+
+**Squad takes a maintenance item from hunch to a published release, and stops there.**
+This section exists because the boundary was never written down, and a system that does
+not say where it ends is read as claiming everything up to the end of software.
+
+Inside: the loop from `BRAINSTORM` to `RELEASE`, plus `ACCEPTANCE` for work that promised
+a user something. Falsification before implementation, evidence that must resolve, gates
+that fail rather than warn.
+
+Outside, and deliberately:
+
+| Not here | Why, and what stands in for it |
+|---|---|
+| **Deploy** — environment promotion, progressive rollout, operational rollback | The chain ends at a merge, a semver tag and a published GitHub release. `check_release_reachable.py` confirms the release exists and is public; nothing here promotes it anywhere, and `rollback` in these rules means reverting a plan or an install, never a production deploy |
+| **Operation** — monitoring, alerting, SLI/SLO, incidents, post-mortems, backup and restore | Absent entirely. `/acceptance` exercises a released delivery ONCE, against the milestone's declared criteria. That is a verification, not an operating practice |
+| **Security beyond dependencies** — SAST/DAST, SBOM, licence audit, threat modelling, secret scanning | One mechanised gate exists and it is narrow: `check_deps_audit.py` caps a plan at INVALID when a declared dependency carries a CRITICAL/HIGH CVE (`deps_audit_insecure`). `hooks/boundary-check.py` constrains where the system may write. Everything else on that list is not here |
+| **Deprecation and end-of-life** — sunsetting a component, migration paths, shutdown | Absent. The loop has no end state by design (`cycle-maintenance` runs as long as the ecosystem is maintained), and nothing models a component leaving it |
+| **Product discovery** — users, outcomes, prioritisation against business value | `BRAINSTORM` shapes an idea and `DISCOVER` falsifies a hypothesis about THE CODE. Neither asks who the user is or what the business gets |
+
+**Why these are absences and not gaps.** Each needs infrastructure this kit does not have
+and must not assume: a deploy target, a metrics backend, a scanner suite, a product
+context. A phase that pretended to cover one would produce the failure this whole system
+is built to refuse — a green verdict over something nobody measured. Adding any of them
+is a real option; inventing a gate for them is not.
+
+**One consequence worth stating.** `RELEASED` means merged, tagged, and published. It
+does not mean deployed, and it does not mean working in production. `cycle-acceptance` is
+the only phase that touches a real artifact, it runs for milestones, and one run is not
+operation.
+
 ## The one phase with a human in it
 
 Everything from `/backlog-init` down runs unattended. That is only defensible if
@@ -63,7 +95,7 @@ the kit that requires a person:
 /brainstorm-pieces       # PIECE-N + the gate: 90% and a PERSON's signature
 ```
 
-Four documents land in `wiki/product/`, and every backlog item afterwards traces to
+Four documents land in the governed project's `wiki/product/`, and every backlog item afterwards traces to
 an `OBJ-N`. That traceability makes two questions computable that were impressions
 before: **an objective nothing serves**, and **shipped work serving no objective**.
 Both become the agenda of the next session, which `build_agenda.py` assembles before
@@ -73,8 +105,10 @@ stalled on a decision only a person can make.
 **A judge may not sign this one.** `alignment_judge.py` signs an item's alignment
 brief when nobody is coming, because it reads the item's evidence. A product vision
 has no independent evidence — it is what everything else is measured against — so a
-judge scoring it would grade the document against itself. The scorer enforces that:
-a `signed-by: judge/…` returns `AWAITING_REVIEW`.
+judge scoring it would grade the document against itself. The scorer enforces that by
+allowlist: only `signed-by: human/{who}`, on a checklist whose boxes a reviewer actually
+ticked, returns `PRODUCT_ALIGNED`. Refusing the single prefix `judge/` and accepting
+every other name is what let the cascade's own author sign it.
 
 ## What you get
 
@@ -83,7 +117,7 @@ a `signed-by: judge/…` returns `AWAITING_REVIEW`.
 - **Prior art can never be evidence.** Gate G5 rejects "project X does it this way" as a justification. Knowing how others solved it is fine; it is simply not a measurement of our system.
 - **Pointers are verified, line included.** A cited `file:line` that does not resolve — missing file, or a line past the end of one — caps the artifact at INVALID.
 - **One registry, two producers.** `BACKLOG.md` is the single answer to "what is pending?". Humans file items; sweeps register findings with evidence attached. Orphaned findings have nowhere to hide.
-- **Eight specialists who know the terrain.** Each carries build commands verified on disk, the domain's invariants, and the false positives that domain generates.
+- **Domain specialists who know the terrain.** You derive them from your own repositories — the kit ships none — and each carries the repos it covers, build commands verified on disk, the domain's invariants, and the false positives that domain generates.
 - **A boundary that stopped working does not pass silently.** Every architecture linter goes green when a rule names a directory that moved — measured on two adopters, one Go and one TypeScript. `/arch-check` and the D5 detector report it; nothing else does.
 - **Guardrails at runtime.** Claude Code hooks enforce git safety (no `--force`, no direct-to-`main`), TDD discipline, CHANGELOG hygiene and honest public copy while you work.
 
@@ -155,7 +189,14 @@ rots once per copy, one agent per role is too coarse to hold "this RDS instance
 is a protected unit".
 
 Routing is deterministic (`mechanisms/cycle/route_domain.py`) and reads its table from
-`rules/cycle-backlog.md` — one table, one truth. A domain naming a specialist
+`.squad/domain-routing.txt` — the project's write root, which the project owns and the
+installer never overwrites. An install made before 2026-09-11 keeps its table under
+`rules/`, and `squad.paths.routing_table` still reads there so an old consumer is not
+stranded; `write_routing_table` names the current destination and nothing writes to the
+old one.
+The INVARIANTS that table must satisfy stay in `rules/cycle-backlog.md`, which is the
+kit's contract: one table, one truth, and the rule that governs it kept where a
+consumer cannot edit it. A domain naming a specialist
 that is not on disk exits 3 (`BROKEN ROUTE`) rather than reporting a route to
 nobody. See [`agents/README.md`](agents/README.md).
 
@@ -173,9 +214,10 @@ nobody. See [`agents/README.md`](agents/README.md).
 | `CHANGELOG.md`, Keep a Changelog format | The Rule 6 gate activates when the file exists; without it the Stop hook says so rather than passing silently |
 | Go, Python, TypeScript or Rust | Only these have `code-quality` detectors. Other stacks run the rest of the pipeline fine |
 
-**Adopting it in another project is a bootstrap, not just an install.** The kit ships *this*
-ecosystem's domain routing table, and gate G1 refuses every item until you replace it — measured on
-an adopter: 88 items with real `file:line` evidence, all `BLOCKER/unroutable_repo`. After
+**Adopting it in another project is a bootstrap, not just an install.** The kit ships no domain
+routing table, and gate G1 refuses every item until you write one — measured on an adopter that
+inherited another ecosystem's table: 88 items with real `file:line` evidence, all
+`BLOCKER/unroutable_repo`. After
 `mechanisms/distribution/install.sh`, run `detect_domains.py --root . --write` and write the specialist files it
 names. The installer prints the sequence.
 
@@ -218,7 +260,7 @@ Each mode defines what counts as a measurement. Evidence from one does not satis
 | `bug` | A reproduced defect | Numbered repro **plus a test that fails on the current state, executed** |
 | `evolve` | Measured cost of the status quo | A number: N round-trips, N duplicated call sites, N ms |
 
-`bug` has a hard floor: **no failing test, no bug.** A defect nobody can express as a failing test is not understood well enough to fix. `live-test` refuses on a domain with no declared target — six of eight have none, by design, because a Go library and a Terraform module have no surface a browser can probe.
+`bug` has a hard floor: **no failing test, no bug.** A defect nobody can express as a failing test is not understood well enough to fix. `live-test` refuses on a domain with no declared target, and most domains have none by design, because a Go library and a Terraform module have no surface a browser can probe.
 
 ## Finding your way — `sq`
 
@@ -243,7 +285,7 @@ suites had not run.
 `sq` computes no verdict — it runs the mechanisms and reports what they said. A consumer
 gets it as `python3 .claude/squad/cli`, since the installer copies directories and the root
 `sq` is a convenience for this repository. The reasoning is in
-[`.squad/wiki/decisions/the-cli-navigates-mechanisms-compute.md`](.squad/wiki/decisions/the-cli-navigates-mechanisms-compute.md).
+[`docs/wiki/decisions/the-cli-navigates-mechanisms-compute.md`](https://github.com/paulohenriquevn/squad/blob/main/docs/wiki/decisions/the-cli-navigates-mechanisms-compute.md).
 
 ## Project structure
 
@@ -253,33 +295,47 @@ nothing — a `lib/`, a `utils/`, a test filed outside a test tree.
 
 ```
 squad/
-├── wiki/product/    ← what the product IS. Four documents, agreed with a person
 ├── rules/           ← the contracts. What each cycle promises and which gates block it
-│   └── squad-map.md          ← the 360º view: every phase, who owns it, what it reads
+│   ├── squad-map.md          ← the 360º view: every phase, who owns it, what it reads
 │   ├── cycle-*.md            ← one per phase; the source of truth for that phase
 │   ├── cycle-phases.txt      ← the chain itself, declared once and machine-readable
 │   ├── records-location.md   ← where output goes, and why the split below exists
 │   └── live-target.txt       ← declared live environments
 ├── skills/          ← what the agent can DO. One directory per capability
+├── commands/        ← the slash commands that are not skills
 ├── mechanisms/      ← what COMPUTES the verdicts. No verdict is asserted in prose
 │   ├── gates/                ← everything that measures the kit against its contracts
 │   ├── cycle/                ← the cycle at runtime: routing, events, status, attestation
 │   ├── fleet/                ← many sessions at once, and the line a person watches
-│   ├── dist/                 ← into a consumer, and kept in step
+│   ├── distribution/         ← into a consumer, and kept in step
 │   └── conventions/          ← where things live and what shape they have
 ├── hooks/           ← what runs in the runtime, outside the agent's turn
-│   └── environment/          ← what a hook loads before it runs
-├── agents/          ← domain specialists, derived per project (README explains routing)
-├── wiki/            ← durable KNOWLEDGE, as an OKF v0.2 bundle
+├── squad/           ← the layout and contract library the above import, plus `sq`
+├── agents/          ← the fourteen role agents, and the domain specialists you derive
+├── docs/wiki/       ← durable KNOWLEDGE people wrote, as an OKF v0.2 bundle
 │   ├── sops/                 ← procedures performed on the kit
-│   └── decisions/            ← decisions that outlive the discussion
-├── records/         ← the TRAIL. What each run left behind, dated and immutable
-│   ├── audits/ reviews/ releases/ acceptance/ implementations/
-│   └── cycle-events.jsonl    ← one line per phase transition
-├── study-material/  ← third-party docs the project depends on. Read-only, not ours
+│   ├── decisions/            ← decisions that outlive the discussion
+│   └── references/           ← arguments worth keeping
 ├── session-state/   ← per-session checkpoints. Ephemeral, never evidence
 └── tests/           ← the proof the above works; per-slice suites live in skills/*/tests
 ```
+
+**`.squad/` is not in that tree, and its absence is the point.** It is the write root
+**of the project being maintained** — the dated trail, the event stream, the project's
+own OKF bundle, and the read-only `study-material/` study zone. A cycle run here creates
+it, exactly as in any consumer, and `.gitignore` ignores it whole: nothing under it is
+ever committed.
+
+The kit kept its own eleven ADRs and SOPs there until 2026-09-21, versioned through a
+`.gitignore` negation, on the argument that this kit's durable knowledge IS its source.
+The argument was true and the location made one path mean two things — authored product
+here, run data in a consumer. They are at `docs/wiki/` now, versioned like the rest of
+the product, and `squad/paths.py` answers for the two kinds separately: `wiki_dir()` for
+a project's bundle, `authored_wiki_dir()` for one people wrote.
+
+The four product documents `cycle-brainstorm` writes land under `.squad/wiki/product/`
+**in the project the kit governs**, which is why they do not appear above: this
+repository is the kit, not a consumer of it.
 
 **`wiki/` and `records/` are the same split, twice.** Knowledge evolves, has an
 owner and goes stale; a record of one execution on one day does none of those,
@@ -287,7 +343,7 @@ and re-verifying it would falsify what it is. That is why they are two
 directories and not one — and why `records/` is no longer called
 `knowledge-base/`, a name that came to mean *everything left after the knowledge
 moved out*. The reasoning is a concept in the bundle:
-[`.squad/wiki/decisions/where-knowledge-lives.md`](.squad/wiki/decisions/where-knowledge-lives.md).
+[`docs/wiki/decisions/where-knowledge-lives.md`](https://github.com/paulohenriquevn/squad/blob/main/docs/wiki/decisions/where-knowledge-lives.md).
 
 Rules are the contract; a SKILL.md carries only phase-specific detail and points back at its rule.
 
@@ -315,7 +371,7 @@ Each refuses the shortcut its field is prone to. `arch-check` will not call a bo
 - **A pointer resolves, line included.** Otherwise the artifact is INVALID.
 - **Killing an item is success.** The cycle can say no, with a `kill_reason` naming what was measured.
 - **`unknown` is a complete answer** — for the constraint corner, and only there. We do not instrument flow, so demanding a constraint claim would be answered by assertion.
-- **Ids are never reused or renumbered.** A killed `B-007` stays `B-007` forever; the number is the audit trail.
+- **Ids are never reused or renumbered.** A killed `B-007` stays `B-007` forever; the number is the audit trail. The order blocks appear in the file is yours to choose — the rule is about the values, not the layout.
 - **Measuring is reading.** Discover produces a document, never a patch.
 - **Nothing between DISCOVER and ACCEPTANCE waits for a person.** A phase may stop; it may not hold the session. The item returns to the registry — behind a wall only when its impediment is material (a machine, a credential, elapsed time), which nobody's authority supplies.
 - **Verdicts are derived from findings**, never asserted.
@@ -329,7 +385,7 @@ Squad is derived from Cycle (MIT) and inverts its centre. Cycle is greenfield an
 | Driver | a milestone in `ROADMAP.md` | an item in `BACKLOG.md` |
 | Discover asks | how did project X solve this? | what is true about *our* system? |
 | Terminal artifact | blueprint (a design to copy) | opportunity (a measured gap) |
-| Agents | generic, stack-agnostic | 8 specialists with verified build commands |
+| Agents | generic, stack-agnostic | domain specialists derived from your repos, with verified build commands |
 | Ends when | every milestone is `[x]` | never — maintenance is continuous |
 
 What Squad keeps: TDD halt-loops, the wiring triad, hard gates with derived verdicts, the orthogonal Codex jury, git-safety hooks, and an auditable `records/`.

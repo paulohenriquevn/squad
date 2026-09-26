@@ -47,8 +47,8 @@ class Unsupported(RuntimeError):
 
 def _version() -> str:
     try:
-        done = subprocess.run(["claude", "--version"], capture_output=True,  # noqa: PLW1510
-                              text=True, timeout=15, stdin=subprocess.DEVNULL)
+        done = subprocess.run(["claude", "--version"], capture_output=True,
+                              text=True, timeout=15, stdin=subprocess.DEVNULL, check=False)
     except (OSError, subprocess.SubprocessError):
         return "version unknown"
     return (done.stdout or "").strip() or "version unknown"
@@ -132,12 +132,12 @@ def ask(prompt: str, *, cwd: Path, budget_usd: float | None = None,
     command += list(extra)
 
     try:
-        done = subprocess.run(  # noqa: PLW1510
+        done = subprocess.run(
             command, capture_output=True, text=True, timeout=timeout, cwd=str(cwd),
             # Closed, not inherited: `claude -p` reads stdin for piped input and
             # waits on a pipe that never delivers, which is what a daemon's stdin
             # is under tmux through `tee`.
-            stdin=subprocess.DEVNULL)
+            stdin=subprocess.DEVNULL, check=False)
     except subprocess.TimeoutExpired:
         return StreamResult(transport_error=f"no answer in {timeout}s")
     except (OSError, subprocess.SubprocessError) as error:
@@ -163,8 +163,8 @@ def sessions(cwd: Path | None = None, timeout: int = 30) -> list[dict]:
     command = ["claude", "agents", "--json"]
     if cwd is not None:
         command += ["--cwd", str(cwd)]
-    done = subprocess.run(command, capture_output=True, text=True,  # noqa: PLW1510
-                          timeout=timeout, stdin=subprocess.DEVNULL)
+    done = subprocess.run(command, capture_output=True, text=True,
+                          timeout=timeout, stdin=subprocess.DEVNULL, check=False)
 
     # `--json` arrived after 2.1.144. A consumer pinned to an older CLI gets
     # `unknown option`, and the CLI exits 0 while saying it — so a returncode

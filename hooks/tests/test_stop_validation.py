@@ -81,7 +81,7 @@ class HookRun:
 
 def run_hook(repo: Path) -> HookRun:
     return HookRun(
-        subprocess.run(  # noqa: PLW1510
+        subprocess.run(
             _CMD,
             cwd=repo,
             input=_PAYLOAD,
@@ -92,7 +92,7 @@ def run_hook(repo: Path) -> HookRun:
                 "HOME": str(repo),
                 "CLAUDE_PROJECT_DIR": str(repo),
             },
-        )
+         check=False)
     )
 
 

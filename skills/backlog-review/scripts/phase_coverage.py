@@ -43,6 +43,13 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+for _up in Path(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        sys.path.insert(0, str(_up))
+        break
+# Below the bootstrap: `squad` is importable only after sys.path is extended.
+from squad import backlog as _shared_backlog  # noqa: E402 — post-bootstrap import
+
 
 class Phase(enum.Enum):
     DISCOVER = "discover"
@@ -114,7 +121,9 @@ class ItemCoverage:
         return [p for p in Phase if p not in self.phases]
 
 
-_ITEM_RE = re.compile(r"^## (B-\d+) — .*?$", re.MULTILINE)
+#: Imported, not compiled — `squad/backlog.py` owns what an item header is.
+#: Six readers each carried one and they disagreed about the separator.
+_ITEM_RE = _shared_backlog.BLOCK_RE
 
 
 def scan_registry(registry: Path, knowledge_base: Path) -> list[ItemCoverage]:

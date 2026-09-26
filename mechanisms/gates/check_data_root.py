@@ -19,36 +19,64 @@ older copy is silently unreachable rather than merely old.
 
 That state is the loudest thing here, exactly as `SPLIT` is in the wiki migration.
 
+  COMMITTABLE   the study zone holds files and is not ignored by git: third-party material cloned
+                where the rule says to put it is one `git add -A` from the history
   CENTRALISED   nothing is left outside the write root
   UNMIGRATED    a legacy root holds data and the write root does not — readers still
                 resolve the old one, and nothing else says so
   SPLIT         both hold data. The old copy is unreachable and looks current
+  NESTED        a write root inside the write root. No migration makes one; a writer
+                that took the write root for a project does
+  SHARED        the kit's leaves sit in a bare `wiki/` beside another producer's
+                bundle. Readers no longer fall back to it, so they are unreachable
+  FOREIGN       a bare `wiki/` holding another producer's bundle and nothing of the
+                kit's. Reported so it is not mistaken for Squad data; not a failure
+  INSIDE_KIT    data written into the installed kit, which the next install deletes
   EMPTY         neither holds anything
 
 Exit codes:
   0  centralised, or nothing to migrate
-  1  a legacy root still holds data
+  1  a legacy root still holds data, or the study zone can be committed
   2  the tree could not be read; nothing was checked, and that is not a pass
 """
 from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from squad.boundaries import STUDY_ZONE
 from squad.paths import (
     DATA_DIRNAME,
+    KIT_LOCATED_WIKI_ROOTS,
     LEGACY_RECORDS_ROOTS,
     LEGACY_STATE_NAMES,
     LEGACY_WIKI_ROOTS,
     data_root,
+    foreign_wiki_entries,
+    is_kit_wiki,
+    kit_wiki_leaves_in,
 )
 
 CENTRALISED, UNMIGRATED_CODE, UNCHECKED = 0, 1, 2
+
+#: Findings from loudest to quietest; the overall state is the first one present.
+FAILING_STATES = ("COMMITTABLE", "INSIDE_KIT", "NESTED", "SPLIT", "SHARED", "UNMIGRATED")
+
+#: States that describe a directory which is not the kit's data. Printed, never the
+#: overall verdict: there is nothing of the kit's in it to move.
+_INFORMATIONAL = frozenset({"FOREIGN", "UNGUARDED"})
+
+#: The legacy wiki roots whose location does not vouch for them — the bare `wiki/`
+#: two plugins write their own OKF bundle into by default. `squad.paths.wiki_dir` reads
+#: one only when it has the kit's shape, and this gate has to classify it the same way
+#: or it asks a project to migrate a plugin's output into the kit's write root.
+_SHAPE_JUDGED_WIKI_ROOTS = frozenset(LEGACY_WIKI_ROOTS) - KIT_LOCATED_WIKI_ROOTS
 
 #: Files a directory carries without being "data" — a scaffold nobody filled.
 _IGNORED = frozenset({".gitkeep", ".DS_Store"})
@@ -79,6 +107,9 @@ def check_project(root: Path) -> list[RootReport]:
         directory = root / relative
         files = len(_documents(directory))
         if not files:
+            continue
+        if relative in _SHAPE_JUDGED_WIKI_ROOTS and not is_kit_wiki(directory):
+            reports.append(_foreign_wiki(relative, directory, files))
             continue
         if current_has:
             state = "SPLIT"
@@ -129,13 +160,89 @@ def check_project(root: Path) -> list[RootReport]:
                 f"write root reports absence. A writer resolved the project as the kit "
                 f"directory it lives in."))
 
-    if not reports:
+    # A write root nested inside the write root. No migration produces it; a writer that
+    # took `.squad` for a project does. SPLIT compares the write root with roots BESIDE
+    # it, so this copy was invisible here — measured on a consumer 2026-09-25 with 39
+    # cycle events in the nested stream against 763 in the real one, and nothing said so.
+    nested = data_root(root) / DATA_DIRNAME
+    files = len(_documents(nested))
+    if files:
+        reports.append(RootReport(
+            str(nested.relative_to(root)), files, "NESTED",
+            f"{files} file(s) in a write root inside the write root. No migration "
+            f"produces this; a writer resolved {DATA_DIRNAME}/ itself as the project. "
+            f"No reader resolves it, so this copy is unreachable"))
+
+    zone = _committable_study_zone(root)
+    if zone is not None:
+        reports.append(zone)
+
+    if not [r for r in reports if r.state not in _INFORMATIONAL]:
         state = "CENTRALISED" if current_has else "EMPTY"
         detail = ("nothing outside the write root" if current_has
                   else "no data anywhere yet — nothing to migrate")
         reports.append(RootReport(DATA_DIRNAME, len(_documents(data_root(root))),
                                   state, detail))
     return reports
+
+
+def _committable_study_zone(root: Path) -> RootReport | None:
+    """The study zone, if git would let it into the index. None when it would not.
+
+    `reference-provenance.md` § 1 keeps third-party material out of the history by
+    where it sits — inside the write root, "ignored whole". That held in one repository,
+    this kit's own; in a consumer it rested on a `.gitignore` nothing read, because
+    `install.sh` leaves `.gitignore` to the consumer and nothing checked what the
+    consumer decided.
+
+    Only the zone is probed, never all of `.squad/`: a consumer may version its bundle
+    or its records on purpose, and that choice is not the kit's to overrule. A tree
+    outside git has no index to protect, so it gets no row.
+    """
+    inside = subprocess.run(["git", "-C", str(root), "rev-parse", "--is-inside-work-tree"],
+                            capture_output=True, text=True, check=False)
+    if inside.returncode != 0:
+        return None
+    probe = f"{STUDY_ZONE}/probe/LICENSE"
+    ignored = subprocess.run(["git", "-C", str(root), "check-ignore", "-q", probe],
+                             capture_output=True, text=True, check=False)
+    if ignored.returncode == 0:
+        return None
+    if ignored.returncode != 1:
+        raise RuntimeError(f"git check-ignore could not answer for {root / probe}: "
+                           f"exit {ignored.returncode}, {ignored.stderr.strip()!r}")
+    # Failing only once something is there to leak. An empty zone is every fresh
+    # install, and failing it made the post-install validation of every consumer that
+    # had not yet edited its `.gitignore` report FAILURE — measured on this suite
+    # 2026-09-25, 18 install tests red at once. The risk is named either way.
+    files = len(_documents(root / STUDY_ZONE))
+    if not files:
+        return RootReport(
+            STUDY_ZONE, 0, "UNGUARDED",
+            f"git would not ignore {STUDY_ZONE}/ once something is cloned there. Nothing "
+            f"is there yet; add `{DATA_DIRNAME}/` to .gitignore before it is")
+    return RootReport(
+        STUDY_ZONE, files, "COMMITTABLE",
+        f"git does not ignore {STUDY_ZONE}/, where reference-provenance.md says "
+        f"third-party material goes. A clone there is one `git add -A` from this "
+        f"history, licence included. Add `{DATA_DIRNAME}/` to .gitignore (or at least "
+        f"`{STUDY_ZONE}/`); this script will not edit it")
+
+
+def _foreign_wiki(relative: str, directory: Path, files: int) -> RootReport:
+    """A bare `wiki/` the kit's readers no longer fall back to — FOREIGN or SHARED."""
+    foreign = ", ".join(foreign_wiki_entries(directory)) or "OKF reserved files only"
+    kit_leaves = kit_wiki_leaves_in(directory)
+    if not kit_leaves:
+        return RootReport(relative, files, "FOREIGN",
+                          f"{files} file(s) in a bundle without the kit's shape "
+                          f"({foreign}) — another producer's, by default a loop-* plugin's. "
+                          f"No reader resolves it as Squad data; nothing of the kit's to move")
+    return RootReport(relative, files, "SHARED",
+                      f"the kit's leaves {', '.join(kit_leaves)} share this directory "
+                      f"with another producer's bundle ({foreign}). Readers cannot tell "
+                      f"whose it is and no longer fall back to it, so those leaves are "
+                      f"unreachable. Move them into {DATA_DIRNAME}/wiki/")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -150,10 +257,8 @@ def main(argv: list[str] | None = None) -> int:
         return UNCHECKED
 
     reports = check_project(root)
-    worst = ("INSIDE_KIT" if any(r.state == "INSIDE_KIT" for r in reports)
-             else "SPLIT") if any(r.state in ("SPLIT", "INSIDE_KIT") for r in reports) else (
-        "UNMIGRATED" if any(r.state == "UNMIGRATED" for r in reports)
-        else reports[0].state)
+    worst = next((s for s in FAILING_STATES if any(r.state == s for r in reports)),
+                 next(r.state for r in reports if r.state not in _INFORMATIONAL))
 
     if args.json:
         print(json.dumps({

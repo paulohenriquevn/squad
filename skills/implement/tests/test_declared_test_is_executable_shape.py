@@ -20,7 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from check_tdd_shape import _has_assertion_shape, _has_test_fn_shape  # noqa: E402
+from check_tdd_shape import _has_assertion_shape, _has_test_fn_shape
 
 _REAL_BLOCK = '''**Two RED tests, and the second is the one that makes the first safe.**
 

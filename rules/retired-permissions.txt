@@ -1,3 +1,4 @@
+# rule-id: SQ-CFG-08
 # Permission rules this kit once shipped and has deliberately withdrawn.
 # `install.sh` removes every line here from a consumer's `settings.json`, on
 # every run, whether or not that consumer has a recorded base.

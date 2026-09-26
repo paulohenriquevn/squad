@@ -47,6 +47,14 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+for _up in Path(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        sys.path.insert(0, str(_up))
+        break
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+from squad.paths import rules_dir  # noqa: E402 — post-bootstrap import
+
 _PHASES_RULE = "cycle-phases.txt"
 
 #: Verdicts that forbid the chain from advancing. Drawn from the golden rules
@@ -75,18 +83,19 @@ _BANDS_RULE = "verdict-bands.txt"
 
 
 def load_clean_verdicts(project_root: Path) -> frozenset[str]:
-    """Read the clean band from `rules/verdict-bands.txt`.
+    """Read the clean band from `rules/verdict-bands.txt` and its `.local` sibling.
 
     An absent registry raises, on the same grounds as an absent blocking list: an
     empty set would make every verdict read as not-clean, and the disorder check
     would pass every stream while checking nothing.
     """
     project_root = Path(project_root)
-    for relative in ("rules", ".claude/rules"):
-        candidate = project_root / relative / _BANDS_RULE
-        if candidate.is_file():
-            path = candidate
-            break
+    # `squad.paths.rules_dir` owns the order. Nine sites resolved this pair by hand
+    # and they disagreed; see that function for which order wins and why.
+    directory = rules_dir(project_root)
+    candidate = directory / _BANDS_RULE if directory else None
+    if candidate is not None and candidate.is_file():
+        path = candidate
     else:
         raise FileNotFoundError(
             f"{_BANDS_RULE} not found under {project_root}. An absent registry is not "
@@ -97,9 +106,18 @@ def load_clean_verdicts(project_root: Path) -> frozenset[str]:
     tooling = Path(__file__).resolve().parent.parent / "cycle"
     if str(tooling) not in sys.path:
         sys.path.insert(0, str(tooling))
-    from verdict_bands import clean_verdicts
+    from verdict_bands import _CLEAN_BANDS, clean_verdicts, load_local_bands
 
-    return clean_verdicts(path)
+    # The consumer's own verdicts, from `verdict-bands.local.txt`. The local file was
+    # added so this check could classify every verdict in the stream, and for a while
+    # only `check_verdict_bands` read it: a consumer's own success verdict, banded
+    # `clean` exactly where it was told to band it, still fell to the not-clean default
+    # here, and the disorder check stayed off for it. `load_local_bands` already drops a
+    # row that names a verdict the kit classifies — the kit stays authoritative, and the
+    # clash is `check_verdict_bands`'s to report, not this checker's to act on.
+    local, _clashes = load_local_bands(path)
+    local_clean = {v for v, entry in local.items() if entry.band in _CLEAN_BANDS}
+    return clean_verdicts(path) | local_clean
 
 
 _VERDICTS_RULE = "blocking-verdicts.txt"
@@ -113,11 +131,12 @@ def load_blocking_verdicts(project_root: Path) -> frozenset[str]:
     forbids advancing while the board's panel called the same event unblocked.
     """
     project_root = Path(project_root)
-    for relative in ("rules", ".claude/rules"):
-        candidate = project_root / relative / _VERDICTS_RULE
-        if candidate.is_file():
-            path = candidate
-            break
+    # `squad.paths.rules_dir` owns the order. Nine sites resolved this pair by hand
+    # and they disagreed; see that function for which order wins and why.
+    directory = rules_dir(project_root)
+    candidate = directory / _VERDICTS_RULE if directory else None
+    if candidate is not None and candidate.is_file():
+        path = candidate
     else:
         raise FileNotFoundError(
             f"{_VERDICTS_RULE} not found under {project_root}. An absent list is not "
@@ -182,11 +201,12 @@ def load_declared_phases(project_root: Path) -> list[DeclaredPhase]:
     mapping would reorder between runs and make `phase_out_of_order` a coin flip.
     """
     project_root = Path(project_root)
-    for relative in ("rules", ".claude/rules"):
-        candidate = project_root / relative / _PHASES_RULE
-        if candidate.is_file():
-            path = candidate
-            break
+    # `squad.paths.rules_dir` owns the order. Nine sites resolved this pair by hand
+    # and they disagreed; see that function for which order wins and why.
+    directory = rules_dir(project_root)
+    candidate = directory / _PHASES_RULE if directory else None
+    if candidate is not None and candidate.is_file():
+        path = candidate
     else:
         raise FileNotFoundError(
             f"{_PHASES_RULE} not found under {project_root}. An absent declaration "
@@ -296,7 +316,11 @@ def _judge_one(
         # 5 `phase_out_of_order` and 4 `phase_advanced_over_blocking_verdict`, none of
         # them real. A gate reporting the chain working correctly as a defect is worse
         # than no gate: it teaches its reader to skip the output.
-        if phase.nested_in or by_name.get(cycle, phase).nested_in:
+        # `by_name.get(cycle, phase)` was the second half of this test and could only
+        # ever return `phase`: it is bound eight lines up as `by_name.get(cycle)`, and
+        # the branch is reached only after `if phase is None: continue`. The disjunct
+        # asked the same question twice and read as though it covered a second case.
+        if phase.nested_in:
             continue
 
         if blocking is not None and phase.position > by_name[blocking[0]].position:
@@ -351,7 +375,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Confront the declared phase chain with the emitted stream.",
     )
-    parser.add_argument("--project-root", type=Path, default=Path.cwd())
+    parser.add_argument(
+        "--root", "--project-root", dest="root", type=Path, default=Path.cwd())
     parser.add_argument(
         "--expect-complete", action="store_true",
         help="the caller states this run is finished, which is the only context "
@@ -361,7 +386,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        report = check_phase_drift(args.project_root, expect_complete=args.expect_complete)
+        report = check_phase_drift(args.root, expect_complete=args.expect_complete)
     except (FileNotFoundError, ValueError) as error:
         print(f"phase-drift: {error}", file=sys.stderr)
         return 2

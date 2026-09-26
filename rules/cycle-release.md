@@ -1,4 +1,5 @@
 # Cycle: RELEASE
+<!-- rule-id: SQ-CYC-14 -->
 
 Source of Truth for the release-cut cycle. Runs after `cycle-review` emits `READY_TO_MERGE`; produces a merge of `develop` into `main` and a semver tag. Fully automated: the system merges a PR whose whole chain passed, and stops only where branch protection requires a reviewer it cannot be.
 
@@ -6,11 +7,11 @@ Source of Truth for the release-cut cycle. Runs after `cycle-review` emits `READ
 
 Take an approved implementation from `READY_TO_MERGE` to a released, tagged version on `main`. Eliminates the manual release ritual: merge, version bump, tag, push, GitHub release notes.
 
-**The merge is the system's, and it is gated rather than supervised.** `rules/autonomy-envelope.md` floor 2 permits merging a pull request whose full chain passed, and forbids merging anything else — the reasoning is [`.squad/wiki/decisions/merge-is-inside-the-envelope.md`](../.squad/wiki/decisions/merge-is-inside-the-envelope.md). The branching topology is untouched: nothing commits to the trunk directly, everything arrives by PR with a semver tag, and `hooks/validate-command.py` still enforces both.
+**The merge is the system's, and it is gated rather than supervised.** `rules/autonomy-envelope.md` floor 2 permits merging a pull request whose full chain passed, and forbids merging anything else — the reasoning is [`docs/wiki/decisions/merge-is-inside-the-envelope.md`](https://github.com/paulohenriquevn/squad/blob/main/docs/wiki/decisions/merge-is-inside-the-envelope.md). The branching topology is untouched: nothing commits to the trunk directly, everything arrives by PR with a semver tag, and `hooks/validate-command.py` still enforces both.
 
 ## Pre-conditions
 
-- `cycle-review` emitted verdict `READY_TO_MERGE` (audit at `records/reviews/{slug}-review-{date}.md`).
+- `cycle-review` emitted verdict `READY_TO_MERGE` (audit at `.squad/records/reviews/{slug}-review-{date}.md`).
 - Working branch is `workspace` (never `develop` or `main` directly — see `git-safety.md` § 1). The release commits are authored on `workspace` and reach `develop` through the promotion PR, like every other change.
 - No uncommitted changes (`git status --porcelain` empty).
 - CHANGELOG `[Unreleased]` section has ≥ 1 entry — otherwise the release has nothing to announce.
@@ -50,7 +51,7 @@ Do NOT trigger when:
 | bump | parsed version + bump-level | next version string | bump-level ∈ {patch, minor, major} OR derivable from CHANGELOG |
 | changelog-rewrite | CHANGELOG.md | CHANGELOG with [Unreleased] empty and a new versioned section | [Unreleased] had ≥ 1 entry before the rewrite |
 | pr-open | release branch state | PR URL | `gh pr create` exit 0; PR body = release notes |
-| tag-cut (post-merge) | merged commit on main | annotated tag + GitHub release | `git tag --verify` resolves AND tag points at the merge commit |
+| tag-cut (post-merge) | merged commit on main | annotated tag + GitHub release | `check_tag_integrity.py` — the tag object is annotated AND the commit it names is contained in the trunk |
 
 ## Post-merge ROADMAP.md checkbox flip — MOVED to cycle-acceptance
 
@@ -164,9 +165,9 @@ When the user does not pass `{bump-level}` explicitly:
 - `minor` — `[Unreleased] § Added` is non-empty AND no major triggers.
 - `patch` — only `[Unreleased] § Fixed` / `Security` entries.
 
-- `minor` — only `### Changed` / `### Fixed` / `### Security`, with at least one `Changed` entry.
-
 The rule always picks. There is no ambiguous outcome and no pause.
+
+`compute_next_version.py` evaluates these in the order written, and the order is load-bearing: `Added` is consulted before `Changed` so that a section carrying both derives `minor` once, from the first rule that matches, rather than depending on which clause a reader reaches first.
 
 ### Why a `Changed`-only release resolves to `minor`
 
@@ -214,15 +215,30 @@ means, never whether something is breaking at all.
 
 - **Gates-passed gate (LOCKED)** — _(not mechanized as one check: composed — it reads the verdicts the chain already emitted — `/review` `READY_TO_MERGE`, `/code-quality` not `FAIL_HARD`, no BLOCKED report standing)_ The merge step merges ONLY a PR whose full chain passed. Merging anything else, or moving a threshold so that it passes, violates envelope floor 2 and floor 3. **This replaced a human-approval gate on 2026-09-01**; what it does not replace is the topology — the PR itself is still mandatory. Branch protection is what makes it mandatory on the remote, and since 2026-09-08 it may enforce the PR **without requiring a human reviewer**: a remote that requires one makes the chain unrunnable and is reported by `check_merge_autonomy.py` at intake.
 - **No direct commits to `main`** — `validate-command.py`, which resolves the real trunk rather than matching the literal name. Even from this skill: every change reaches `main` via the PR opened above. **Unchanged by the amendment** — merging a PR and committing to the trunk are different acts, and only the first moved.
-- **Tag must be annotated** (`git tag -a`) and pushed only after merge to `main` — never on `develop` or `workspace`. _(not mechanized: debt since 2026-09-01 — nothing inspects the tag object's type or the branch it was cut from; `validate-command.py` blocks the commit paths, not the tag)_
+- **Tag must be annotated** (`git tag -a`) and pushed only after merge to `main` — never on `develop` or `workspace`. `mechanisms/gates/check_tag_integrity.py --tag v{version} --trunk main` reads the tag object's type (`git cat-file -t` answers `tag` for annotated, `commit` for lightweight) and whether the commit it names is contained in the trunk (`git merge-base --is-ancestor`, not a branch-name match). An absent tag exits 2: not a passing tag.
+
+  **This clause replaced `git tag --verify` on 2026-09-21, and the replacement is the point.** The phase-contract table above demanded that `--verify` resolve, while Step 7 of the skill cuts the tag with `git tag -a`. `--verify` checks a GPG **signature**, so an unsigned annotated tag — the only kind this kit produces — fails it:
+
+  ```
+  $ git tag -a v1.0.0 -m "release" && git tag --verify v1.0.0
+  error: no signature found
+  exit=1
+  ```
+
+  Every correct release would have failed its own gate. Nobody found out because neither clause was mechanised: one demanded the impossible, the other was carried as debt with the note that "nothing inspects the tag object's type or the branch it was cut from". Two unmechanised clauses about one object, and the contradiction between them survived because no code ever had to hold both.
 - **CHANGELOG must have content** — `changelog_section_nonempty.py` refuses if `[Unreleased]` is empty after stripping headers.
+- **The published release must exist and be public** — `mechanisms/gates/check_release_reachable.py --tag v{version}`, run in Step 7 immediately after `gh release create`. It confirms a release exists for the tag, is not a DRAFT, and names the tag that was cut.
+
+  **The chain used to end at `gh release create` and emit `RELEASED`.** A draft release, or a `gh` call that failed after the tag was already pushed, produced that verdict over an artifact no consumer can fetch — and `RELEASED` is what `cycle-maintenance`'s ADVANCE reads to write `shipped` into the registry. Three ways the last step half-succeeds, none of them looked at.
+
+  It runs for **every** item, with or without a `milestone_id`. What it does NOT claim: that a package is installable from a registry, or that the delivery works. The first needs the network and a registry; the second is `cycle-acceptance`, against declared criteria.
 - **Single-flip invariant** — owned by [`cycle-acceptance § Hard gates`](cycle-acceptance.md), which is where the flip moved (see § Post-merge ROADMAP.md checkbox flip). This cycle no longer flips anything; the clause stays as a pointer so nobody re-adds a flip here.
 - **No silent flip** — `flip_milestone_checkbox.py --commit`, which writes the run-file and aborts the whole operation (restoring the checkbox) when the commit fails. The roadmap-runs file MUST be appended with the flip commit SHA. A flip without a run-file entry is forbidden.
 
 ## Stop conditions
 
 - `gh pr create` fails → halt; surface stderr.
-- PR is closed without merge → halt; record the rationale in `records/releases/{version}-release.md`.
+- PR is closed without merge → halt; record the rationale in `.squad/records/releases/{version}-release.md`.
 - Tag already exists for the computed version → the computed version is already cut, so the chain advances to the next free patch level and records that it did. It halts only if that level is taken too, which means the tag series disagrees with the CHANGELOG — a broken record rather than a version choice, registered as its own item.
 
 ## Anti-patterns
@@ -235,9 +251,11 @@ means, never whether something is breaking at all.
 - **Flipping the ROADMAP checkbox from this cycle.** It moved to `cycle-acceptance` (see § Post-merge ROADMAP.md checkbox flip). The flip anti-patterns themselves — fuzzy matching, multi-flip, flipping without a roadmap-runs entry — live there, with the flip.
 - **Blocking the release if `milestone_id` is missing.** Ad-hoc work (hotfixes, off-roadmap fixes) is by design — emit INFO, continue as RELEASED, skip the acceptance handoff.
 
+  **What skipping the handoff does NOT skip**, since 2026-09-21: `check_release_reachable.py`. An external review read the milestone-only rule as leaving every off-roadmap item unverified, and half of that reading was right. `cycle-acceptance.md` argues that an item nobody promised a user has no user-visible promise to exercise, and for PRODUCT acceptance the argument holds. It says nothing about whether the thing shipped — a question with an answer for every item — and that question now gets asked for all of them.
+
 ## Output
 
-- `records/releases/{version}-release.md` — record of the release run: input verdict, computed version, PR URL, merge commit, tag, GitHub release URL.
+- `.squad/records/releases/{version}-release.md` — record of the release run: input verdict, computed version, PR URL, merge commit, tag, GitHub release URL.
 - `[Unreleased]` empty (until the next change lands).
 - `git tag v{version}` annotated, pushed.
 - GitHub release published.

@@ -1,14 +1,16 @@
 """Refuse a pytest run that spans two skill slices, and name the command that works.
 
-WHY THIS EXISTS. The 31 slices are import-isolated on purpose: in production each skill runs alone
+WHY THIS EXISTS. The slices under `skills/*/tests` are import-isolated on purpose: in production each skill runs alone
 with only its own `scripts/` on `sys.path`, and several ship modules with the same basename and
-different contents — `check_corner_coverage.py` exists in two skills and means two things.
+different contents — `_rubric_loader.py` exists in three skills, and until 2026-09-21
+`apply_fixes.py` existed in two and meant two things (now `apply_plan_fixes.py` and
+`apply_opportunity_fixes.py`, named for what each one fixes).
 `mechanisms/cycle/run_slice_tests.sh` mirrors that by giving each slice its own process, and it exits 0.
 
 What was missing is what happens when somebody does the obvious thing instead:
 
     $ python3 -m pytest skills/discover-plan-confidence/tests skills/discover-confidence/tests
-    ERROR skills/discover-plan-confidence/tests/test_check_corner_coverage.py
+    ERROR skills/plan-improve/tests/test_apply_plan_fixes.py
     ERROR skills/discover-plan-confidence/tests/test_check_plan_completeness.py
     ERROR skills/discover-plan-confidence/tests/test_threshold_resolution.py
     !!!!!!!! Interrupted: 3 errors during collection !!!!!!!!
@@ -84,7 +86,7 @@ def pytest_configure(config) -> None:
     raise pytest.UsageError(
         f"this run spans {len(slices)} skill slices ({named}), and they cannot share one pytest "
         f"process: several slices ship modules with the same basename and different contents, so "
-        f"`import check_corner_coverage` would resolve to whichever slice was collected first — a "
+        f"`import _rubric_loader` would resolve to whichever slice was collected first — a "
         f"configuration that never happens in real use, where each skill runs alone.\n"
         f"\n"
         f"Run every slice, each in its own process:\n"

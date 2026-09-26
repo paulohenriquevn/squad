@@ -1,4 +1,5 @@
 # Parsimony Ladder
+<!-- rule-id: SQ-LAD-02 -->
 
 Source of Truth for the parsimony deliberation that precedes writing any production code.
 The cheapest line of code is the one you never write.

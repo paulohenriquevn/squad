@@ -66,11 +66,15 @@ The frontmatter MUST carry `verdict: <TOKEN>` — it is the line any reader reso
 ### 5. Compute the verdict — do not name it
 
 ```bash
-python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/acceptance/scripts/compute_acceptance_verdict.py" \
-    --criteria criteria.json --evidence evidence.json
+VERDICT=$(python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/acceptance/scripts/compute_acceptance_verdict.py" \
+    --criteria criteria.json --evidence evidence.json | tail -1)
 ```
 
 Exit 0 → `ACCEPTED` / `ACCEPTED_WITH_CAVEATS`. Exit 1 → `REJECTED` / `NOT_VALIDATED`, with per-criterion reasons on stderr. Report the token the script printed. A verdict the script did not emit is a review BLOCKER.
+
+Cited evidence paths are resolved against the evidence record's own directory (`--evidence-root` to point elsewhere). A path that does not resolve to a readable, non-empty file is `NOT_VALIDATED`: a zero-byte screenshot is a failed capture that reads as a successful one.
+
+**Capture the token.** It is not for the report alone — Step 6 passes it to the flip, which refuses anything that is not green. That is the mechanism the gate "No flip without a green verdict" names; before 2026-09-21 the flip script had never heard the word.
 
 ### 6. Flip, or do not
 
@@ -79,8 +83,11 @@ On a green verdict only, reusing the release slice's script so the single-flip i
 ```bash
 python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/release/scripts/flip_milestone_checkbox.py" \
     --roadmap ROADMAP.md --milestone-id M2 --version {released-version} \
+    --verdict "$VERDICT" \
     --plan .squad/records/plans/{slug}-plan.md --commit
 ```
+
+`--verdict` is required and checked: only `ACCEPTED` / `ACCEPTED_WITH_CAVEATS` may close a milestone. The script also exits non-zero — rather than `WARN … skipping flip`, exit 0 — when the milestone header does not match, so a `##` header no longer leaves a milestone silently open.
 
 On `REJECTED`: the checkbox stays `[ ]`, the release is already public, so open the hotfix path immediately and re-enter at `/plan-write`. On `NOT_VALIDATED`: the checkbox stays `[ ]`; state precisely what could not be exercised and why.
 

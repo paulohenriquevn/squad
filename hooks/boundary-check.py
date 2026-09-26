@@ -3,7 +3,7 @@
 
 Two boundaries, one hook, because both answer the same question about one path:
 
-  the study zone   `study-material/**` holds third-party material. A literal copy
+  the study zone   `.squad/study-material/**` holds third-party material. A literal copy
                    carries its licence into this repository, which is a legal
                    problem rather than a stylistic one (`rules/reference-provenance.md`).
   the installed kit  under a copy install the kit sits in a writable directory
@@ -21,10 +21,39 @@ This hook decides what to DO about a violation; it does not decide where the
 boundary runs. `validate-command` refuses the same writes arriving through the
 shell, and while each kept its own answer the boundary held against `Edit` and
 not against `sed -i`.
+
+WHAT THIS BOUNDARY IS WORTH: A CONVENTION, NOT A GUARANTEE
+-----------------------------------------------------------
+This hook reads `tool_input.file_path`, so its reach is exactly the tools that
+carry one — `Write`, `Edit`, `NotebookEdit`. A Python heredoc calling
+`Path.write_text` reaches the same bytes and this hook never runs. Measured on
+2026-09-18: a session edited a file inside an installed kit through a heredoc and
+nothing stopped it.
+
+Widening the pattern is not the answer, and `validate-command.py` already made
+the argument for the credential deny list one hook over:
+
+    This closes the common door. It does NOT make the deny list a sandbox, and
+    saying otherwise would make it the thing it replaces — a guard that reads as
+    protection and is not. A determined session reaches the same bytes through
+    `python3 -c`, a heredoc, an editor, or a path this pattern does not spell.
+    What it stops is the accident and the habit, which is most of what happens.
+
+Chasing `write_text` would add `open(..., "w")`, `shutil.copy`, `tee`, `dd` and a
+truncating redirect — each one a door and none of them the last. So the boundary
+is stated the way `rules/reference-provenance.md § 6` states its own layers:
+
+    guarantee    nothing. No layer here prevents a write; the kit is not a sandbox
+                 and a session with a shell can reach any byte in the tree.
+    convention   `Write` / `Edit` / `NotebookEdit` are refused at the boundary, and
+                 `validate-command` refuses the shell forms it can spell.
+
+A reader relying on more than that is relying on something nobody built. What the
+two hooks together buy is that crossing the boundary has to be DELIBERATE — which
+is worth having, and is not the same as impossible.
 """
 from __future__ import annotations
 
-import re
 import sys
 from pathlib import Path
 
@@ -43,14 +72,22 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _sys_bootstrap.path.insert(0, str(_up))
         break
-from squad.paths import DATA_DIRNAME, RECORDS  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.boundaries import (  # noqa: E402 — post-bootstrap import
+    STUDY_ZONE,
+    study_zone_re,
+)
+from squad.paths import DATA_DIRNAME, RECORDS  # noqa: E402 — post-bootstrap import
 
-#: `rules/reference-provenance.md` § 1. `records/references/` was retired on
-#: 2026-09-01 with the practice that filled it; the rule records what that costs.
-ZONE_RE = re.compile(r"(^|/)(\.claude/)?study-material/")
+#: `rules/reference-provenance.md` § 1, read from the one module that owns it.
+#: `records/references/` was retired on 2026-09-01 with the practice that filled it;
+#: the rule records what that costs.
+ZONE_RE = study_zone_re()
 
 ZONE_REASON = (
-    "BOUNDARY VIOLATION: study-material/ holds third-party material we depend on "
+    f"BOUNDARY VIOLATION: {STUDY_ZONE}/ holds third-party material we depend on "
     "and is read-only. Never edit or create files there — a literal copy carries "
     "its licence into this repository. Capture findings in "
     f"{DATA_DIRNAME}/{RECORDS}/discoveries/blueprints/."

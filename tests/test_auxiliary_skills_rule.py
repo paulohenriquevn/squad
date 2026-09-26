@@ -38,16 +38,16 @@ def _eco(root: Path, *, skills: list[str], declared: list[str] | None) -> Path:
         (eco / "skills" / name / "SKILL.md").write_text(f"# {name}\n", encoding="utf-8")
     if declared is not None:
         (eco / "rules" / "auxiliary-skills.txt").write_text(
-            "# skills deste projeto\n" + "\n".join(declared) + "\n", encoding="utf-8")
+            "# this project's skills\n" + "\n".join(declared) + "\n", encoding="utf-8")
     return eco
 
 
 def _warns_about(eco: Path, skill: str) -> bool:
     """Is there any warning about THIS skill? (the minimal fixture generates others, irrelevant here)"""
-    result = subprocess.run(  # noqa: PLW1510
+    result = subprocess.run(
         [sys.executable, str(_SCRIPT), "--ecosystem-dir", str(eco), "--json"],
         capture_output=True, text=True,
-    )
+     check=False)
     import json
     findings = json.loads(result.stdout).get("findings", [])
     return any(skill in json.dumps(f) for f in findings)
@@ -81,27 +81,31 @@ def test_a_declared_skill_that_does_not_exist_is_not_an_error(tmp_path: Path) ->
 # finished" wearing the appearance of coverage — the defect D5 pursues.
 # ---------------------------------------------------------------------------
 
-def _eco_with_agent(root: Path, body: str) -> Path:
+def _eco_with_agent(root: Path, body: str, name: str = "a-domain") -> Path:
     eco = _eco(root, skills=[], declared=None)
     (eco / "agents").mkdir(parents=True, exist_ok=True)
-    (eco / "agents" / "meu-dominio.md").write_text(body, encoding="utf-8")
+    (eco / "agents" / f"{name}.md").write_text(body, encoding="utf-8")
     return eco
 
 
 def test_an_unreviewed_skeleton_is_warned_about(tmp_path: Path) -> None:
+    # `— OPEN`, the marker `scaffold_specialists.render` actually writes. The fixture
+    # carried `<!-- TO BE FILLED IN: only a human knows this -->`, which only
+    # `detect_domains.render_specialist` ever produced — a second template reachable
+    # from nothing but its own tests, since removed. A fixture using a marker no
+    # shipped writer emits tests the gate against a document nobody creates.
     eco = _eco_with_agent(tmp_path, """---
-name: meu-dominio
+name: a-domain
 derived: true
 reviewed_by_human: false
 ---
 
-# meu-dominio
+# a-domain
 
-## Invariantes
-
-<!-- TO BE FILLED IN: only a human knows this -->
+## The domain's invariants — OPEN
 """)
-    assert _warns_about(eco, "meu-dominio"), "um esqueleto silencioso parece um especialista pronto"
+    assert _warns_about(eco, "a-domain"), (
+        "a silent skeleton looks like a finished specialist")
 
 
 def test_a_filled_specialist_is_not_warned_about(tmp_path: Path) -> None:

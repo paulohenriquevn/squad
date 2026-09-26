@@ -1,4 +1,5 @@
 # Discover-Opportunity Golden Rule
+<!-- rule-id: SQ-GLD-04 -->
 
 Locked unbreakable contract that `/discover-confidence` reads to score opportunities and decide verdicts. This file is the per-project Source of Truth promoted from `skills/discover-confidence/templates/discover-opportunity-golden-rule.example.md`.
 
@@ -35,8 +36,8 @@ The ancestor's `<!-- DEFERRED: ... -->` marker is **not honoured anywhere**. Def
 
 | Rule | Enforcement script |
 |---|---|
-| All 4 corners populated | `skills/discover-confidence/scripts/check_corner_coverage.py` |
-| `unknown` honoured for Constraint Relation only | `skills/discover-confidence/scripts/check_corner_coverage.py` (`UNKNOWN_CORNERS`) |
+| All 4 corners populated | `skills/discover-confidence/scripts/check_corners_populated.py` |
+| `unknown` honoured for Constraint Relation only | `skills/discover-confidence/scripts/check_corners_populated.py` (`UNKNOWN_CORNERS`) |
 | Every code pointer resolves, line included | `skills/discover-confidence/scripts/check_evidence_pointers.py` |
 | Runtime observations counted, never reported as verified | `skills/discover-confidence/scripts/check_evidence_pointers.py` |
 | Mandatory opportunity sections present | `skills/discover-confidence/scripts/check_opportunity_completeness.py` (cap 70) |

@@ -58,9 +58,13 @@ def test_notify_slack_never_logs_webhook_url() -> None:
     for line in lines:
         if "print(" in line or "log(" in line or "echo" in line:
             # This line logs something; make sure it doesn't include the raw webhook_url
-            assert "webhook_url" not in line or "webhook_url" in line and "redacted" in line, (
-                f"Line logs webhook URL: {line}"
-            )
+            # `A not in x or A in x and B` is `A not in x or B`: the middle clause is
+            # true whenever the first is false, so the whole thing reduced to "either
+            # the name is absent, or the word redacted appears somewhere on the line".
+            # Written out, the rule is: a logging line must not carry the variable
+            # unless that same line redacts it.
+            if "webhook_url" in line:
+                assert "redacted" in line, f"Line logs webhook URL: {line}"
 
 
 def test_notify_slack_posts_only_on_released_verdict() -> None:
@@ -116,18 +120,13 @@ def test_rules_notifications_txt_exists_and_is_project_owned() -> None:
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="the integration does not exist: skills/release/SKILL.md never mentions "
-           "notify_slack (kit#62). Expected-to-fail rather than green-and-silent; "
-           "strict=True means this fails loudly the day someone wires it up and leaves "
-           "the marker behind.",
-)
-def test_skill_release_calls_notify_slack_at_step_8_5() -> None:
-    """skills/release/SKILL.md must call notify_slack.py at Step 8.5.
+def test_the_release_skill_invokes_the_notifier() -> None:
+    """The integration this file was written against, now that it exists.
 
-    After the RELEASED verdict is published, invoke notify_slack.
-    Use: python3 scripts/notify_slack.py --verdict RELEASED --version <tag>
+    It carried `xfail(strict=True)` while `skills/release/SKILL.md` mentioned the
+    notifier nowhere — the honest marker for a feature that ships and is never called.
+    `strict=True` did exactly its job: it failed loudly the moment the step was wired
+    up, rather than passing in silence and leaving the marker to rot.
     """
     skill_path = _REPO / "skills" / "release" / "SKILL.md"
     assert skill_path.is_file(), "skills/release/SKILL.md must exist"
@@ -142,3 +141,22 @@ def test_skill_release_calls_notify_slack_at_step_8_5() -> None:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+def test_a_webhook_that_is_not_https_is_refused_before_anything_is_opened(monkeypatch) -> None:
+    """`urlopen` also opens `file:` and custom schemes, so a webhook variable pointing at
+    `file:///etc/passwd` would be read rather than posted to. Refused by scheme, and the
+    reason says which scheme, never the URL — a webhook URL is a credential."""
+    import importlib.util
+    import urllib.request
+
+    spec = importlib.util.spec_from_file_location(
+        "notify_slack", _REPO / "skills" / "release" / "scripts" / "notify_slack.py")
+    notify_slack = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(notify_slack)
+    opened = []
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: opened.append(a))
+    ok, why = notify_slack.post_to_slack("file:///etc/passwd", "m", "v1.0.0")
+    assert not ok
+    assert "file" in why and "/etc/passwd" not in why
+    assert opened == []

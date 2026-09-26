@@ -1,3 +1,4 @@
+# rule-id: SQ-ALW-03
 # Authoritative domains for WebFetch during /discover-execute.
 #
 # Format: one domain per line, no protocol, no trailing slash. Lines starting

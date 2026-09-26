@@ -1,16 +1,24 @@
-"""D2/TypeScript — dois defeitos medidos no promptly em 2026-08-03.
+"""D2/TypeScript — two defects measured in promptly on 2026-08-03.
 
 Both make the detector call FABRICATED what resolves perfectly, and together they
 produced 112 findings (60 HARD) in a repository whose build and tests are green. A
 detector that fails a healthy monorepo teaches the team to ignore it — which is why
-estes casos existem.
+these cases exist.
 """
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
+import pytest
+
 from scripts.detectors.typescript import TypescriptDetector
+
+# Both cases read imports through the TypeScript grammar. Where the grammar package cannot
+# be installed (no wheel past cp312), the detector correctly reports that it parsed
+# nothing, so a skip says that here instead of a failure about workspaces.
+pytest.importorskip("tree_sitter_languages",
+                    reason="the TypeScript grammar package is not installable on this Python")
 
 
 def _workspace(tmp_path: Path) -> Path:
@@ -40,7 +48,7 @@ def test_sibling_workspace_import_is_not_reported_as_fabricated(tmp_path, monkey
     The self-reference patch (2026-05-30) resolves only the ROOT package.json's name
     (`promptly`) — which nobody imports. Every sibling import went to the registry,
     took a 404 and
-    virava HARD `symbol_fabrication_typescript`.
+    became a HARD `symbol_fabrication_typescript`.
     """
     api = _workspace(tmp_path)
     src = api / "src" / "app.ts"
@@ -70,20 +78,20 @@ def test_scoped_subpath_import_queries_the_package_not_the_subpath(tmp_path, mon
         "import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';\n", encoding="utf-8"
     )
 
-    consultados: list[str] = []
+    queried: list[str] = []
     from scripts import _registry
     monkeypatch.setattr(_registry, "package_exists_on_npm",
-                        lambda pkg: (consultados.append(pkg), True)[1])
+                        lambda pkg: (queried.append(pkg), True)[1])
 
     findings = TypescriptDetector().detect_symbol_fabrication([src])
-    assert consultados == ["@modelcontextprotocol/sdk"], (
-        f"consultou o subpath em vez do pacote: {consultados}"
+    assert queried == ["@modelcontextprotocol/sdk"], (
+        f"queried the subpath instead of the package: {queried}"
     )
     assert findings == []
 
 
 class TestPathAliasNotAPackage:
-    """Terceira familia de falso positivo: `@/components/...` e alias de tsconfig.
+    """Third false-positive family: `@/components/...` is a tsconfig alias.
 
     986 HARD findings in a dashboard, all false, because the detector treated
     any specifier carrying `@` as an npm scope and went to the registry. The root

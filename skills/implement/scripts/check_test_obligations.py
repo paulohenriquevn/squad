@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from dataclasses import dataclass, field
@@ -121,20 +122,32 @@ def parse_obligations(plan_path: Path) -> list[Obligation]:
     return obligations
 
 
+#: Directories nothing under them is ever a test of this project's. PRUNED during the
+#: walk, not filtered after it: `rglob("*")` descends into every one of them first, and
+#: on a repository with a populated `node_modules` that is the whole cost of the scan —
+#: tens of thousands of stat calls to reach a decision the directory name already made.
+_NEVER_WALKED = frozenset({".git", "node_modules", "__pycache__", ".venv", "venv",
+                           ".tox", ".mypy_cache", ".pytest_cache", "dist", "build",
+                           "target", "vendor", ".next"})
+
+
 def _iter_test_files(repo_root: Path):
-    for path in repo_root.rglob("*"):
-        if not path.is_file() or path.suffix.lower() not in _CODE_EXTS:
-            continue
-        if any(part in (".git", "node_modules", "__pycache__", ".venv") for part in path.parts):
-            continue
-        try:
-            rel_parts = [p.lower() for p in path.relative_to(repo_root).parts]
-        except ValueError:
-            rel_parts = [path.name.lower()]
-        in_test_dir = any(h in part for part in rel_parts[:-1] for h in _TEST_NAME_HINTS)
-        is_test_file = any(h in path.name.lower() for h in _TEST_NAME_HINTS)
-        if in_test_dir or is_test_file:
-            yield path
+    for parent, dirnames, filenames in os.walk(repo_root):
+        # In place, so `os.walk` does not descend into what we just removed.
+        dirnames[:] = [d for d in dirnames if d not in _NEVER_WALKED]
+        for name in filenames:
+            path = Path(parent) / name
+            if path.suffix.lower() not in _CODE_EXTS:
+                continue
+            try:
+                rel_parts = [p.lower() for p in path.relative_to(repo_root).parts]
+            except ValueError:
+                rel_parts = [path.name.lower()]
+            in_test_dir = any(h in part for part in rel_parts[:-1]
+                              for h in _TEST_NAME_HINTS)
+            is_test_file = any(h in path.name.lower() for h in _TEST_NAME_HINTS)
+            if in_test_dir or is_test_file:
+                yield path
 
 
 def _tree_has_signal(repo_root: Path, signals: tuple[str, ...]) -> bool:

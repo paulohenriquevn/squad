@@ -2,22 +2,29 @@
 
 WHY THIS DOES NOT GLOB AND RUN
 ------------------------------
-The obvious design is to glob `mechanisms/gates/check_*.py` and invoke each one. It is
-not implementable: the root-path flag is not uniform across the 23 gates — eight take
-`--root`, four `--repo-root`, three `--project-root`, one `--repo`, one
-`--ecosystem-dir`, one a positional, `check_install_drift` needs both `--install` and
-`--kit`, and three take none. `check_xrefs` also passes while printing WARN unless it
-is given `--strict`.
+The obvious design is to glob `mechanisms/gates/check_*.py` and invoke each one. Half
+the reason it was not implementable has since been removed, and saying which half is
+the point of this paragraph.
 
-So a glob-and-run would carry a table of seven flag conventions plus a special case —
-a second list of what "verified" means, diverging from CI on the next gate added.
-That is precisely what the ADR forbids.
+GONE: the root-path flag used to differ across the gates `known_gates()` lists — eight
+spellings, and several gates taking none — so a glob-and-run would have carried a table
+mapping gate name to flag. `mechanisms/gates/_contract.py` now declares one spelling and
+every gate accepts it, with the older names surviving as aliases. That table is gone
+from here, from `verify_ecosystem.py`, and from `tests/test_gates_say_what_they_examined.py`,
+where it had grown to 22 entries and had let two gates sit outside the empty-sweep
+protection.
 
-Instead the invocations are REPLAYED from `.github/workflows/ci.yml`. `check_xrefs`
+REMAINS: a root is not the whole invocation. `check_xrefs` exits 0 while printing WARN
+unless it is given `--strict`; `check_install_drift` needs `--install` as well as a kit;
+`check_auditor_coverage`, `check_panel_approval` and `check_review_binding` each need the
+slug or phase naming their subject. A glob would have to decide those, which means a
+second definition of "verified" living beside CI's and diverging from it on the next gate
+added. That is what the ADR forbids, and the contract does not change it.
+
+So the invocations are still REPLAYED from `.github/workflows/ci.yml`. `check_xrefs`
 arrives with `--strict` because the flag lives in the workflow. "The CLI reaches
-everything CI reaches" stops being a property somebody has to maintain and becomes
-true by construction, and the glob is used only for the opposite question: which gates
-CI never invokes.
+everything CI reaches" stays true by construction rather than by maintenance, and the
+glob answers only the opposite question: which gates CI never invokes.
 
 WHEN CI EVENTUALLY CALLS THIS COMMAND
 -------------------------------------
@@ -109,7 +116,13 @@ def reached_within(root: Path, scripts: list[str]) -> set[str]:
             code = _PROSE_RE.sub(" ", path.read_text(encoding="utf-8", errors="replace"))
         except OSError:
             continue
-        found.update(name for name in gates if f"{name}.py" in code)
+        # Two spellings, because `verify_ecosystem` has used both. It used to build
+        # each path inline — `... / "check_skill_map.py"` — and now passes the bare
+        # name to one helper: `_gate_payload(eco, "check_skill_map", ...)`. Matching
+        # only the first reported six live gates as unreached the day the nine wrappers
+        # were consolidated, which reads as "CI stopped running them" when nothing did.
+        found.update(name for name in gates
+                     if f"{name}.py" in code or f'"{name}"' in code or f"'{name}'" in code)
     return found
 
 
@@ -253,6 +266,17 @@ def build_report(root: Path, *, results: list[Result], unreached: list[str]) -> 
     return report
 
 
+#: Per-gate budget for the replay. The slowest gate in this repository measured under
+#: 30s; 300 leaves room for a consumer's larger tree without letting one hung gate hold
+#: the whole run. A budget nobody can meet is a budget that gets bypassed, and a run with
+#: no budget at all is one that hangs with nothing naming the cause.
+_GATE_TIMEOUT_SEC = 300
+
+#: The exit code recorded for a gate that ran out of budget. Distinct from any code a
+#: gate returns, so "did not finish" can never be read as a verdict it produced.
+_TIMED_OUT = 124
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="sq check", description=__doc__.split("\n")[0])
     parser.add_argument("--json", action="store_true")
@@ -314,9 +338,19 @@ def main(argv: list[str] | None = None) -> int:
 
     results: list[Result] = []
     for command in commands:
-        done = subprocess.run(  # noqa: PLW1510
-            command.argv, capture_output=True, text=True, cwd=where.kit
-        )
+        try:
+            done = subprocess.run(
+                command.argv, capture_output=True, text=True, cwd=where.kit,
+                timeout=_GATE_TIMEOUT_SEC, check=False)
+        except subprocess.TimeoutExpired:
+            # UNMEASURED, not a pass and not a failure. Every other subprocess in this
+            # partition carries an explicit budget with a comment justifying it; this one
+            # had none, so `sq check` could hang on a single gate with nothing saying
+            # which — and a hang in a pre-push path is a gate people learn to bypass.
+            results.append(Result(
+                command, _TIMED_OUT,
+                f"did not finish within {_GATE_TIMEOUT_SEC}s — this gate was NOT measured"))
+            continue
         results.append(Result(command, done.returncode, (done.stdout + done.stderr).strip()))
 
     return emit(build_report(where.kit, results=results, unreached=unreached), as_json=args.json)

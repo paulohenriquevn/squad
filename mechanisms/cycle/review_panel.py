@@ -57,6 +57,25 @@ from pathlib import Path
 #: Odd on purpose: a tie is not a state this mechanism should ever have to name.
 PANEL_SIZE = 3
 
+#: How many seats a phase declares. Three where the verdict is a MAJORITY — the 2-of-3 is the
+#: property, and a panel that shrank to one would lose it. One for `alignment`, because the
+#: alignment sign-off is not a vote: four checkboxes are ticked by a single reviewer who is not
+#: the author, and `score_alignment` reports the weakest signer of the set. A majority has no
+#: meaning over that, and requiring three reviewers to tick one checklist would ask a project for
+#: reviewers the mechanism cannot use.
+#:
+#: Added 2026-09-23. Until then `rules/review-panel.txt` named no `alignment` phase at all, so
+#: nothing convened the reviewer the sign-off contract requires — `alignment_judge.py` records a
+#: verdict and says of itself that *"it does not read the evidence"*, and the agent that does was
+#: summoned by hand. A consumer's practical path became messaging another session, which depends
+#: on one being alive and idle; one item took five rounds that way.
+PANEL_SIZE_BY_PHASE = {"alignment": 1}
+
+
+def panel_size_for(phase: str) -> int:
+    """Seats this phase declares. `PANEL_SIZE` unless the phase says otherwise."""
+    return PANEL_SIZE_BY_PHASE.get(phase.lower(), PANEL_SIZE)
+
 #: How many approvals carry a document. Simple majority of a full panel.
 MAJORITY = 2
 
@@ -67,8 +86,20 @@ MIN_REASON_WORDS = 15
 #: Model prefixes to families. Matching is by prefix because versions move and a
 #: table pinned to exact ids goes stale silently — which for THIS table would mean
 #: quietly failing to notice that three reviewers share a family.
+#:
+#: The bare aliases `sonnet`, `opus` and `haiku` are here because a plugin agent's
+#: frontmatter is written in Claude Code's vocabulary, not in full model ids, and
+#: `seat_family` reads that frontmatter. Without them the answer for a sonnet
+#: sub-agent was `unknown` — safe, since unknown counts toward nothing, but a worse
+#: answer than the one available: we know which family `sonnet` is.
+#:
+#: `inherit` is deliberately absent. It names no model — it defers to the caller's —
+#: so it must fall through to `unknown` rather than be guessed at.
 _FAMILIES: tuple[tuple[str, str], ...] = (
     ("claude", "anthropic"),
+    ("sonnet", "anthropic"),
+    ("opus", "anthropic"),
+    ("haiku", "anthropic"),
     ("gpt", "openai"),
     ("o1", "openai"),
     ("o3", "openai"),
@@ -168,6 +199,25 @@ def parse_panel_phases(text: str) -> list[str]:
     return []
 
 
+def single_family_waived(text: str) -> tuple[bool, str]:
+    """Did this project declare that it runs a one-family panel, and why?
+
+    Returns `(waived, reason)`. A waiver with no reason is not a waiver: an exemption
+    nobody justified is an escape hatch, and the roster says so in its own words.
+    """
+    accepted = False
+    reason = ""
+    for raw in text.splitlines():
+        line = raw.split("#", 1)[0].strip()
+        if line.startswith("single_family_panel"):
+            _, _, value = line.partition("=")
+            accepted = value.strip().lower() in {"accepted", "yes", "true"}
+        elif line.startswith("single_family_reason"):
+            _, _, value = line.partition("=")
+            reason = value.strip()
+    return (accepted and bool(reason)), reason
+
+
 def seats_for(text: str, phase: str) -> list[Seat]:
     """The seats declared for one phase."""
     return [s for s in parse_roster(text) if s.phase == phase.lower()]
@@ -210,6 +260,18 @@ class Panel:
     #: the assignment. `None` means nobody checked, which is a weaker claim and is
     #: reported as such rather than silently treated as a match.
     assigned: list[str] | None = None
+
+    #: This project declared, in `rules/review-panel.txt`, that it runs a panel of one
+    #: family and what that costs it. DECLARED, never inferred from the roster: a panel
+    #: that happens to be one family and a panel that was meant to be read the same on
+    #: disk, and only one of them is a decision.
+    #:
+    #: The kit's rule does not move. `rules/review-panel.txt` is the layer the installer
+    #: preserves precisely because which models a project can reach is not the kit's
+    #: business — so a project with no second provider chooses between running no panel
+    #: and running one that says what it is worth, and this is the second. Every outcome
+    #: carries the waiver, so APPROVED under it reads as the weaker claim it is.
+    single_family_waived: bool = False
 
     # -- validity ---------------------------------------------------------
 
@@ -263,7 +325,7 @@ class Panel:
             )
 
         families = {v.family for v in counted}
-        if not (families - {HOME_FAMILY, "unknown"}):
+        if not (families - {HOME_FAMILY, "unknown"}) and not self.single_family_waived:
             raise PanelInvalid(
                 f"every counted vote is from the {HOME_FAMILY} family or an "
                 f"unrecognised model ({sorted(families)}). A panel needs at least one "
@@ -317,9 +379,27 @@ class Panel:
         approvals = sum(1 for v in self.votes if v.approves)
         if approvals < MAJORITY:
             return PanelOutcome.RETURNED
-        if self.carried_by_one_family:
+        # The waiver reaches here too, and it has to: refusing the correlated majority
+        # while accepting the correlated roster would make the declaration buy nothing
+        # — every document would return, which is the "run no panel at all" option
+        # wearing a panel's clothes.
+        if self.carried_by_one_family and not self.single_family_waived:
             return PanelOutcome.RETURNED
         return PanelOutcome.APPROVED
+
+    @property
+    def outcome_note(self) -> str:
+        """What the verdict is worth, in one line a report can carry.
+
+        An APPROVED from one family is a weaker claim than an APPROVED across two, and
+        a reader tells them apart here or is misled. Empty when the panel spanned
+        families, because then the verdict means what it has always meant.
+        """
+        if self.single_family_waived and self.carried_by_one_family:
+            return ("carried by a single family under the waiver this project declared "
+                    "in `rules/review-panel.txt`: correlated reviewers share failure "
+                    "modes, so this is a weaker claim than a majority spanning two")
+        return ""
 
     def dissenting(self) -> list[Vote]:
         """The votes on the losing side.
@@ -401,6 +481,16 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Tally a review panel over one artifact.")
     ap.add_argument("--record", type=Path, required=True,
                     help="the panel record: slug, phase, author, votes")
+    # `Panel.assigned` is what refuses "the panel that voted is not the panel that was
+    # convened", and `convene_panel.py`'s docstring says this module "refuses a record
+    # whose voters do not match". Nothing ever SET it: `load()` deliberately does not
+    # read it from the record (a document supplying the list it is checked against proves
+    # nothing) and `main` had no other source, so `assigned` stayed empty and the check
+    # was skipped on every tally the CLI performed. The list comes from the assignment
+    # `convene_panel` wrote, which sits beside the record by construction.
+    ap.add_argument("--assignment", type=Path, default=None,
+                    help="the assignment convene_panel wrote; defaults to the sibling "
+                         "<slug>-<phase>.assignment.json")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
 
@@ -409,6 +499,24 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, KeyError, json.JSONDecodeError) as exc:
         print(f"review_panel: cannot read the panel record — {exc}", file=sys.stderr)
         return 2
+
+    assignment_path = args.assignment or args.record.with_name(
+        args.record.name.replace(".json", ".assignment.json"))
+    if assignment_path.is_file():
+        try:
+            panel.assigned = list(
+                json.loads(assignment_path.read_text(encoding="utf-8")).get("assigned", []))
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"review_panel: the assignment at {assignment_path} could not be read "
+                  f"({exc}), so whether the panel that voted is the panel that was "
+                  f"convened was NOT checked", file=sys.stderr)
+            return 2
+    else:
+        # Said out loud. A tally that skipped the convening check and printed an outcome
+        # is a tally whose strongest guarantee was silently absent.
+        print(f"review_panel: no assignment at {assignment_path} — whether the panel "
+              f"that voted is the panel that was convened was NOT checked",
+              file=sys.stderr)
 
     try:
         record = panel.record()

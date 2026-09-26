@@ -53,8 +53,15 @@ __all__ = [
     "SessionStartContext", "StopContext", "SubagentStopContext",
     "UserPromptSubmitContext",
     "create_context", "safe_create_context", "handle_context_error",
-    "exit_block", "exit_non_block", "exit_success", "output_json",
+    "exit_non_block",
 ]
+
+# `exit_success`, `exit_block` and `output_json` used to be exported here as module-level
+# twins of the methods on `squad/outputs.py`. Every hook exits through the per-event
+# `Output` methods — `c.output.exit_block(...)` — and none of the twins had a caller or a
+# test. Two spellings of "how a hook ends" is how one of them drifts, and the one nobody
+# calls is the one that drifts unnoticed. `exit_non_block` stays: `squad/tests/test_squad.py`
+# exercises the module-level form deliberately, to pin that it matches the method.
 
 C = TypeVar("C", bound=HookContext)
 
@@ -101,9 +108,54 @@ def build_context(payload: dict[str, Any], expected: type[C] | None = None) -> C
             f"this hook expects {expected.__name__} but the runtime sent `{event}`. "
             f"Check the event it is registered under in hooks.json")
 
-    known = {f for f in cls.__dataclass_fields__ if f not in ("raw", "event_name")}
-    kwargs = {k: v for k, v in payload.items() if k in known}
+    fields = {name: f for name, f in cls.__dataclass_fields__.items()
+              if name not in ("raw", "event_name")}
+    kwargs = {k: v for k, v in payload.items() if k in fields}
+    # The payload was filtered by field NAME and assigned straight into a TYPED dataclass,
+    # so a runtime sending `tool_input` as a string produced a context whose annotation
+    # said dict and whose value was not. The first hook doing `tool_input["command"]`
+    # then raised TypeError — a traceback, exit 1, and for a PreToolUse hook exit 1 means
+    # THE ACTION PROCEEDS. A malformed payload opened the guard instead of closing it.
+    for name, value in kwargs.items():
+        _refuse_wrong_type(name, value, fields[name].type, cls)
+    # `cls` is a TypeVar bound to the context base; mypy cannot see that the concrete
+    # subclass constructor accepts the filtered kwargs built from its own fields.
     return cls(raw=payload, **kwargs)  # type: ignore[return-value]
+
+
+#: The annotations this library uses, mapped to what a JSON payload may carry for them.
+#: Deliberately small: a dataclass field whose annotation is not here is not checked,
+#: because guessing at a type is how a guard starts refusing valid input.
+_JSON_TYPES: dict[str, tuple[type, ...]] = {
+    "str": (str,),
+    "bool": (bool,),
+    "int": (int,),
+    "dict": (dict,),
+    "list": (list,),
+    "dict[str, Any]": (dict,),
+    "list[Any]": (list,),
+    "str | None": (str, type(None)),
+    "bool | None": (bool, type(None)),
+    "int | None": (int, type(None)),
+    "dict[str, Any] | None": (dict, type(None)),
+}
+
+
+def _refuse_wrong_type(name: str, value: object, annotation: object, cls: type) -> None:
+    """Raise when `value` cannot be what `annotation` says, and stay quiet otherwise."""
+    allowed = _JSON_TYPES.get(str(annotation).strip())
+    if allowed is None:
+        return
+    # `bool` is a subclass of `int`; a payload sending True for an int field is a
+    # different value than it looks, so the two are not interchangeable here.
+    if isinstance(value, bool) and bool not in allowed:
+        raise ContextError(
+            f"`{name}` is a bool and {cls.__name__} declares it {annotation}")
+    if not isinstance(value, allowed):
+        raise ContextError(
+            f"`{name}` is {type(value).__name__} and {cls.__name__} declares it "
+            f"{annotation}. A hook reading it would raise rather than judge, and a hook "
+            f"that raises exits 1 — which lets the action through")
 
 
 def create_context(expected: type[C] | None = None, *, stream: Any = None) -> C:
@@ -138,10 +190,6 @@ def handle_context_error(error: BaseException) -> NoReturn:
     sys.exit(BLOCK)
 
 
-def exit_success(message: str | None = None) -> NoReturn:
-    if message:
-        print(message)
-    sys.exit(0)
 
 
 def exit_non_block(message: str, exit_code: int = NON_BLOCK) -> NoReturn:
@@ -151,11 +199,5 @@ def exit_non_block(message: str, exit_code: int = NON_BLOCK) -> NoReturn:
     sys.exit(exit_code)
 
 
-def exit_block(reason: str) -> NoReturn:
-    print(reason, file=sys.stderr)
-    sys.exit(BLOCK)
 
 
-def output_json(data: dict[str, Any], exit_code: int = 0) -> NoReturn:
-    print(json.dumps(data))
-    sys.exit(exit_code)

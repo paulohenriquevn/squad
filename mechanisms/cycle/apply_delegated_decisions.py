@@ -28,9 +28,25 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from delegated_decision import classify_wall, rewrite_wall
+for _up in Path(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        sys.path.insert(0, str(_up))
+        break
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+from delegated_decision import (  # noqa: E402 — post-bootstrap
+    classify_wall,
+    rewrite_wall,
+)
 
-_ITEM_RE = re.compile(r"(?m)^#{2,3}\s+(B-\d+)\s")
+from squad import (  # noqa: E402 — post-bootstrap import
+    backlog as _shared_backlog,
+    shared_file,
+)
+
+#: Imported, not compiled — `squad/backlog.py` owns what an item header is.
+#: Six readers each carried one and they disagreed about the separator.
+_ITEM_RE = _shared_backlog.BLOCK_RE
 _WALL_RE = re.compile(r"(?m)^blocked_by:(?P<wall>.*)$")
 
 
@@ -121,6 +137,34 @@ def _tree_is_clean(repo: Path) -> bool:
     return result.returncode == 0 and not result.stdout.strip()
 
 
+def _load_decisions(path: Path) -> dict[str, dict[str, str]]:
+    """`{item id: {"decision": ..., "rationale": ...}}`, or a ValueError naming the key."""
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise ValueError(f"{path} could not be read: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{path} is not valid JSON: {exc}") from exc
+
+    if not isinstance(raw, dict):
+        raise ValueError(
+            f"{path} holds a JSON {type(raw).__name__}, not an object. The shape is "
+            f'{{"B-165": {{"decision": "...", "rationale": "..."}}}}')
+
+    for item, entry in raw.items():
+        if not isinstance(entry, dict):
+            raise ValueError(f"{path}: `{item}` holds a {type(entry).__name__}, "
+                             f"not an object with `decision` and `rationale`")
+        for field in ("decision", "rationale"):
+            value = entry.get(field)
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(
+                    f"{path}: `{item}` has no non-empty `{field}`. A decision with no "
+                    f"rationale is a decision nobody can argue with afterwards, which "
+                    f"is the whole reason this file exists rather than a flag")
+    return raw
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--registry", required=True, type=Path)
@@ -137,7 +181,17 @@ def main() -> int:
     if not args.registry.exists():
         print(f"registry not found: {args.registry}", file=sys.stderr)
         return 2
-    decisions = json.loads(args.decisions.read_text())
+    # Validated at the BOUNDARY, where the file enters. `json.loads` accepts any JSON,
+    # and `plan()` then indexes `decisions[item]["decision"]` and `["rationale"]` while
+    # `apply()` does the same — so a file that is a list, or an object whose entry is
+    # missing `rationale`, left this tool as a TypeError or KeyError traceback. A
+    # hand-written decisions file getting one key wrong is the ordinary case, and a
+    # traceback is the worst way to say so.
+    try:
+        decisions = _load_decisions(args.decisions)
+    except ValueError as exc:
+        print(f"REFUSED: {exc}", file=sys.stderr)
+        return 2
 
     rows = plan(args.registry, decisions)
     for row in rows:
@@ -161,9 +215,16 @@ def main() -> int:
         return 2
 
     backup = args.registry.with_suffix(".md.bak")
-    shutil.copy2(args.registry, backup)
-    text, changed = apply(args.registry, decisions)
-    args.registry.write_text(text)
+    # Read-decide-write over the shared registry, held as one transaction. `apply` reads
+    # the file itself, so the lock must be taken around the call and not inside it.
+    try:
+        with shared_file.locked(args.registry):
+            shutil.copy2(args.registry, backup)
+            text, changed = apply(args.registry, decisions)
+            shared_file.write_atomic(args.registry, text)
+    except TimeoutError as exc:
+        print(f"REFUSED: {exc}", file=sys.stderr)
+        return 2
     print(f"\nrewrote {len(changed)}: {', '.join(changed)}")
     print(f"backup: {backup}")
     return 0

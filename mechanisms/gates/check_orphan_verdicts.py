@@ -183,11 +183,27 @@ def check_orphan_verdicts(repo_root: Path) -> OrphanReport:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parents[2])
+    parser.add_argument(
+        "--root", "--repo-root", dest="root", type=Path, default=Path(__file__).resolve().parents[2])
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
 
-    report = check_orphan_verdicts(args.repo_root)
+    report = check_orphan_verdicts(args.root)
+
+    # Zero cycle rules swept means the glob found nothing to read, and "no verdict is
+    # orphaned" is then a statement about an empty set rather than about this
+    # repository. Exit 2 keeps "could not measure" separate from "measured and found
+    # nothing wrong" — the distinction the rest of this gate family already draws.
+    if report.rules_swept == 0:
+        message = (f"UNCHECKED  no cycle rule was swept under {args.root} — "
+                   f"nothing was measured, so nothing is being reported clean")
+        if args.json:
+            payload = report.as_dict()
+            payload["unchecked_because"] = message
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            print(message, file=sys.stderr)
+        return 2
 
     if args.json:
         print(json.dumps(report.as_dict(), indent=2, ensure_ascii=False))

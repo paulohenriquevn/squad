@@ -19,6 +19,15 @@ seeing no event concludes the command never landed.
 
 The refusal is right; the instruction is what is wrong, and nothing read it until a
 person ran it.
+
+**Where those three instructions went, 2026-09-20.** Naming the contract's verdict fixed
+the refusal and left phases 1-3 each CLOSING a phase that `rules/cycle-phases.txt`
+declares once — four ends against the single start `/brainstorm-vision` emits, from which
+neither WIP nor lead time can be derived. The three intermediate ends are gone; the start
+carries the session instead, and an open start is exactly the "somebody is working on
+this" the paragraph above wanted. `/brainstorm-pieces` still closes the phase with the
+contract's verdict, `AWAITING_REVIEW` included. See
+`tests/test_a_cycle_a_skill_ends_is_a_cycle_a_skill_starts.py`.
 """
 
 from __future__ import annotations
@@ -30,7 +39,10 @@ _REPO = Path(__file__).parent.parent
 sys.path.insert(0, str(_REPO))
 sys.path.insert(0, str(_REPO / "mechanisms" / "gates"))
 
-from check_emitted_verdicts import scan  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from check_emitted_verdicts import scan  # noqa: E402 — post-bootstrap import
 
 
 def test_every_instructed_verdict_is_declared_by_its_cycle() -> None:

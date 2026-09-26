@@ -33,15 +33,39 @@ zero production call sites" — against a symbol with two.
 
   and remove it when you are done (`git worktree remove /tmp/review-$$`).
 - Scratch files go under `/tmp`, never under the repository.
+- **Your findings file is the one exception, and it is expected.** `{FINDINGS_DIR}` is an
+  ABSOLUTE path in the shared checkout, given to you because that is where the consolidator
+  reads. Write it there directly — the rule above is about not mutating the code under
+  review, not about withholding your own output. Do not stage it in `/tmp` and copy: a
+  reviewer that improvises the last step is a reviewer whose findings file goes missing the
+  day it does not, and an absent findings file is indistinguishable from a reviewer that
+  found nothing.
 
-The consolidator records the tree state when you are spawned and compares it afterwards. A tree that
-moved is reported at the top of the review, above every finding in it.
+The consolidator records the state of the tree **the spawner ran in** when you are spawned, and
+compares it afterwards. A tree that moved is reported at the top of the review, above every finding
+in it. That is a fact about the spawner's checkout and NOT about yours — if you are isolated, as the
+line above asks you to be, they are different trees.
+
+**So declare the tree you actually read.** Put its HEAD at the top of your findings file, quoted:
+
+```yaml
+agent: test-reviewer
+tree_head: "<the output of `git rev-parse HEAD` in the tree you read>"
+findings:
+  - ...
+```
+
+The consolidator checks that your tree CONTAINS the commits under review and reports any reviewer
+whose does not. Measured on a real review: five reviewers ran in a worktree that did not contain the
+change, two noticed and re-derived their findings against the right ref, three did not, and nothing
+downstream could tell them apart. Quote the value — an unquoted sha of only digits loses its leading
+zeros to YAML and is reported as unusable.
 
 ## Pre-read (mandatory)
 
 1. The plan: `{PLAN_PATH}` (focus on TDD sections per task + Acceptance Criteria + Deep Dives that mention edge cases)
 2. The project testing rule: `.claude/rules/testing.md` (TDD discipline, pyramid, AAA format)
-3. The git diff: `git diff {DIFF_BASE}..HEAD -- 'tests/**' '*.test.ts' '*.test.tsx' '*.spec.ts'`
+3. The git diff: `git diff {DIFF_BASE}...HEAD -- 'tests/**' '*.test.ts' '*.test.tsx' '*.spec.ts'`
 4. The wiring check script behavior: `.claude/skills/implement/scripts/check_wiring.py` (pillar b expects tests/integration/ to exercise new symbols)
 
 ## What to review (in this order)
@@ -100,7 +124,7 @@ For every Edge Case mentioned in the plan's Deep Dives or Acceptance Criteria se
 
 ## Output (mandatory YAML format)
 
-Save to `.claude/agents/review-{SLUG}-{DATE}/findings/tests.yml`:
+Save to `{FINDINGS_DIR}/tests.yml`:
 
 ```yaml
 agent: review-{SLUG}-tests

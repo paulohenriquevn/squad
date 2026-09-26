@@ -58,7 +58,7 @@ You may precede the marker with a 5-line summary of what changed across iteratio
 If verdict is below target, run the automated fix script:
 
 ```bash
-python3 .claude/skills/plan-improve/scripts/apply_fixes.py "{PLAN_PATH}"
+python3 .claude/skills/plan-improve/scripts/apply_plan_fixes.py "{PLAN_PATH}"
 ```
 
 This applies three SAFE deterministic transformations:

@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import argparse
 import enum
+import functools
 import re
 import shutil
 import subprocess
@@ -72,24 +73,32 @@ def classify(*, source: str, base: str | None, target: str | None) -> Action:
     return Action.LOCAL_CHANGE
 
 
+@functools.lru_cache(maxsize=4096)
 def historical_versions(repo: Path, rel: str) -> set[str]:
     """Every content this path has ever had in the kit's history.
+
+    MEMOISED on (repo, rel). This spawns `git rev-list --all -- <rel>` plus one `git show`
+    per revision, and it is called from inside the per-file loop of `sync_target` — which
+    runs once per CONSUMER. Syncing the same file into eight consumers replayed the same
+    history eight times, and a file with forty revisions costs forty processes each pass.
+    The answer depends on the kit's history and the path, neither of which changes within
+    a run.
 
     Without this, a consumer installed from an older version shows up as "locally
     modified" in every file the kit has evolved since — measured: 231 false
     LOCAL_CHANGE across 40 consumers, `install.sh` in almost all of them. Telling
     behind from modified is what makes updating without fear possible.
     """
-    revisions = subprocess.run(  # noqa: PLW1510
+    revisions = subprocess.run(
         ["git", "-C", str(repo), "rev-list", "--all", "--", rel],
         capture_output=True, text=True,
-    ).stdout.split()
+     check=False).stdout.split()
     contents: set[str] = set()
     for revision in revisions:
-        blob = subprocess.run(  # noqa: PLW1510
+        blob = subprocess.run(
             ["git", "-C", str(repo), "show", f"{revision}:{rel}"],
             capture_output=True, text=True,
-        )
+         check=False)
         if blob.returncode == 0:
             contents.add(blob.stdout)
     return contents
@@ -105,10 +114,10 @@ def classify_with_history(*, source: str, base: str | None, target: str | None,
 
 
 def _git_show(repo: Path, sha: str, rel: str) -> str | None:
-    result = subprocess.run(  # noqa: PLW1510
+    result = subprocess.run(
         ["git", "-C", str(repo), "show", f"{sha}:{rel}"],
         capture_output=True, text=True,
-    )
+     check=False)
     return result.stdout if result.returncode == 0 else None
 
 
@@ -186,7 +195,7 @@ def missing_rule_dependencies(kit: Path, eco: Path, files: list[str]) -> list[st
 
 def sync_target(kit: Path, target_root: Path, files: list[str], base: str,
                 *, apply: bool) -> dict[str, list[str]]:
-    """Classifica (e opcionalmente aplica) a delta em UM consumidor."""
+    """Classify (and optionally apply) the delta against ONE consumer."""
     eco = target_root / ".claude"
     outcome: dict[str, list[str]] = {action.value: [] for action in Action}
 
@@ -195,15 +204,22 @@ def sync_target(kit: Path, target_root: Path, files: list[str], base: str,
         if source is None:
             continue
         target_content = _read(eco / rel)
+        # `classify_with_history` IS this composition, and it had no production caller:
+        # the branch the tests exercised was not the branch that ran, so the two could
+        # drift without a single test going red. The history scan stays lazy — the set is
+        # only computed when `classify` already said LOCAL_CHANGE.
         action = classify(
             source=source,
             base=_git_show(kit, f"{base}^", rel),
             target=target_content,
         )
         if action is Action.LOCAL_CHANGE:
-            # Only pay the cost of scanning history when there is divergence.
-            if target_content in historical_versions(kit, rel):
-                action = Action.STALE
+            action = classify_with_history(
+                source=source,
+                base=_git_show(kit, f"{base}^", rel),
+                target=target_content,
+                historical=historical_versions(kit, rel),
+            )
         outcome[action.value].append(rel)
         if apply and action in (Action.NEW, Action.UPDATE, Action.STALE):
             destination = eco / rel

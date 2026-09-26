@@ -186,7 +186,14 @@ def _check_purpose_stated(path: Path, relative: Path, report: NameReport) -> Non
         return
 
     if path.suffix == ".py":
-        stated = bool(re.search(r'^\s*(?:from __future__[^\n]*\n\s*)?["\']{3}', head, re.M))
+        # `[rRbBuUfF]{0,2}` — a docstring may carry a string prefix, and the common one
+        # here is `r`: a module explaining itself with a regex needs the raw form to
+        # write `\d` without a DeprecationWarning. Without this the pattern read every
+        # such file as having NO docstring, and reported an 18-line one as
+        # `purpose_not_stated`. A gate that accuses a compliant file teaches its
+        # readers to ignore it.
+        stated = bool(re.search(
+            r'^\s*(?:from __future__[^\n]*\n\s*)?[rRbBuUfF]{0,2}["\']{3}', head, re.M))
     else:
         # A shell script states its purpose in a comment above the first command.
         body = re.sub(r"^#!.*\n", "", head)
@@ -224,10 +231,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Check that folder and file names state their purpose.",
     )
-    parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parents[2])
+    parser.add_argument(
+        "--root", "--repo-root", dest="root", type=Path, default=Path(__file__).resolve().parents[2])
     args = parser.parse_args(argv)
 
-    report = check_semantic_names(args.repo_root)
+    report = check_semantic_names(args.root)
 
     print(
         f"read {report.paths_read} file(s) across {report.directories_read} "
@@ -240,6 +248,17 @@ def main(argv: list[str] | None = None) -> int:
     for finding in report.findings:
         print(f"  [{finding.kind}] {finding.path}: {finding.detail}")
 
+    # An empty findings list mapped straight to 0, and `check_semantic_names()` returns
+    # the freshly-constructed empty report when `repo_root` is not a directory. Nothing
+    # else guarded it: `main` never validated `--repo-root` and never consulted
+    # `paths_read`, so a typo'd path printed "read 0 file(s)" and exited like a clean
+    # repository. `check_write_containment.py` and `check_phase_drift.py` already refuse
+    # this, and this now matches them.
+    if report.paths_read == 0:
+        print(f"UNCHECKED: 0 file(s) read under {args.root}. "
+              f"{'That path is not a directory. ' if not args.root.is_dir() else ''}"
+              f"An unexamined tree is not a tree with good names.", file=sys.stderr)
+        return 2
     return 1 if report.findings else 0
 
 

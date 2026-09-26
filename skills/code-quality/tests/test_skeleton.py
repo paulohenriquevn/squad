@@ -109,20 +109,41 @@ def test_base_detector_declares_required_methods() -> None:
         assert hasattr(base, method), f"BaseDetector missing method: {method}"
 
 
-def test_base_detector_methods_raise_not_implemented() -> None:
-    """Each BaseDetector method MUST raise NotImplementedError when invoked on the base class."""
+def test_the_language_specific_methods_stay_abstract() -> None:
+    """Three of the five MUST raise on the base class: they cannot be written once.
+
+    `detect_orphan_exports` and `detect_mutation_score` are NOT among them, and that is
+    the point of them not being here: both were copied character for character into all
+    four subclasses, and neither body touches anything language-specific — they read
+    only `self.language` and `self.threshold`, which the base already supplies. Four
+    concrete instances of one behaviour is long past the Rule of Three.
+    """
     base_cls = importlib.import_module("scripts.detectors").BaseDetector
     instance = base_cls()
     methods = [
         ("detect_dead_code", (Path("/tmp"),)),
         ("detect_symbol_fabrication", ([Path("/tmp/x.py")],)),
-        ("detect_orphan_exports", (Path("/tmp"),)),
-        ("detect_mutation_score", ([Path("/tmp/x.py")],)),
         ("detect_architecture_violations", (Path("/tmp"),)),
     ]
     for method, args in methods:
         with pytest.raises(NotImplementedError):
             getattr(instance, method)(*args)
+
+
+def test_the_shared_methods_are_inherited_not_copied() -> None:
+    """A subclass overriding either one is the duplication coming back."""
+    detectors = importlib.import_module("scripts.detectors")
+    base_cls = detectors.BaseDetector
+
+    for name in ("PythonDetector", "GoDetector", "RustDetector", "TypescriptDetector"):
+        subclass = getattr(detectors, name, None)
+        if subclass is None:
+            continue
+        for method in ("detect_orphan_exports", "detect_mutation_score"):
+            assert method not in vars(subclass), (
+                f"{name} redefines {method}; the base already implements it and the "
+                f"body is language-agnostic")
+            assert getattr(subclass, method) is getattr(base_cls, method)
 
 
 def test_templates_report_skeleton_exists(skill_root: Path) -> None:

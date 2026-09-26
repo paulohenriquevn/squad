@@ -24,7 +24,10 @@ from pathlib import Path
 _REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO / "mechanisms" / "gates"))
 
-from check_xrefs import broken_markdown_links  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from check_xrefs import broken_markdown_links  # noqa: E402 — post-bootstrap import
 
 
 def test_this_repository_has_no_broken_markdown_links() -> None:

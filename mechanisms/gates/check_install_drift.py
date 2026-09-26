@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B-103 — has a consumer's install and this kit drifted, and which way?
+"""Has a consumer's install drifted from this kit, and which way?
 
 WHY THIS EXISTS
 ---------------
@@ -25,7 +25,7 @@ that the moment a comment is reworded — but "does one side hold work the other
     DIVERGED        BOTH hold unique lines
 
 DIVERGED is the only class that needs a human, and it is the class a blind copy destroys. Measured
-on `run_code_quality.py`: copying the install over the kit would have deleted B-092's
+on `run_code_quality.py`: copying the install over the kit would have deleted 's
 zero-detector check, the one fix that had already made it home.
 
 WHAT IT DELIBERATELY DOES NOT DO
@@ -48,14 +48,19 @@ import sys
 # four different orders, and `check_write_containment.py` refuses a second one.
 import sys as _sys_bootstrap
 from dataclasses import dataclass, field
-from pathlib import Path
-from pathlib import Path as _Path_bootstrap
+from pathlib import Path, Path as _Path_bootstrap
 
 for _up in _Path_bootstrap(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _sys_bootstrap.path.insert(0, str(_up))
         break
-from squad.paths import DATA_DIRNAME, LEGACY_RECORDS_ROOTS  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import (  # noqa: E402 — post-bootstrap import
+    DATA_DIRNAME,
+    LEGACY_RECORDS_ROOTS,
+)
 
 
 class Drift(enum.Enum):
@@ -85,7 +90,7 @@ def _lines(path: Path) -> set[str]:
     return {line for line in text.split("\n") if line.strip()}
 
 
-def _historical_contents(kit_root: Path, rel: str) -> set[str]:
+def _historical_contents(kit_root: Path, rel: str) -> set[str] | None:
     """Every content this path has ever had in the kit's history.
 
     Without asking this, a consumer installed from an older version shows up as
@@ -96,20 +101,88 @@ def _historical_contents(kit_root: Path, rel: str) -> set[str]:
     false `local-change` became 119) and was not here.
     """
     try:
-        revisions = subprocess.run(  # noqa: PLW1510
+        listed = subprocess.run(
             ["git", "-C", str(kit_root), "rev-list", "--all", "--", rel],
-            capture_output=True, text=True, timeout=60,
-        ).stdout.split()
-    except (OSError, subprocess.SubprocessError):
+            capture_output=True, text=True, timeout=60, check=False)
+    except (OSError, subprocess.SubprocessError) as exc:
+        # None, not `set()`. An empty set makes `body in history` false for every body,
+        # so a git failure reclassified every stale file as "needs a human" — the exact
+        # false-positive class this function was written to remove. The caller now tells
+        # "no history" from "could not ask".
+        print(f"check_install_drift: could not read the history of {rel}: {exc}. "
+              f"Whether this file is an older kit version was NOT determined.",
+              file=sys.stderr)
+        return None
+    if listed.returncode != 0:
+        print(f"check_install_drift: `git rev-list` exited {listed.returncode} for {rel}: "
+              f"{(listed.stderr or '').strip()[:160]}. Staleness NOT determined.",
+              file=sys.stderr)
+        return None
+
+    revisions = listed.stdout.split()
+    if not revisions:
         return set()
+
+    # ONE process for every revision, not one process PER revision. `git show` was spawned
+    # in a loop with no cap and no early exit, so a file with forty revisions cost forty
+    # processes — per file, per consumer. `cat-file --batch` reads the same blobs over a
+    # single pipe.
+    request = "\n".join(f"{revision}:{rel}" for revision in revisions) + "\n"
+    try:
+        batch = subprocess.run(
+            ["git", "-C", str(kit_root), "cat-file", "--batch"],
+            # BYTES, not text: `--batch` declares each blob's size in bytes, and
+            # `_blobs_from_batch` spends that number slicing. Decoding first made the two
+            # units disagree on every non-ASCII character.
+            input=request.encode("utf-8"), capture_output=True, timeout=120, check=False)
+    except (OSError, subprocess.SubprocessError) as exc:
+        print(f"check_install_drift: could not read the blobs of {rel}: {exc}. "
+              f"Staleness NOT determined.", file=sys.stderr)
+        return None
+
+    return _blobs_from_batch(batch.stdout)
+
+
+def _blobs_from_batch(stream: bytes) -> set[str]:
+    """The contents in a `git cat-file --batch` answer. BYTES in, text out.
+
+    Each object arrives as `<sha> <type> <size>\n<size bytes>\n`; a missing one as
+    `<name> missing\n`. Parsed by the declared size rather than by scanning for the next
+    header, because a blob may contain a line that looks exactly like one.
+
+    The stream is bytes because `size` is a count of BYTES. This ran with `text=True` and
+    advanced by `size` over the DECODED string until 2026-09-23, so every non-ASCII
+    character left the cursor short by the difference — and this kit's prose is written with
+    em-dashes and accents. Measured on `hooks/validate-command.py`: 59104 bytes against
+    58717 characters, 387 lost per revision; `git rev-list --all` names 14 commits for that
+    path and this returned 7 contents, none of them the one a real install holds.
+
+    The consequence ran all the way up. `classify_file` downgrades to STALE when the
+    install's body appears here, so a body this never produced could not match, and the file
+    was reported DIVERGED — which `--apply-upstream` refuses. 350 of 350 diverged files in
+    one consumer, every one merely older, all unreachable from a size in bytes spent on
+    characters.
+    """
     contents: set[str] = set()
-    for revision in revisions:
-        blob = subprocess.run(  # noqa: PLW1510
-            ["git", "-C", str(kit_root), "show", f"{revision}:{rel}"],
-            capture_output=True, text=True,
-        )
-        if blob.returncode == 0:
-            contents.add(blob.stdout)
+    at = 0
+    while at < len(stream):
+        end_of_header = stream.find(b"\n", at)
+        if end_of_header == -1:
+            break
+        header = stream[at:end_of_header]
+        at = end_of_header + 1
+        parts = header.split()
+        if len(parts) != 3 or parts[1] != b"blob":
+            continue  # `missing`, or an object that is not a blob
+        try:
+            size = int(parts[2])
+        except ValueError:
+            continue
+        try:
+            contents.add(stream[at:at + size].decode("utf-8"))
+        except UnicodeDecodeError:
+            pass  # a binary blob has no text body to compare against
+        at += size + 1  # the trailing newline git adds after the payload
     return contents
 
 
@@ -122,7 +195,7 @@ def _is_project_owned(rel: str) -> bool:
     ownership without the declaration is worse.
     """
     try:
-        from squad.boundaries import PROJECT_OWNED  # noqa: PLC0415
+        from squad.boundaries import PROJECT_OWNED
     except ImportError:
         return False
     if not any(pattern.search(rel) for pattern in PROJECT_OWNED):
@@ -161,7 +234,13 @@ def classify_file(install_file: Path, kit_file: Path,
             body = install_file.read_text(encoding="utf-8-sig")
         except (OSError, UnicodeDecodeError):
             return verdict
-        if body in _historical_contents(kit_root, rel):
+        history = _historical_contents(kit_root, rel)
+        if history is None:
+            # Could not ask. The verdict stands as it was — reporting STALE would claim a
+            # match nothing found, and reporting the default silently would hide that the
+            # question went unanswered. The reason is already on stderr.
+            return verdict
+        if body in history:
             return Drift.STALE
     return verdict
 
@@ -183,7 +262,11 @@ def classify_file(install_file: Path, kit_file: Path,
 #: in one day that a rule lived in one file and was missing from another.
 _CACHE_DIRS = ("__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache",
                ".hypothesis")
-_CONSUMER_LOCAL = (*_CACHE_DIRS, ".benchmarks", DATA_DIRNAME, *LEGACY_RECORDS_ROOTS)
+#: `.git` joined on 2026-09-17. When `_installed_scope` returns None the walk covers the
+#: whole install root, and a target whose `.claude/` is itself a repository — a consumer
+#: that versions its install — had every object under `.git/` walked and reported as a
+#: consumer-local file. Thousands of rows, and the signal underneath them invisible.
+_CONSUMER_LOCAL = (*_CACHE_DIRS, ".git", ".benchmarks", DATA_DIRNAME, *LEGACY_RECORDS_ROOTS)
 
 #: Files that belong to the PROJECT even while living in a directory the kit also has.
 #: `agents/<domain>.md` describes the consumer's repository — harvesting it into the kit
@@ -254,12 +337,13 @@ class DriftReport:
     only_in_install: list[str] = field(default_factory=list)
     only_in_kit: list[str] = field(default_factory=list)
     _kit_dirs: frozenset[str] = frozenset()
+    withdrawn_prefixes: tuple[str, ...] = ()
 
     @property
     def unharvested_files(self) -> list[str]:
         """Install-only files sitting in a directory this repository ALSO has.
 
-        The distinction is what keeps the check readable. B-103's `_layout.py` and
+        The distinction is what keeps the check readable. 's `_layout.py` and
         `bump_version.py` were whole files present in one tree only, under `implement/scripts/`
         and `release/scripts/` — directories the kit has — and missing them would have cost three
         items. Whereas `review-b052-…-knowledge/` is a directory the kit does not have at all,
@@ -286,7 +370,26 @@ class DriftReport:
         had nowhere to be read. `--consumer-local` is where it is read now.
         """
         unharvested = set(self.unharvested_files)
-        return [rel for rel in self.only_in_install if rel not in unharvested]
+        return [rel for rel in self.only_in_install
+                if rel not in unharvested and not self._is_withdrawn(rel)]
+
+    def _is_withdrawn(self, rel: str) -> bool:
+        return any(rel == w or rel.startswith(w.rstrip("/") + "/")
+                   for w in self.withdrawn_prefixes)
+
+    @property
+    def withdrawn_files(self) -> list[str]:
+        """Install-only files the kit DECLARES it withdrew — not the project's work.
+
+        Counted as `consumer-local` until 2026-09-23, and that label asserts something
+        false about them: it reads "files this install holds and the kit does not ship",
+        which is true, next to a heading a reader takes to mean "yours". Measured on one
+        consumer — 103 of 111 so-called consumer-local files belonged to eight skills this
+        kit retired, every retirement written in prose in a document the kit ships and read
+        by nothing (#171). A number that is 93% one thing and labelled the other is worse
+        than no number.
+        """
+        return [rel for rel in self.only_in_install if self._is_withdrawn(rel)]
 
     @property
     def needs_attention(self) -> bool:
@@ -296,6 +399,25 @@ class DriftReport:
             or self.counts.get(Drift.DIVERGED)
             or self.unharvested_files
         )
+
+
+def _withdrawn_prefixes(kit_root: Path) -> tuple[str, ...]:
+    """Paths this kit SHIPPED and later WITHDREW, from the list that travels with it.
+
+    Read BY NAME. Absence is not evidence of anything — that is the whole reason the list
+    exists, and treating absence as withdrawal is how a project's own work gets called the
+    kit's and then deleted.
+    """
+    listing = kit_root / "mechanisms" / "distribution" / "withdrawn.txt"
+    if not listing.is_file():
+        return ()
+    names = []
+    for line in listing.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "|" not in line:
+            continue
+        names.append(line.split("|", 1)[0].strip())
+    return tuple(n for n in names if n)
 
 
 def scan(install_root: Path, kit_root: Path) -> DriftReport:
@@ -319,6 +441,7 @@ def scan(install_root: Path, kit_root: Path) -> DriftReport:
         only_in_install=sorted(set(install) - set(resolved_kit)),
         only_in_kit=sorted(set(resolved_kit) - set(install)),
         _kit_dirs=frozenset(str(Path(rel).parent) for rel in resolved_kit),
+        withdrawn_prefixes=_withdrawn_prefixes(kit_root),
     )
     for rel in sorted(set(install) & set(resolved_kit)):
         verdict = classify_file(install[rel], resolved_kit[rel], kit_root, rel)
@@ -333,8 +456,12 @@ def main(argv: list[str] | None = None) -> int:
                         help="a consumer's install root (…/.claude), or one tree inside it")
     # The kit ROOT, not its `skills/`. The old default silently narrowed every
     # invocation to one of the six trees an install carries.
-    parser.add_argument("--kit", type=Path, default=Path(__file__).resolve().parents[2],
-                        help="this repository's skills directory")
+    # `--root` is an alias for `--kit`, per the contract in `_contract.py`. This gate
+    # compares TWO trees, so it is the one place where "the tree to sweep" needed
+    # saying which: `--kit` is the reference and `--install` is the copy under test.
+    parser.add_argument("--root", "--kit", dest="kit", type=Path,
+                        default=Path(__file__).resolve().parents[2],
+                        help="this kit's root (default: the repository this file lives in)")
     # Asking is not auditing: this lists what the install owns and exits 0, so a
     # cleanup can diff against it. Folding it into the default output would put a
     # normally-healthy list in front of everyone on every run, and kit#33 argued
@@ -361,15 +488,51 @@ def main(argv: list[str] | None = None) -> int:
             print("    no files — everything here came from the kit")
         return 0
 
+    #: What each class COSTS, printed beside its count. All four used to render as
+    #: `<class>: <count>` and a file list, so `install_ahead: 3` sat next to
+    #: `kit_ahead: 38` and a reader compared magnitudes — two sizes of one thing.
+    #:
+    #: They are not one thing. `install.sh --force` snapshots `.claude/` into
+    #: `.install-backups/` and replaces it, so INSTALL_AHEAD is the ONLY class whose
+    #: lines are gone after an upgrade. KIT_AHEAD is pure gain, IDENTICAL is nothing,
+    #: and DIVERGED at least survives on both sides until somebody chooses.
+    #:
+    #: Measured 2026-09-22 on a real consumer: `install_ahead: 3` — three hooks carrying
+    #: the wiring for a 94-line module the kit does not have. The number printed on every
+    #: run, was read twice that day by the session maintaining the kit, and nobody opened
+    #: the files. A count in the same voice as a count that loses nothing reads as
+    #: inventory.
+    _COST = {
+        Drift.INSTALL_AHEAD: ("lines only this install has — ERASED by the next "
+                              "`install.sh --force`, which is true of no other class "
+                              "here. Harvest upstream before upgrading"),
+        Drift.DIVERGED: ("both sides hold unique lines — a copy in either direction "
+                         "deletes the other's fix"),
+        # These two are the only classes where this install holds NO line the kit lacks,
+        # which is the whole reason `--apply-upstream` accepts them and refuses the two
+        # above. Naming the command here and nowhere else is deliberate: it was reachable
+        # only by replacing the whole tree, and a reader who saw the count had no smaller
+        # answer than reinstalling everything.
+        Drift.STALE: ("the kit moved on and this copy did not — one file at a time with "
+                      "`install.sh <target> --apply-upstream <path>`"),
+        Drift.KIT_AHEAD: ("the kit holds lines this install lacks — an upgrade adds them, "
+                          "as does `install.sh <target> --apply-upstream <path>` per file"),
+    }
     for verdict in (Drift.DIVERGED, Drift.INSTALL_AHEAD, Drift.STALE, Drift.KIT_AHEAD):
         files = report.by_class[verdict]
         if files:
-            print(f"{verdict.value}: {len(files)}")
+            print(f"{verdict.value}: {len(files)} — {_COST[verdict]}")
             for rel in files:
                 print(f"    {rel}")
     if report.unharvested_files:
         print(f"install-only, in a directory the kit has (yours, or work to harvest — this check cannot tell): {len(report.unharvested_files)}")
         for rel in report.unharvested_files:
+            print(f"    {rel}")
+    if report.withdrawn_files:
+        print(f"withdrawn by the kit, still installed: {len(report.withdrawn_files)}"
+              f"   (declared in mechanisms/distribution/withdrawn.txt — the kit's, not yours;"
+              f" `install.sh <target> --remove-withdrawn` deletes exactly these)")
+        for rel in report.withdrawn_files:
             print(f"    {rel}")
     consumer_local = len(report.consumer_local_files)
     print(f"identical: {report.counts[Drift.IDENTICAL]}   only_in_kit: {len(report.only_in_kit)}"
@@ -387,8 +550,12 @@ def main(argv: list[str] | None = None) -> int:
                        "unique lines, and a copy in either direction deletes the "
                        "other's fix")
         if report.counts.get(Drift.INSTALL_AHEAD):
+            # DIVERGED's entry above names what it COSTS. This one named only what it
+            # IS, and the cost is the reason to act: these lines are the only ones the
+            # upgrade takes away.
             why.append(f"{report.counts[Drift.INSTALL_AHEAD]} INSTALL_AHEAD — the "
-                       "install holds lines the kit does not")
+                       "install holds lines the kit does not, and they are erased by "
+                       "the next install")
         if report.unharvested_files:
             why.append(f"{len(report.unharvested_files)} install-only file(s) in a "
                        "directory the kit has — yours, or work to harvest")

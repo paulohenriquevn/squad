@@ -33,9 +33,9 @@ def _by_id(state: dict) -> dict:
     return {i["id"]: i for i in state["items"]}
 
 
-def _end(cycle: str, slug: str, verdict: str = "PASS") -> dict:
+def _end(cycle: str, slug: str, verdict: str = "PASS", hours_ago: float = 0.4) -> dict:
     return {"type": "cycle:phase:end", "cycle": cycle, "slug": slug,
-            "verdict": verdict, "timestamp": "2026-08-31T10:00:00Z"}
+            "verdict": verdict, "timestamp": _ago(hours_ago)}
 
 
 # ── position without a stream ─────────────────────────────────────────────────
@@ -344,9 +344,24 @@ def test_a_board_without_a_backlog_still_reports_the_lead(tmp_path: Path) -> Non
 # verdict of a phase already over, and nothing on the page said anything was running.
 
 
-def _start(cycle: str, slug: str) -> dict:
+def _ago(hours: float) -> str:
+    """A stamp relative to NOW, never a frozen date.
+
+    These helpers carried `2026-08-31T13:00:00Z`, and a fixed past date is the wrong
+    instrument for a question about the present: as of 2026-09-21 that start was three
+    weeks old and the tests asserted the board still called it running. They passed only
+    because nothing consulted the clock — and the defect they were therefore unable to
+    catch is the one this file's siblings record, a consumer headlining `WORKING B-184`
+    over a start that had died 20 hours earlier.
+    """
+    from datetime import datetime, timedelta, timezone
+    return (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat().replace(
+        "+00:00", "Z")
+
+
+def _start(cycle: str, slug: str, hours_ago: float = 0.5) -> dict:
     return {"type": "cycle:phase:start", "cycle": cycle, "slug": slug,
-            "timestamp": "2026-08-31T13:00:00Z"}
+            "timestamp": _ago(hours_ago)}
 
 
 def test_a_started_phase_with_no_end_is_running(tmp_path: Path) -> None:
@@ -692,11 +707,44 @@ def test_the_board_and_the_drift_checker_read_the_same_blocking_list() -> None:
 
 def test_a_missing_rule_file_does_not_let_the_board_claim_nothing_is_blocked(
         tmp_path: Path) -> None:
-    """The board reports what it can read. An unreadable rule is not evidence that
-    every gate is open — the checker raises on it, and the board shows no gates
-    because it found none to check, which the empty panel already says."""
+    """None, not `frozenset()`.
+
+    This asserted the empty set, on the reasoning that "the board shows no gates because
+    it found none to check, which the empty panel already says". It does not say that:
+    an empty set makes `verdict.upper() in blocking` false for every verdict, so the
+    panel renders an empty `blocking` list — which is exactly what an item with no
+    blocking verdict renders. The two states were identical on screen, and the function's
+    own docstring promised they would not be.
+    """
     from board_state import blocking_verdicts
-    assert blocking_verdicts(tmp_path) == frozenset()
+
+    assert blocking_verdicts(tmp_path) is None
+
+
+def test_the_board_says_when_it_could_not_read_the_blocking_rule(tmp_path: Path) -> None:
+    """The payload carries the reason, so `board.html` can render it."""
+    import board_state
+
+    (tmp_path / "BACKLOG.md").write_text("## B-001\n\nstatus: planned\n", encoding="utf-8")
+    detail = board_state.item_detail(tmp_path, "B-001")
+
+    assert "blocking_unknown" in detail, sorted(detail)
+    assert "not determined" in detail["blocking_unknown"]
+
+
+def test_a_board_drawn_from_the_fallback_chain_says_so(tmp_path: Path) -> None:
+    """`PHASES` drives what the board draws and which events are placed.
+
+    A chain nobody read produced a board that looks exactly like one drawn from the
+    contract, and the eight hardcoded names are a snapshot of one moment in a file that
+    changes.
+    """
+    import board_state
+
+    assert board_state.PHASES_SOURCE in ("declared", "fallback")
+    (tmp_path / "BACKLOG.md").write_text("## B-001\n\nstatus: planned\n", encoding="utf-8")
+
+    assert board_state.build_state(tmp_path)["phases_source"] == board_state.PHASES_SOURCE
 
 
 # ── being locked out must not look like being down ───────────────────────────

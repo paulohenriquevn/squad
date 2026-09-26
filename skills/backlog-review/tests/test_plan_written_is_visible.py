@@ -25,7 +25,10 @@ from pathlib import Path
 _KIT = Path(__file__).resolve().parents[3]
 if str(_KIT) not in sys.path:
     sys.path.insert(0, str(_KIT))
-from squad.paths import write_records_dir  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import write_records_dir  # noqa: E402 — post-bootstrap import
 
 _SCRIPT = (Path(__file__).resolve().parents[1] / "scripts"
            / "select_backlog_item.py")
@@ -55,7 +58,7 @@ def _run(backlog: Path, *args: str) -> dict:
     out = subprocess.run(
         [sys.executable, str(_SCRIPT), str(backlog), "--json", *args],
         capture_output=True, text=True, timeout=120,
-    ).stdout
+     check=False).stdout
     return json.loads(out[out.index("{"):])
 
 

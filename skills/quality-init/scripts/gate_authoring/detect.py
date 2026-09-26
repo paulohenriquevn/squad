@@ -200,28 +200,39 @@ def detect_languages(target: str, verbose: bool = False) -> list[LanguageInfo]:
 
 
 def detect_frameworks(target: str, verbose: bool = False) -> list[str]:
-    """Detect frameworks used in the project."""
+    """Detect frameworks used in the project.
+
+    Each source file is read AT MOST ONCE. `FRAMEWORK_MARKERS` holds several markers
+    per framework and several frameworks share a file pattern, so the loop re-read the
+    same `package.json`, the same `requirements.txt` and the same `*.py` once per marker
+    — the file count times the marker count, on a tree the caller has not filtered.
+    """
     detected: list[str] = []
+    bodies: dict[Path, str | None] = {}
+
+    def _body(path: Path) -> str | None:
+        if path not in bodies:
+            try:
+                bodies[path] = path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                bodies[path] = None
+        return bodies[path]
 
     for framework, markers in FRAMEWORK_MARKERS.items():
         found = False
         for file_pattern, content_pattern in markers:
             if found:
                 break
-            # Search for matching files
             for f in Path(target).rglob(file_pattern):
                 if any(skip in f.parts for skip in SKIP_DIRS):
                     continue
                 if not content_pattern:
                     found = True
                     break
-                try:
-                    content = f.read_text(encoding="utf-8", errors="replace")
-                    if re.search(content_pattern, content):
-                        found = True
-                        break
-                except OSError:
-                    pass
+                content = _body(f)
+                if content is not None and re.search(content_pattern, content):
+                    found = True
+                    break
 
         if found:
             detected.append(framework)

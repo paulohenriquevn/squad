@@ -39,6 +39,17 @@ if (!TRACKER) throw new Error('no tracker: pass args.tracker (github, jira, etc.
 
 const WORKTREE_ROOT = args?.worktreeRoot ?? '/tmp/squad-dispatch'
 
+// One worktree path per RUN, not per unit. It was `${WORKTREE_ROOT}/${unit.slug}` under a
+// machine-global root — and the very next sentence of the same prompt says "Other
+// workflows may be repairing other issues in parallel. Two writers in one tree produce a
+// diff neither authored." A re-dispatch of the same unit, or another fleet on the host,
+// resolved to the SAME path, so the prompt warned about exactly the collision its own
+// instruction created. The stamp and the sanitised slug match the briefs fleet_router.py
+// writes, for the same reason.
+const RUN_STAMP = new Date().toISOString().replace(/[-:]/g, '').slice(0, 15)
+const safeSlug = (slug) => String(slug).replace(/[^A-Za-z0-9._-]/g, '-')
+const worktreeFor = (unit) => `${WORKTREE_ROOT}/${safeSlug(unit.slug)}-${RUN_STAMP}`
+
 // Schemas for structured output
 const REPAIR = {
   type: 'object',
@@ -83,7 +94,7 @@ const results = await pipeline(
     `BODY:\n${unit.body}\n\n` +
     `## Where you work\n\n` +
     `Make your own worktree, and put every edit inside it:\n\n` +
-    `    git -C ${REPO} worktree add -b ${unit.branch} ${WORKTREE_ROOT}/${unit.slug} HEAD\n\n` +
+    `    git -C ${REPO} worktree add -b ${unit.branch} ${worktreeFor(unit)} HEAD\n\n` +
     `Other workflows may be repairing other issues in parallel. Two writers in one tree ` +
     `produce a diff neither authored.\n\n` +
     `**Never \`git stash\` inside it.** The worktree isolates the index, HEAD and the ` +

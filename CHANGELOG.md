@@ -6,7 +6,3302 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ## [Unreleased]
 
+### Added
+- **The lead asks a typed decision model before it pays for a headless agent.** With `OPENROUTER_API_KEY` set, a menu the doctrine may decide goes first to Jev (`jev-1.13` via OpenRouter), which picks a section of `rules/autonomy-envelope.md` and a menu option from closed lists, at about USD 0.00002 and under a second a call; the lead acts only when both answers reach 0.90 confidence, and otherwise, on a rule that needs text typed, or when the API fails, it asks the agent exactly as before. The screen, the menu, the doctrine and the item's prior rulings are sent to OpenRouter on this path. (#219)
+
 ### Fixed
+- **A plan in a consumer can cite a kit rule as `rules/<name>.md` without being capped INVALID.** The citation checker looked for it one directory too deep under `.claude/`, so every such plan took the `fabricated_citation` hard cap; the installed kit's root is now searched. (#228)
+- **The `plan-confidence` test suite collects in an installed kit.** One of its tests imported helpers from the kit's own root `tests/`, which does not ship, so the slice failed at collection in every consumer; the helpers now live in the slice, and every slice is collected from an install on each run. (#227)
+- **The board's issues panel reads an `https://` remote.** Its own parse kept only what followed a `:` in the host, so `https://github.com/owner/name.git` scoped nothing and the panel went dark; it now shares one reader with `promote_to_develop.py`, which already handled every shape. (#135)
+- **The code-quality skill declares a `tree-sitter` its grammar package can load.** It declared `>=0.25`, on which `tree-sitter-languages` 1.10 raises `TypeError` for every grammar, so D2 on TypeScript reported that it parsed nothing; the range is now `>=0.21,<0.22`. (#135)
+- **The commit-convention check no longer fails a run on a detached HEAD, as in CI.** Without an upstream it read every commit as unpushed, so the two declared exemptions were reported as fixable and the ecosystem check failed on every CI run while passing locally; a commit on any remote branch now counts as pushed. (#135)
+- **The README and the Squad map no longer point at files the kit does not have.** The README said the kit ships a domain routing table and listed `rules/domain-routing.txt` in its tree; it ships none, and the table lives at `.squad/domain-routing.txt`. The map called the distribution family `dist/`. (#218)
+- **Every fresh install reported a post-install FAILURE because its empty study zone was not gitignored.** An empty `.squad/study-material/` is now `UNGUARDED`, named but not failing; it becomes `COMMITTABLE`, and fails, once something is cloned there. (#128)
+- **The kit no longer carries Portuguese outside the lines that must.** The new English-only detector found 59 lines in 34 files the old word list called clean; accidental prose, test messages and identifiers were translated, and the lines that quote Portuguese on purpose (registry patterns, a user requirement, a consumer config) are marked with their reason. (#130)
+- **`verify_ecosystem` ignored four of the six states that fail `check_data_root`.** It kept its own list, `UNMIGRATED` and `SPLIT`, so a nested write root, data inside the installed kit, a shared wiki bundle or a committable study zone passed the ecosystem check while the gate itself exited 1. It now reads the gate's own list. (#215, #184, #128)
+- **A plugin's OKF bundle in `wiki/` is no longer read as the project's knowledge.** `loop-system-cartography` and `loop-project-purge` write their bundle to `<project>/wiki/` by default, and the legacy wiki fallback accepted any directory there. A bare `wiki/` is now read only when it has the kit's shape: at least one of its leaves and nothing it never writes. `check_data_root` reports another producer's bundle as FOREIGN, and kit leaves mixed into one as SHARED. (#184)
+- **Rules the kit withdrew are now reported to the consumer holding them, and the withdrawal list is complete.** `withdrawn.txt` listed 8 skills, but the kit's history shows 27 skills and 18 rule files shipped and later withdrawn; the unlisted ones, such as `rules/cycle-auto-plan.md`, kept loading into consumer sessions. They are now listed, a test checks the list against the git history, and a `--force` install no longer labels a withdrawn file "kept (yours)". (#171)
+- **A consumer's own clean verdict now keeps the phase-drift check on.** `check_phase_drift` read only the kit's `rules/verdict-bands.txt`, so a verdict the consumer banded clean in `verdict-bands.local.txt` still counted as not-clean, and a step repeated after it was treated as rework. The local rows are now read too; a local row naming a verdict the kit already classifies is still ignored. (#137)
+- **`check_adr_completeness` no longer accepts Portuguese phrases as evidence that an ADR weighed an alternative.** `rules/english-only.md` says it reads English only; six Portuguese phrases had survived, so a Portuguese rationale passed the alternatives check while breaking the rule governing the plan. (#216)
+- **A criterion was refused as a write because a file name contained `-i`.** Writing flags are now read as whole tokens of the command they belong to — `sed -i`/`-ni`/`-i.bak`, `sort -o`, `git branch -d` stay refused, while `--ignore-scripts`, `a-cold-invocation.test.ts`, `grep -o` and `ls -d` run. (#165)
+- **The scorer and the executor now agree on which commands a criterion may name.** Both read one list (`criterion_commands.py`): `npx`, `pnpm` and `yarn` count as executable and are run like `npm`, and names are matched as whole tokens, so `go.mod` or `node_modules` no longer count as commands. (#167)
+- **The vacuous-criterion advisory no longer fires on "exit 0".** It now flags a count only when zero is compared to it inside the command (`= 0`, `-eq 0`) or stated by the verb right after it (`prints 0`). (#166)
+- **A review whose reviewer read a tree without the change is refused.** Reviewers already declared the tree they read and a stale one was reported above the findings, but the verdict could still read READY_TO_MERGE. It is now `INVALID` with exit 1, naming each stale reviewer and the commit its tree lacks; a reviewer that declares no tree is still reported, not refused, so older findings files stay readable. (#148)
+- **Each item's independent audit writes to its own directory.** Auditor output moves from `.squad/records/audits/<plugin>/` to `.squad/records/audits/<slug>/<plugin>/`, so one item's audit no longer reuses the previous item's plugin database and report. (#185)
+- **Independent auditors are launched one at a time, by the name that resolves.** /review now states the launch order for the `loop-*` halt-loops (one active at a time, the next only after the previous `final_report.md` exists, never in a sub-agent), and `select_auditors.py` prints the namespaced command (`/loop-code-review:loop-code-review`). A guard refusing a second active loop belongs to the plugins themselves. (#181)
+- **A plugin verdict computed as blocking now blocks the review.** When an auditor's `verdict.json` says a script counted blocking findings, /review gets a BLOCKER; agent-derived verdicts stay a carried signal. (#179)
+- **An auditor stopped on its iteration cap no longer counts as coverage.** A report whose own run says INCOMPLETE is now a distinct state that blocks the review with a finding naming the stop condition, instead of passing because it is well-formed. (#178)
+- **/review generated knowledge skills whose names the kit's own validator rejected.** A name longer than 64 characters now keeps as much of the plan slug as fits plus a stable 8-character hash, the directory and frontmatter name always match, and the shipped-skills test no longer grades a run's generated skills as if the kit shipped them. (#203)
+- **/review diffs against a base that exists, and refuses one that does not.** `detect_domain.py` and `spawn_reviewers.py` resolve the integration branch (`develop`, locally or on origin) instead of assuming `main`, report the ref they used so auditors and reviewers get the same one, and exit 2 on an unresolvable base instead of silently deriving domains from the plan alone; changed files are now the three-dot set the auditors audit. (#180)
+- **`--check` and `--json` could disagree about the same item, and the JSON dropped some items from every key.** A plan named by its title, which is how `plan-write` names it, was never linked to its item, so `--check` said "no plan exists yet" next to a finished plan. A halted `approved` item was removed from every approved key and the JSON had no `halted` key, so `/pipeline` dropped it without saying so. Plans are now linked through the same item lookup the alignment gate uses, `--json` always emits `halted`, `--check` answers `ITEM_HALTED` for a halted approved item, and an implemented item is no longer also listed as awaiting a plan. (#209)
+- **A wiring summary read PASS over symbols it never located.** A partial resolution is now `INCONCLUSIVE`: it does not block (the run reads `PARTIAL`, the phase review files a MEDIUM finding) and it no longer claims what was not measured; both reports name the directories searched. (#190)
+- **A check that ran out of time was reported as a red suite.** `run_validation.py` rendered a timeout as `FAIL`, and its npm budgets were hardcoded below what a real repository takes (a consumer's green `npm test` took 658s against 600), so that repository could never pass; `test_execution` meanwhile counted the unfinished suite as one that ran. A timeout is now its own `TIMEOUT` status, the run reads `NOT_VALIDATED` (exit 1, never PASS, never FAIL), and every budget can be raised in `rules/code-quality-thresholds.txt` as `validation.timeout_s.<name>`. (#201)
+- **A task id in another item's commit was read as this item's.** `check_checkpoint_consistency` matched a bare `T4.1` across the last 500 commits of the whole repository, and every plan starts at `T1.1`, so another item's commit raised a false HIGH `task_committed_in_git_not_in_progress` and hid a real `plan_task_absent_from_progress`. A commit is now attributed only when its body carries this item's `Plan: <slug>` line beside the task id, which the halt-loop's commit template now writes. (#200)
+- **D1 reported knip as unavailable in a pnpm workspace whose member declares it.** The detector now runs knip through the package manager the lockfile names, in the root or in each workspace member that declares it, reports which directories it covered, and reports a declared tool it cannot start as "D1 not measured" under its own key instead of blaming the project. (#213)
+- **The code-quality knob audit failed every consumer whose preserved thresholds file predated the kit's.** In a copy install, `rules/code-quality-thresholds.txt` is the project's configuration, so the audit no longer grades it against the kit's scripts: it skips there and names the keys the project's copy leaves unmarked. (#202)
+- **`/discover-execute --sweep` filed its findings as `triaged` while the registry contract files them as `approved`.** The skill now writes `status: approved` with `approved_by: system/autonomous-sweep`, as `rules/cycle-backlog.md` says, and a test holds the two documents to the same answer. (#183)
+- **The comment explaining why a decision that cites an item keeps its class cited an example that did not.** "B-007 decided the threshold" classifies as a dependency; the ordering it described holds, and is now pinned by a test with an example that exercises it. (#140)
+- **A judge given a bare name signed a brief as nobody in particular.** `alignment_judge.py --judge <name>` wrote the name verbatim, so the marker claimed neither `judge/` nor `human/` and a reader searching for `judge/` concluded no judge had signed a brief the scorer called ALIGNED. A bare name is now signed as `judge/<name>`, and any other prefix is refused, as `human/` and `peer/` already were. (#205)
+- **A file marked `**(NEW)**` in a plan was not read as declared.** `plan-write` tells authors to mark a file that does not exist yet with (NEW), and authors write it bold; the diff-cohesion parser only accepted a tail starting with a dash, colon or parenthesis, so a phase declaring three such files reported `declared_files: 0`, a HIGH `no_declared_scope`, and one phase later reported those same declared files as drift. Measured on a consumer: 5 bullets across 4 of 34 plans. (#199)
+- **A phase handed a path inside the write root recorded its events in a stream nobody reads.** `project_root_for` walks up to the nearest project, and one of the legacy root names it recognises is the bare `records` — which is exactly where the write root keeps its trail. So `<project>/.squad` passed the legacy test and was taken for an unmigrated project, and a `review` phase given its findings directory under `.squad/records/reviews/` wrote to `.squad/.squad/records/cycle-events.jsonl`. Measured by the consumer that reported it: 39 real `review` events in the nested stream against 763 in the real one, accumulating over a week with nothing saying so, and reproduced here on a clean tree, so the nested directory is the consequence and not the trigger. A directory named `.squad` is now never a project candidate. The whole candidate is skipped, not just the legacy test the issue suggested narrowing: once the nested copy exists the write-root test fires on it as well, and the narrower fix fails the regression test for a consumer already in that state. The 39 events are not moved — a person moves them. (#215)
+- **`check_data_root` could not see a write root nested inside the write root.** `SPLIT` compares the write root with roots beside it, and this copy is inside it, so the gate that exists to find unreachable data reported nothing. No migration produces `.squad/.squad/`, only a writer that mistook the write root for a project, so it is now reported unconditionally as `NESTED`, ranked between `INSIDE_KIT` and `SPLIT`. The module docstring now lists `INSIDE_KIT` too, which it had been reporting without naming. (#215)
+- **A plan was graded against the smallest item id it happened to mention.** `_committed_work_id` returned `sorted(set(ids))[0]` and consulted the frontmatter only when no id was mentioned at all, so the guess beat the declaration in every plan that names a related item — which is every well-written one. Measured by the consumer that reported it, on a real plan for `B-286` mentioning `B-286` ten times, `B-271` seven, `B-288` four and `B-036` twice: it returned **`B-036`**, which is blocked, and blocked forces the FULL rubric. A brief complete by the LOCAL contract scored 23/34 = 68% and took a hard cap, on a plan whose own structural score was 99.2 with coverage 7/7 and 4/4 ADRs carrying alternatives; two further items were dragged behind it, and a lane read the message, concluded every LOCAL item in every consumer was unbuildable, and stopped. **Declarations first now**: frontmatter `milestone_id`, then the filename slug that `_brief_for` already derives the brief path from, then a body mention only when there is exactly one and it cannot be the wrong one. Several candidates and no declaration returns None — which since the depth fix renders as `NOT MEASURED` instead of silently grading the full rubric. (#214)
+- **The gate never said which item or which rubric it had graded.** The four criteria it named most often were four of the five artifacts the LOCAL rubric removes, so a reader was being sent to write documents their item does not require, with nothing in the output to reveal it. Every run now prints `graded as: <item> at depth <rubric>`, and the JSON carries the same field. (#214)
+- **One impediment named three times in a sentence counted as three.** `parse_blocked_by` returns one entry per OCCURRENCE, in both copies, so a consumer's board printed `blocks B-229, B-229, B-229` and the selector printed `B-229 <- B-270, B-270, B-270` — one edge counted three times from both ends. Reproduced in this tree on the reported input and measured against the registry: one item affected, three occurrences, one distinct id. **The prose form is not the bug** and stays: of the eight items carrying the field when it was measured, seven named a sponsor decision or an external action and only one named an item, so demanding `B-NNN` would have reported seven honest impediments as malformed. What was missing is `dict.fromkeys` on the read, which keeps first-seen order where a set would destroy it. Both copies, because a fix in one is the half-applied shape this repository keeps measuring — the mutant that reverts either one fails the agreement test. (#206)
+- **A bucket fed only by status was labelled "In flight".** Three readers answered what is in flight and no two the same way: `board_state._wip` from the event stream (its own docstring: *WIP is not a card count*), `backlog_index.BUCKETS` from status as `approved` + `planned`, and `select_backlog_item.in_flight` from status as `planned` alone. The two status readers disagree with each other about `approved`, and each has a measured reason. Reported by a consumer whose index said `In flight (6)` with **zero phases open** — five commitments never started and one item merged waiting for a tag — and whose reader then asked whether work was happening in a batch, which the label had told them. `cycle-maintenance.md` makes *exactly one item in flight* a hard gate, so nobody could tell a violated invariant from a mislabelled bucket without opening the generator. **The grouping was right and the label was not**: the index groups by COMMITMENT, which status can answer, and the bucket is now `Committed`. The word belongs to the readers that have the stream. The contract's table also covered five of six statuses — `approved` was in no bucket at all while the generator put it in one — and now names every one, carrying the generator's argument, which was the better of the two. (#207)
+- **The alignment gate reported an undeliverable depth as a derived one.** `classify_alignment_depth.classify` returns a verdict carrying `measurable` and `why_unmeasurable`, two fields that exist for exactly this question, and `_depth_for` returned `.depth` and dropped both. So a plan graded against the FULL rubric because the registry could not be found read identically to one graded against FULL because the item needs it. Reported by a consumer measuring both directions: from inside a worktree the registry is not in, the gate printed `BLOCKED — close these first: nfr_measurable, flows, scenario_classes, system_diagram`; from where the registry is, the same item is LOCAL and the same brief scores 92%. **Four of those four criteria are four of the five artifacts LOCAL removes**, whose absence is the whole point of LOCAL existing. A lane read that message, concluded the `--depth` flag did not exist and that every LOCAL item in every consumer was unbuildable, and stopped — the flag exists and this gate uses it. The default does not move: FULL is the safe direction and the reverse would be the escape hatch the threshold rule refuses. What changes is that the reader can tell *this item needs those artifacts* from *I could not find out whether it needs them*, which is the distinction `check_plugin_freshness` keeps between `unverifiable` and `aligned` and the one added to `check_verification_freshness` the same day between a killed run and a failing one. Third instance of that class in one session. (#212)
+- **Opening the next sprint destroyed the last one's verdicts.** The closed record is the only durable output a sprint has, and `sprint_record`'s own docstring says the closing verdicts are what make it worth keeping — which is exactly what reusing the slot overwrote. Found by running the commands end to end, not by a unit test: every assertion about closing passed, and the file it wrote was gone one command later. A closed sprint is now archived under `records/sprints/` before the slot is reused, which is also the right tree for it: once closed it is a dated artifact rather than state one session leaves for the next. (#211)
+- **A test about broken references broke the gate that finds broken references.** The new prefix test named deliberately-absent paths as `rules/<x>.md` and `skills/_kit-rules/<x>.md`, and `check_xrefs` scans every file in the tree for exactly those spellings — including that test. Six FAIL findings, 46 red tests, all of them pointing at the installer because `verify_ecosystem` reads the gate and `install.sh` validates through it. The fixtures now use prefixes that cannot be read as a claim about this repository, and the one file reachable by a bare name is built from path components rather than a literal. A fixture must not be spellable as a statement about the tree it runs in. (#198)
+- **`SKILLS_REF_RE` was defined twice, identically, in `check_xrefs`.** The second definition shadowed the first, so the file carried two statements of one pattern and a later edit to the wrong one would have changed nothing. Removed. (#198)
+- **The fabricated-citation hard cap could not see the form every plan uses.** `_RULE_REF_RE` refused any filename preceded by `/` and said so — "Excludes paths containing slashes … v0.1 keeps the regex conservative" — honest about its scope, and the scope was the wrong one: `rules/<name>.md` is how every rule file and every plan in this kit cites. Measured by a consumer against 34 plans once the prefix was read: four cite a path that does not resolve, three of them one-line repoints to a document that moved. Measured here over 46 shipped documents: 256 citations seen before, 422 after. **The lookbehind is unchanged, and that is the fix rather than an omission from it** — it excludes `-` as well as `/`, so dropping the slash alone makes `skills/_kit-rules/alignment-threshold.md` match as `rules/alignment-threshold.md` and the kit reports its own correct citations as broken. Keeping `/` forbids a match starting mid-path; a new prefix group consumes the path from its beginning. `.` joined the lookbehind because reading paths made every GitHub URL to a markdown file match from `com/<owner>/…`. And the resolver now looks in the data root one level above `records/`, where `rules/cycle-brainstorm.md` says the cycle writes `wiki/product/objectives.md`: invisible while slashes never matched, and the difference between a resolved citation and a hard cap on a file written exactly where it was told to. The brief's note, which stated the blind spot, changed with the code. (#198)
+- **The alignment scorer paid authors to invent numbers.** `_MEASURABLE_RE` read latency, throughput and size — `ms`, `rps`, `MB`, `p95` — so a change to a component's public API had no unit it could match, and the only reachable form was a comparison. The only comparison an author can write before implementing is a diff budget: a number nobody can know before implementing. Reported by a peer session that paid six panel rounds on one brief, three of whose refusals were about invented line budgets and none about the item; a seat later built the minimal patch and measured 36 lines against a ceiling of 20, before docblocks or tests. Measured here on that brief's own requirements: with the invented budget the measurable ratio was 0.33, and removing it took the honest version to 0.00 — the scorer penalised the true statement and rewarded the inventable one. Both now read 1.00. The vocabulary added is declarations and behaviour (`exactly 1 prop`, `0 dependencies added`, `2 call sites updated`), not more units, because every one of those six refusals was on a non-behavioural criterion and no criterion naming observable behaviour was ever refused. A number is still required next to the noun: `props are documented` states nothing anyone can fail, and the widening must not become "accepts prose". (#197)
+- **"Measurable" had two definitions and they had already drifted.** `plan-alignment` and `plan-confidence` both answer whether a statement carries something somebody can fail, with two regexes written apart. Measured 2026-09-24: `the command exits 0` was measurable to one and not the other, because one had been widened that same week — `LoC`, `lines`, `≤`, `≥`, `exits` — by an author who did not know the other existed. The numeric core now lives in `squad/measurability.py`, which both import: the kit's own rule for its roster, one parser, because two readers of one table drift apart silently. Merging them completely was tried and was wrong: `equals <x>`, `contains <x>`, `returns true` and a backticked command make an acceptance criterion measurable and would have made every requirement mentioning code measurable. Those four stay with the criterion reader, named and pinned by a test, because the two questions overlap without being the same. (#197)
+- **An exemption outside the checked range read as covering fixable work.** `_apply_exemptions` asked `Report.already_pushed` whether a declared commit was still beyond reach, and that set holds only the shas IN the range — it exists to tell an author which of the findings in front of them an amend can touch. Under `--introduced` on a synced branch the range is empty, so every exemption looked like it covered a commit somebody could fix and `exemption_is_fixable` fired on all of them. The question is about the repository, so it now consults the full pushed set. Found within a minute of shipping it, by running the other of the two routes: the audit route was green and the pre-push route was red on the same declaration, which is the only reason it was visible at all. (#196)
+- **A violation on a pushed commit had no permitted remedy, and two checks demanded one.** Commit `4b7c637` carries `fix(panel, install)` where the convention it ships says comma-separated with no space. The commit is on the upstream, an amend cannot reach it, and this repository forbids force-pushing a shared branch — so the standalone audit was correctly red and nothing anyone was allowed to do would clear it. Narrowing the audit's range was the wrong fix and was tried first: its docstring states that grading history IS the point, and `check_contribution_conventions` had already given `--introduced` to the pre-push caller precisely so the two questions stay separate. `pushed_exemptions = <sha> <reason>` now declares one finding, repeatable, with the reason mandatory — a bare sha records that somebody waived it, not why. The safety property is the whole of it: an exemption is honoured only while the commit is reachable from the upstream, the set no permitted action can change. Declared for a commit an amend can still reach, the gate reports `exemption_is_fixable` and KEEPS the original finding, so this can record a rule that was broken and can never excuse breaking one. Waived findings print under `DECLARED` on every run: an exemption nobody can see is indistinguishable from a rule nobody checks. (#196)
+- **A killed test run was recorded, and read, as 31 failing suites.** Measured on this tree 2026-09-24 after a full run was stopped externally: every suite counted as a failure because its pytest was terminated, and not one test ran — `{"failed_suites":31,"passed":0,"failed":0}`. `check_verification_freshness` reported `failing` with the detail "0 test(s) in 31 suite(s) failed", a sentence that contradicts itself and reads as total breakage to anyone who does not stop on the zero. A suite counted as failed while reporting no failing test did not fail — it did not finish. The reader now returns a distinct `interrupted` state: not a pass, because nothing was proved, and not a failure, because nothing about the code was measured. Same argument the existing `unattributable` state rests on — a run that says nothing about one state of the repository is not a verdict, and must not wear the vocabulary of the one state a reader has to act on. A partial kill, where some tests ran and some suites never reported, reads `interrupted` too. (#195)
+- **The reviewer brief told five readers to run a module that cannot run.** Its path note said `check_evidence_citations.py` "decides the question mechanically; run it before returning a plan on an unresolved citation". That file has no `__main__` — it is a library `run_structural.py` imports — so running it prints nothing and exits 0, which reads as a pass. A peer session followed the instruction four times and the `vera-technical-arbiter` seat once, recording "check_evidence_citations exits 0" inside a vote. The same note also claimed the detector "knows the prefix", while the detector's own comment says it "Excludes paths containing slashes ... v0.1 keeps the regex conservative" — so the brief contradicted, with authority, a limit the detector states about itself, which is worse than the narrow detector because the detector is honest. The note now names the scorer, which is runnable and calls the detector for it, points at `sub_reports.evidence_citations`, and states the blind spot so a reviewer does not read zero citations as clean. Guarded by a test that refuses any script path in the emitted note without an entry point. (#194)
+- **A companion the install does not hold is now marked, because this mode refuses to bring it.** `--apply-upstream` writes only over a file already present, so listing a new file beside "apply each on its own" sent the reader into a refusal. Reported by the consumer whose missing companion was the guard's own test file: they declined a wide `--merge` mid-session, so the guard they had verified was covered by a test that does not run there. "The guard has a test" and "the test runs here" are different claims. New companions are labelled and the mode that can bring them is named. (#193)
+- **`--apply-upstream` reported success on half a fix and said nothing about the other half.** The mode takes ONE file and a fix is rarely one file. Reported by a consumer on 2026-09-24 applying the panel-family change: `convene_panel.py` arrived, the installer printed `APPLIED`, the panel kept convening, and the first seat that reached a plugin raised `AttributeError: 'Plugin' object has no attribute 'agent_model'` — that method lives in `installed_plugins.py`. A second companion, `review_panel.py`, was missing too and did NOT raise: it returned `unknown` for a model it now recognises, which is the fail-safe answer and therefore the silent one. A partial apply fails in two ways and only one of them gets reported. The installer now reads the commit that last touched the applied file and names every file that moved with it and still differs in the target. It applies none of them: each is its own judgement, one may be DIVERGED, and refusing to guess there is the whole design of this mode. A kit that is not a git checkout gets a stated `not checked` rather than silence, because silence reads as "none". Over-reports when a commit carried unrelated work, which is the honest direction. (#193)
+- **The capability gate died under `--json`, which is the only way anything reads it.** The payload called `seat_family(s, config_dir=config_dir)` in a scope holding no such name, so the gate raised `NameError` — while running it by hand printed `HOLDS` and exited 0. `verify_ecosystem` reads this gate as JSON and `install.sh` validates through `verify_ecosystem`, so 43 install tests went red at once and every one of them pointed at the installer. The verified family is now resolved once per seat before the payload is built, and `families` derives from it rather than from the roster string it had been reporting beside a verdict computed from something else. The regression test drives the gate as a subprocess, because the check itself was correct and no unit test of it could have seen this. (#191)
+- **The panel's outside-family seat was a Claude sub-agent in every gated phase.** `rules/review-panel.txt` declared `gpt-5.5` for the three `judge-codex` seats and reached them with `builtin` — and `builtin` means this session SPAWNS the agent, which runs the model its own frontmatter names. Measured 2026-09-24 against the version the plugin manifest resolves to, `judge-codex` 0.3.3: all eight judge agents declare `model: sonnet`. Version 0.1.0 declared `model: gpt-5-codex` and 0.2.0 changed it, so the seat stopped being external at an upstream version bump and nothing here heard. The family rule exists because correlated models are fooled together — a plausible fabrication that survives one survives its siblings — and it was satisfied by a string no reader ever compared to anything. `convene_panel.seat_family` now reads the installed agent's frontmatter for a `builtin` seat and reports where the answer came from; `check_panel_capability` computes family diversity from it, and its JSON carries the verified family plus `family_source` rather than the roster's claim beside a verdict derived from something else. The three seats now declare the route the plugin itself documents, `codex`, which runs `codex exec` through the companion script. Two limits are recorded in the roster rather than papered over: that script falls back to `claude --model sonnet` when Codex is unavailable, and `cast_vote --model` is caller-supplied, so neither can prove which model answered. (#191)
+- **A `plugin:agent` seat stopped being verified the moment it left `builtin`.** The plugin and agent existence check sat nested under `if seat.is_builtin`, so moving a seat onto its documented route would have silently retired the check that its agent was installed at all. `resolve_seat` now asks both questions independently: a `plugin:agent` seat is verified against the plugin whatever its route, and a routed seat additionally needs its binary on PATH. (#191)
+- **`family_of` did not recognise the vocabulary plugin frontmatter is written in.** `sonnet`, `opus` and `haiku` returned `unknown`, which is safe — unknown counts toward nothing — but it is a worse answer than the one available. `inherit` is deliberately still `unknown`: it names no model, it defers to the caller's, and guessing would manufacture the contradiction a caller is asking about. (#191)
+
+- **A symbol the wiring checker could not LOCATE was discarded silently, so a summary read PASS
+  over it (#190).** `wiring_recheck`'s own docstring states the obligation it made impossible —
+  *"the former is an unresolved symbol the caller should report as inconclusive, never as PASS"* —
+  and the loop did `continue`, with `PillarARecheck` carrying no field for them. The caller was
+  given an obligation and no way to meet it. The count was derivable as `checked - resolved`; the
+  IDENTITIES were not, and the identities are the finding.
+
+  Measured on a consumer: `symbols_resolved: 17, pillar_a_fails: 0, status: PASS`, where the 17
+  were local variables — `s` with 513 callers, `runs` with 196, `body` with 173 — plus `byName`, a
+  variable **that very diff deleted**, resolving with 5. The four exports of the file under review
+  were among the **11 discarded**, because that module lives in `scripts/`, outside
+  `PRODUCTION_DIR_NAMES`. Run directly against one of those exports the same checker returns HALT:
+  two gates over one subject disagreeing, and the aggregate was the one reporting green.
+
+  **The tuple is the symptom and was deliberately not widened.** `check_wiring.py:203-208` already
+  records why: *"a repo that keeps its source at the root would report every symbol as unwired."*
+  Widening is a guess about other people's layouts and enumerating directory names is a list that
+  goes short again; naming the unresolved generalises to any layout. **And a partial resolution is
+  deliberately still PASS** — a derived or dynamic name legitimately does not resolve, and a gate
+  that fires on ordinary work is one somebody switches off (`§ 4.1`). What the docstring asks is
+  that the SYMBOLS be inconclusive, not the summary. The all-unresolved case was already honest:
+  both callers return `N/A` at zero resolved.
+
+  Both callers now print them, because the field existing is not the fix — the caller printing it
+  is. `test_every_symbol_is_accounted_for` holds the arithmetic: resolved + unresolved == checked,
+  since a symbol that goes nowhere is exactly how 17 came to look like a measurement over 28.
+
+- **A BLOCKED report from the PLAN phase halted nothing, and it was the second omission in the
+  same literal set (#189).** `squad_boss.HALT_DIRS` maps a phase's output directory to its phase and
+  `plans` was absent, while `rules/cycle-phases.txt` declares `plan` and two contracts assert the
+  halt works — `cycle-plan.md` ("a BLOCKED report blocks downstream") and `cycle-maintenance.md`
+  ("SELECT holds the item until the file is gone"). Both true for the four directories named, false
+  for this one. A consumer proved it with one real file moved between two directories: in `plans/`
+  `halt_reports` did not find it and SELECT re-offered the halted item; in `maintenance-runs/`, same
+  file and same name, it was found and withheld.
+
+  **The set was the defect, not the entry** — `squad_boss` records the first omission in its own
+  comment, `maintenance-runs` missing so that *"a BLOCKED report from the cycle that ORCHESTRATES
+  the queue was invisible to the reader of that queue"*. And there were **two partial, disjoint maps
+  of one relation**: `panel_brief.PHASE_SOURCES` named `design`/`discover`/`plan`/`alignment`,
+  `HALT_DIRS` named `implement`/`review`/`release`/`maintenance`. Neither complete, no overlap, and
+  `plan` in one and missing from the other — which is how this was possible at all.
+
+  The proposed fix was to derive the map from `cycle-phases.txt` crossed with
+  `blocking-verdicts.txt`. **Measured: that cannot produce it** — the phase file declares phases and
+  no directories, and the verdict file is a flat list. So the seven remaining phases are now
+  DECLARED in `PHASES_WITHOUT_A_HALT_REPORT`, each with why, and two tests hold the set: every
+  declared phase is in one list or the other, and the two maps of the relation agree where they
+  meet. `discover` is declared as a **gap rather than mapped** — `cycle-discover.md` promises a
+  BLOCKED report and names no directory, and mapping it from a guess is how this set acquired its
+  first two omissions.
+
+- **The vote-binding fix was verified in its links and not in its chain.** `c96442d` made
+  `convene_panel` name the artifact, and the tests that came with it exercised `convene_panel` and
+  `_artifact_digest` separately — **neither ran `cast()`**, which is the only thing that writes a
+  record. So `assignment → record → digest` stayed unverified after the fix, which is the same
+  shape as the defect it closed: `test_a_vote_binds_to_the_text_it_was_cast_on` proved the consumer
+  worked while nothing checked the producer. Corrected one level up and left uncorrected one level
+  above that.
+
+  The chain is measured now, including **the refusal that existed and had never been reachable** —
+  a second verdict on unchanged text. Asserted as the property rather than as *the field is not
+  null*, because naming the field would let the next way of emptying it through; the formulation is
+  a peer's and is better than the one I had.
+
+  A second defect was reported in the same function — that `_open_round` archives the PREVIOUS sha
+  rather than the digest it just computed. **Measured: that is correct.** The archived round carries
+  the sha the round was cast ON, and `panel["artifact_sha256"]` then moves to the current bytes. The
+  hash is written once at record creation, deliberately: *"it belongs to the PANEL and not to a
+  seat — re-hashing on each vote would bind the approval to the text only the last reviewer saw."*
+  What was broken was upstream of all of it.
+
+  And my own end-to-end test **skipped** on its first run, because a bare project has no roster. A
+  skip is not a pass, and a test that skips leaves exactly the gap it was written to close. It
+  builds the roster now and asserts.
+
+- **A matrix mismatch named one end of itself, so the artifact's own explanation of a fix
+  re-created what it removed.** `_task_criteria` attributes a criterion only from inside that
+  task's own `#### Acceptance Criteria` block — correct, and the reason is good. The trap is a
+  review asking for a criterion to MOVE: the natural edit moves the bullet and leaves a note
+  saying so, and the most useful place for that note is inside the block it is about. The parser
+  then reads the note's `**AC-005**` as the old task still declaring it, while the moved bullet,
+  placed under the new task's `###` heading and above its first `####`, sits in no subsection and
+  is invisible to every reader of the block.
+
+  Measured on a consumer three times in one session: three corrections that were right by eye
+  produced `matrix_cites_undeclared_criterion` + `coverage_lt_100`, and a differential on a scratch
+  copy flipped `is_complete` back to True by reverting one row's task id. A panel seat found it by
+  running the scorer; the other two read the plan text, found the move correct, and closed the
+  objection — a human following the moved bullet DOES find it under the new task.
+
+  **The parser is deliberately not made cleverer about prose**: a checker that tried to tell a
+  declaration from a sentence describing one would be guessing. What changed is the diagnostic. It
+  now reads `G1 cites AC-005, which T1.4 does not declare, and T1.2 does at line 16`, and a
+  criterion in no subsection is reported as such by name and line. The locations are recorded
+  beside the set in the same pass, so the two cannot disagree about what was read.
+
+  Two of my own tests were wrong here. One passed before the fix, asserting "contains a digit" and
+  finding the `1` in the gap id `G1` — satisfied by a coincidence in the text it read. An existing
+  one pinned the message's exact string and broke when the message gained the half that closes the
+  diagnosis; it asserts the content now, because the finding is about the row and the criterion and
+  not about the wording.
+
+- **A dimension with no subject was reported as a positive signal at full weight.**
+  `check_adr_completeness` returns `completeness_ratio=1.0` for zero ADRs — deliberate, and
+  `plan-template.md` says so: a plan with one way to do a thing has no decision to record. The
+  ratio is right; using it as a SIGN was not. `run_structural` read it twice — `adr_score = 20.0 *
+  ratio` and `sign = "positive" if ratio >= 1.0` — so an empty set contributed a perfect dimension
+  score AND read as evidence. The same shape sat on the other 20-point dimension: a plan with no
+  bug-fix task scored 20/20 for TDD.
+
+  Both now read `NOT MEASURED` with sign `neutral`, a value the `Reason` contract already declared
+  and used elsewhere. **The score is deliberately unchanged**, and
+  `test_the_score_is_unchanged_by_this` pins it: the weights are `rubric-v1.md`'s and the 90%
+  threshold is calibrated against that formula, so redistributing 20 points when a dimension is
+  unexercised would recalibrate every verdict in the kit silently — a rubric decision, not a defect
+  fix. The argument for saying it out loud is `check_install_drift`'s about its own counts: *"a 0
+  that means 'not reported' and a 0 that means 'none' are different facts, and summing them
+  silently is how a total becomes fiction."*
+
+- **An output-valued criterion was judged by its exit code, so `grep -c` printing `0` read red in
+  both states (#188).** `_decide` returned before the output was ever compared — `if
+  result.exit_code != 0: return False` sat above the `print:<value>` branch — and this ecosystem
+  writes *"`… | grep -c pattern` prints `0`"* routinely, a form that prints `0` and exits `1`. Such
+  a criterion read `[fails today]` in the FIXED state exactly as in the broken one: **not
+  discriminating, stuck.** Measured on one consumer plan, this and the tokenizer below left **six
+  of thirteen criteria unable to flip**, while that plan's central metric — stated four times,
+  including in its Global DoD — was *"`grep -c '[fails today]'` goes from 13 to 0"*. Unsatisfiable
+  by construction, and nothing said so. The exit code now travels in every verdict as context
+  (`already prints '0' (exit 1)`), because hiding it would trade one confusion for another.
+
+- **The tokenizer read `print` inside an `awk` body as a command name.** The split separates on `{`
+  and `}`, so `awk "END{print NR}"` became `awk "END` / `print NR` / `"` and `print` landed in head
+  position — refused as unknown, permanently and lexically, so repointing the criterion at a file
+  that exists changed nothing. **Measured before choosing the fix**: dropping `{`/`}` from the
+  separator set would leave `{ rm -rf /; }` with heads `['{', '}']` and `rm` never read, a security
+  regression in the file whose job is that boundary. So an `awk`/`sed`/`jq` quoted body is masked
+  instead — all three read, and `_WRITING_FLAGS` still checks the unmasked span, so `sed -i`
+  remains caught.
+
+- **The refusal now names the line-count form that works.** Measured on a three-line file:
+  `grep -c .` returns 2 because it skips blank lines (wrong for a BUDGET), `wc -l <` returns 2
+  because it counts newlines, `awk "END{print NR}"` is correct and was refused, and `grep -c ""` is
+  correct and was accepted while being named nowhere. The tool steered authors from a wrong
+  instrument to a slightly-wrong one; the refusal says which to use.
+
+- **No panel vote was bound to the artifact it reviewed (#187).** `cast_vote.py` hashes the
+  artifact per round — the mechanism is there and correct — and reads the path from the
+  assignment: `panel.get("artifact", "")`. `convene_panel.py` named no `artifact`, so the key was
+  always absent, the digest always `""`, and every recorded round carried `sha256=None`. Confirmed
+  on a consumer across **all six archived rounds** of one record.
+
+  **The dangerous case is the inverse of the one that was hit.** A plan edited while a seat was
+  still voting, where the seat happened to read the post-edit text and its findings held — by
+  luck. The other direction has no defence: a round approves, an edit lands, and the record still
+  reads `APPROVED` over bytes nobody approved, while `review_panel.py` tallies it 2-of-3 and the
+  phase advances. `check_panel_approval.py` states that a missing record is not an approval, and
+  **an unbound record is weaker than a missing one, because it reads identically to a sound one.**
+
+  `convene_panel` now calls `panel_brief.locate` — the same `PHASE_SOURCES` table `build` reads, so
+  a rename moves one string and this follows. `cast_vote.py` did not change: it was already
+  written for the value.
+
+  **A test about this already existed and passed.**
+  `test_a_vote_binds_to_the_text_it_was_cast_on.py` tests `cast_vote` correctly and **builds its
+  own assignment** carrying `"artifact": artifact` — so it proved the CONSUMER works and said
+  nothing about whether the PRODUCER ever supplies the value. It even blesses the empty case, which
+  is right for `cast_vote` (an honest `""` beats a fabricated digest) and is why nobody asked
+  whether `""` was the only state in practice. Same shape as `--apply-upstream` calling
+  `classify_file` with two of four arguments: the function was tested, the call site was not. The
+  new test runs the real producer, over the phase list read from the roster — `alignment` was added
+  hours earlier and a test naming the three older phases would have passed over it.
+
+- **`check_adr_completeness` saw no ADR, so the cap guarding them had no subject.**
+  `ADR_HEADER_RE` matched `^###\s+(D\d+)`, which the plan template does prescribe — and the rest
+  of the kit writes `ADR-N`: `rules/cycle-code-quality.md`, `rules/cycle-rule-schema.md`,
+  `docs/ADR/0025-…`. Authors followed the majority. **Measured across one consumer's plans:
+  `### ADR-N` ninety-six times against `### D1` five.** So the kit taught one spelling everywhere
+  and matched the other, which makes accepting both the fix rather than calling it a deviation.
+
+  The cost, proven rather than argued. `plan-confidence-golden-rule.md:42` declares *"ADR without
+  alternatives in Rationale → score ≤ 70"*, and with no ADR matched the cap has no subject: a
+  plan with one ADR rejecting nothing reported `total_adrs=0, completeness_ratio=1.0`. **A gate
+  reporting itself applied while applying nothing** — the second instance in one day, after the
+  template prescribing DoD headings the criteria checker could not match (#186).
+
+  Found by the **orthogonal seat** of a plan panel: the reviewer from outside the kit's model
+  family approved the artifact and brought back a defect of the kit that neither same-family seat
+  saw — while both same-family seats returned the plan for arithmetic errors the orthogonal one
+  did not catch. Each caught what the other missed, which is the argument for
+  `panel_size_for`'s narrowing of the family rule, measured from the other side.
+
+- **`test_the_template_satisfies_its_own_checkers` named THREE checkers and the skill ships
+  SEVENTEEN.** Same shape as the frozen parenthetical naming six signals while the matcher held
+  thirty-nine (#175): a list that names some is a sample wearing coverage. It cost an instance the
+  same day — had the file enumerated the directory, the ADR defect above would have surfaced in
+  the run that found the two DoD headings. The list is now **derived from disk**, and a checker
+  this file does not exercise must be named in `_NOT_EXERCISED` with its reason — thirteen are,
+  each with one (*"reads the repository's modules, not a document"*, *"fires only on a bugfix
+  task"*). Both directions: an exclusion naming a checker that left also fails, because that is a
+  rule which quietly stopped applying. Proven by mutation — a `check_quarantine_probe.py` with no
+  declaration fails the check by name.
+
+- **`check_drawbacks_section` did not count a bullet opening in bold**, which is the form the
+  rest of `plan-template.md` uses. `^\s*[-*]\s+(Q\d+|[A-Z])` missed
+  `- **Does \`scripts/lib/\` want a barrel?** …` and reported `unresolved_entries: 0` beside two
+  bullets plainly present — the sixth literal a consumer found by trial and error in one day. The
+  added `\**` loosens nothing: `- *emphasis* then text` and a bullet of only spaces are still not
+  counted, because what the pattern requires is that a bullet CARRY something.
+
+- **The template prescribed headings its own checkers could not find, and the measurability
+  detector could not read the notation this kit writes (#186).** Four defects in the space
+  between `plan-write`'s template and `plan-confidence`'s gates. A consumer measured the visible
+  end: `total_criteria 0` beside the hard cap `vague_acceptance_criteria`, which sends an author
+  to rewrite criteria that are precise — and reported finding **six** exact literals by trial and
+  error in one day.
+
+  `#### DoD (Definition of Done)` (`:269`) and `## Global Definition of Done` (`:339`) matched
+  nothing, and `Global DoD` — an alternative the pattern itself listed — was unreachable at its
+  natural level, because `####?` is three or four `#` while a document section is `##`.
+  `check_baseline_context` required four subsections the template **deliberately removed** on
+  2026-09-22 (*"Cite the discovery, do not restate it"* — 135 lines median here against 503 in
+  the opportunity, the same state written twice), while its docstring cited that template as the
+  source of them; it was last touched four days earlier and contains no occurrence of
+  `citation`. And `MEASURABLE_PATTERNS` read `[<>]=?` but not `≤`, required `exit ` so `exits 0`
+  was missed, and had no unit for `LoC`.
+
+  **Three attempted fixes were refuted by measurement before the fourth held.** Widening the
+  header pattern made the kit's own `good-plan.md` fire the cap. Not grading DoD bullets —
+  refuted, `test_dod_section_also_scanned` defends grading them and is right. Rewriting the
+  fixture — refuted, three of four rejected bullets were detector misses. Fixing only the
+  detector — refuted, the ratio reached 0.77 and `All phases done` / `Tests passing` remained.
+  **Both sides had a defect**, and they had never been graded because
+  `## Global Definition of Done` could not be matched. After both: `0.69 → 0.92`, cap cleared.
+
+  **The mechanism closes the class rather than the four instances.**
+  `test_the_template_satisfies_its_own_checkers.py` feeds the template to its three checkers, so
+  a heading changing on one side without the other fails there instead of in somebody's plan — it
+  found all four at once, including the two nobody reported. It strips the template's ```markdown
+  fences first, because a template's examples must not be read as content and the checkers strip
+  fenced code: the fixture models an author who FOLLOWED the template rather than the template as
+  a document. A lint tool was offered instead; the parsimony ladder puts a lint tool at rung six
+  and the two files agreeing at rung one.
+
+- **The alignment report now shows which trees the acceptance criteria name (#177).** A brief
+  can score 34/34 `AWAITING_REVIEW` while every path its criteria name lives in a different git
+  repository. Two gates, each correct in its own scope, and the space between them:
+  `route_domain.py` checks the DECLARED `repo:` and never these paths, and this scorer grades a
+  criterion executable when it names something that RUNS rather than something that EXISTS —
+  deliberate, because a plan describes files not yet created. `grep -rln 'criteria'
+  mechanisms/gates/*.py` returns nothing: no gate reads criteria at all. A consumer paid hours
+  of brief and plan for work its registry cannot execute.
+
+  **It SHOWS and does not judge.** Not a comparison — the scorer receives only the brief and has
+  no access to the item's `repo:`, which lives in `BACKLOG.md`. Not a gate — a criterion
+  legitimately names a config at an umbrella root or a shared test, and
+  `code-quality-golden-rule.md § 4.1` is the argument that a check firing on ordinary work is one
+  somebody switches off. So no new blocking surface, no new gate in the chain, no contract
+  change, and nothing new asked of the caller.
+
+  **Three granularity rules, the first two refuted by running them on the brief that motivated
+  the issue** — an item filed as `repo: packages/theo` whose criteria name `packages/ui`.
+  Reporting the first segment printed `packages (12)`, identical for both, so the reader saw
+  nothing. Reporting two segments only when the group agreed printed `packages (12)` as well,
+  because those criteria name BOTH and disagreement collapsed exactly where the answer was. The
+  rule that works reports two segments when the second names a DIRECTORY and one when it names a
+  file, so the real brief now reads **`packages/ui (11) · packages/theo (1)`** while
+  `tests/test_a.py` and `scripts/probe.mjs` still read `tests` and `scripts`.
+
+  A first draft also printed the line inside the sign-off branch, where it would appear only
+  after a brief was fully signed — which is after the plan is written, and arriving before it is
+  the whole value.
+
+- **`_preflight` called `_verification(root)` and took no `root`, so the verification-freshness
+  check had never run once (#176).** No module-level `root` existed either, making the
+  `NameError` unconditional in every tree since it was wired in. `promote()` had the value and
+  did not pass it.
+
+  **It stayed invisible because the fail-safe worked.** The `except Exception` above the call
+  was deliberate — *"a premise we cannot read is reported, not hidden"* — but what it PRINTED,
+  `UNCHECKED`, is exactly what a consumer sees when no verification record exists yet: an
+  expected, harmless state. Twelve lines above, a comment carefully explains that `stale` and
+  `unattributable` both mean the green a reader remembers is about a different tree — and the
+  check producing those states had never run. **The shape, named so it can be looked for: a
+  fail-safe that reports into the same vocabulary as a legitimate state converts a defect into
+  an expected condition.** Not the recorded class *a step that cannot fail loudly did not run* —
+  this step DID fail loudly, into a channel where that is indistinguishable from normal. The two
+  are now separate: `BROKEN` says in words that it is a defect in the promoter and not a state
+  of the repository. Origin: `_preflight`'s docblock says *"Pure code movement"*, which is the
+  claim that made nobody look.
+
+- **A slice that ran ZERO tests read `PASS`, because pytest exits 0 when it runs nothing.**
+  Measured here: `pytest tests/ -k <no-match>` prints `3141 deselected / 0 selected` and exits
+  `0`. A filter matching no name, a path collecting nothing and a selector selecting nothing all
+  do this, and `run_slice_tests.sh` judged from the exit code alone. A consumer named it as one
+  of four complaints about the kit, having been misled by it twice in one day.
+
+  **The principle was already written four lines above and applied only to the trailer**: *"a 0
+  that means 'not reported' and a 0 that means 'none' are different facts, and summing them
+  silently is how a total becomes fiction."* The verdict never consulted them. A slice that ran
+  nothing now reads `EMPTY` and fails the run. Failing is safe, measured: across the 31 slices
+  the smallest legitimately runs 11 tests, and `skipped` is counted separately so a fully
+  skipped slice is not called empty.
+
+- **A signature marker on a box's continuation line was invisible, and the tick read as a
+  PERSON's (#174).** `score_alignment.py` paired each box's mark to its text with its own
+  `_CHECKBOX_RE`, anchored `^…$` under `re.MULTILINE`, capturing ONE line. A
+  `<!-- signed-by: … -->` on the next line fell outside the captured text and the `else
+  "human"` fallback fired. Measured here: same marker, same judge — on the `- [x]` line
+  `judge/alignment-judge`; one line down, `human`. Box authors wrap long text and the natural
+  home for a long `(verified: …)` clause is a line of its own, so **the failing shape is the
+  one a careful reviewer produces**.
+
+  **The root cause is the duplicate reader.** `squad/signoff.py` declares itself the one reader
+  and its `read()` searches the whole body, so it never had this bug; `score_alignment.py` kept
+  a second, line-wise one beside it. `attribute()` now lives in the shared module — boxes with
+  their continuation lines, weakest-wins in one place — and the duplicate is gone. **The
+  `"human"` default is NOT changed**: it is deliberate and documented, and changing it would
+  oblige every human to write `human/<name>` or be blocked, which is a contract decision. What
+  ships instead is the count — the report now says how many ticks carried no marker, because a
+  mechanism that assumes must not assume silently.
+
+- **The concurrency refusal printed the list that DETECTS concurrency, not the one that
+  ACCEPTS a test (#175).** A reader who copied a printed token failed again: the message
+  rendered `CONCURRENCY_SIGNALS` (39 tokens — `mutex`, `SharedArrayBuffer`) while acceptance is
+  decided by `RACE_TEST_SIGNALS` (14 — `go test -race`, `loom::`, `pytest-asyncio`). Same class
+  as `rules/code-quality-allowlist.txt` (#343), where following the documentation produced a
+  worse outcome than adding nothing.
+
+  **The irony is kept in the docstring.** `_accepted_signals()` exists to stop exactly this, and
+  the hand-written parenthetical it replaced — "(race/loom/concurrent/parallel/atomic-counter/
+  cancellation)" — names six tokens that are **all `RACE_TEST_SIGNALS` members**. The frozen
+  prose was naming the RIGHT list; the fix that removed the drift risk pointed the renderer at
+  the wrong constant while asserting, in that same docstring, that it now derived rather than
+  restated.
+
+  **Two further defects surfaced by writing the class-closing test**, which asserts that every
+  printed token is accepted by the decider — an invariant that holds whichever constant a later
+  edit points the renderer at. First: `\b--race\b` **could never match**, because a word
+  boundary cannot hold between a space and a hyphen; it accepted only `x--race` and never
+  `cargo test --race`, so the acceptance list held a pattern that could not accept the thing it
+  named. Second: the regex stripper, written for `\bword\b`, rendered the real list as
+  `cancellations+propagat` and `none[—-–]+single[- ]threaded)` — tokens nobody can copy. A
+  message naming the right list in an unusable form is not a fix.
+
+  A pre-existing test **encoded the defect**: `test_the_concurrency_refusal_lists_every_accepted_signal`
+  required the message to derive from `CONCURRENCY_SIGNALS` and be long. Its purpose was right —
+  a frozen parenthetical is how a message drifts from code — and its yardstick was the same wrong
+  constant. Corrected rather than deleted, for the third time this day (see #169's two).
+
+- **`install.sh` accepted an install as a place to install, and `--remove-withdrawn` could
+  not run without a full reinstall.** Two defects of the same operation, both measured by
+  making them: passing a consumer's `.claude` as the target built `.claude/.claude` with
+  **917 files** — a complete second copy one level down — plus a records scaffold beside it,
+  with nothing warning. The litter was the smaller half. **Every other flag then acted on the
+  wrong tree**: `--remove-withdrawn` ran against the nested install, found none of the eight
+  withdrawn skills there, and reported nothing, while the real install one level up kept all
+  eight. A destructive flag that silently does nothing is what makes an operator believe the
+  work is done.
+
+  The refusal reads `squad.layout.has_kit` — the same predicate `resolve()` uses to decide a
+  directory IS an install — rather than the basename `.claude`: a consumer may install into a
+  differently-named directory, and a name check would miss exactly those while refusing an
+  empty directory that happens to be called `.claude`. It names the directory to use instead.
+  `test_install_refuses_an_unconfined_root.py` already refuses `$HOME`, the config dir and
+  `/`, whose blast radius is the machine; this is the complement, whose blast radius is a
+  duplicate.
+
+  And `--remove-withdrawn` now removes and STOPS. It was reachable only through a full
+  install, so the narrow, destructive, explicitly-authorised action could not be taken without
+  the broad one nobody asked for — authorising the deletion of eight retired skills is not
+  authorising every kit file to be replaced. Measured consequence: given that choice, the
+  operator deleted the directories by hand, which is the mechanism being routed around. The
+  standalone path also drops the test from 47.79s to 6.46s, because it installs nothing.
+
+- **`--apply-upstream` called `classify_file` with two of its four arguments, so it refused
+  exactly the files the checker had just declared applicable.** The promotion from `DIVERGED`
+  to `STALE` runs only when given `kit_root` AND `rel`
+  (`check_install_drift.py:233`), and `rel` is also what enables that function's ownership
+  guard. The scan passes both and reported `stale: 9`; this passed neither and refused the
+  same nine as `DIVERGED`. **One reader, called with less context than it needs to answer** —
+  the inverse of the duplication the `PROJECT_OWNED` import removed in the same file, and
+  just as capable of two answers to one question. Reported by a consumer that checked
+  MEMBERSHIP of the stale list rather than its count, then could not act on it; verified here
+  against a copy of that install, where both files now apply as `stale` and `agents/README.md`
+  is refused by the ownership guard rather than misclassified.
+
+  Two smaller defects of the same change closed with it. `classify_file` can now return
+  `YOURS`, which fell into the "could not classify" branch — right refusal, wrong reason;
+  it has its own branch. And the withdrawal report from #171 printed on EVERY per-file
+  invocation: eight lines before a one-line result, 176 lines of repetition in a loop of 22,
+  which is how a report teaches people to skip it. A withdrawal is news about the whole
+  install, so it now prints only for the operation that touches the whole install.
+
+- **A size in BYTES was spent slicing a string of CHARACTERS, and it made 350 recoverable
+  files unreachable (#173).** `_blobs_from_batch` ran `git cat-file --batch` with
+  `text=True` and advanced by the declared `size` over the DECODED stream. Every non-ASCII
+  character left the cursor short by the difference, and this kit's prose is written with
+  em-dashes and accents. Measured on `hooks/validate-command.py`: **59104 bytes against
+  58717 characters — 387 lost per revision from 197 non-ASCII characters**;
+  `git rev-list --all` names 14 commits for that path and the reader returned 7 contents,
+  none of them the one a real install holds.
+
+  **The consequence ran all the way to the upgrade path.** `classify_file` downgrades to
+  `STALE` when the install's body appears in history, so a body the parser never produced
+  could not match — and the file was reported `DIVERGED`, which `--apply-upstream` refuses by
+  design. Measured before and after, on two consumers:
+
+  | consumer | before | after |
+  |---|---|---|
+  | one with 400 differing files | `diverged 350 · stale 10` | **`diverged 0 · stale 361`** |
+  | one installed today | `diverged 9 · stale 0` | **`diverged 0 · stale 9`** |
+
+  Every one of the 350 is now applicable, and by PROOF rather than inference: the body is
+  byte-identical to a revision this kit shipped.
+
+  **Two conclusions of the same day were wrong because of it.** A line-level history
+  criterion was proposed and then measured against the case it was never tested on — a
+  consumer who re-adds a line the kit deliberately deleted — where it does not merely miss
+  the case but REMOVES a protection the tool already has (`install_ahead` refuses it
+  correctly). And "provenance only serves future installs" was refuted by a peer session
+  measuring its own install: `# kit-commit` present, resolving and clean, with 8 of its 9
+  differing files byte-identical to that commit. Both detours ended at the parser: the
+  mechanism to answer this existed and was broken by a unit.
+
+  Also fixed here: `--apply-upstream` restated `PROJECT_OWNED` inline, making it the fourth
+  reader of "whose file is this" — the multiplication `check_install_drift._is_project_owned`
+  refuses to add to in its own comment. It imports the declaration now.
+
+- **A write verb inside a QUOTED STRING refused a read-only command — all ten were reachable
+  (#168).** `check_kit_boundary` searched `WRITE_VERB_RE` over the raw segment, and
+  `segments()` splits on `;`, `&&` and `|` with no notion of quoting, so
+  `echo "no install agora: .claude/rules/architecture.md"` was refused and
+  `echo "algo aqui: …"` was not — one Portuguese word apart, neither writing anything. Same
+  class as the heredoc false positive `_split_heredocs` closed, and worse in one respect: a
+  heredoc at least has the SHAPE of a write. Reported by a peer session that re-did the
+  blocked read through Python and finished the work unchanged — **the block bought nothing at
+  the price of a detour**, which is how an operator learns to route around a guard. Neither
+  hypothesis raised was right: `$(grep …)` in a string passed and `--install` as a flag
+  passed; it was the bare word. Fixed with `_mask_inert_quotes`, which is length-preserving
+  and keeps `$(…)` and backticks readable — blanking a double-quoted span wholesale would
+  have made `echo "$(rm .claude/x)"` a two-character bypass of the entire boundary. Masked
+  for DETECTION, original for EXTRACTION, so `rm ".claude/x"` still resolves. **Two holes
+  that predate the report closed with it**: `rm ".claude/x"` was never refused, because
+  `(?<!\S)` rejected the quote as a neighbour, and neither was a backtick substitution,
+  because `` ` `` was not in the verb's prefix class. `)`, quotes and backticks now terminate
+  an extracted path, so a refusal no longer names `…run_slice_tests.sh)`.
+
+- **A withdrawn kit file reached nobody, and a reinstall put it back (#171).** `install.sh`
+  preserves any skill directory the source kit does not ship — right for a project's own
+  skill, exactly wrong for one the kit RETIRED, and indistinguishable from it on disk.
+  Measured on one consumer: 30 skills present and absent from the kit, **103 of the 111 files
+  `check_install_drift` labelled "consumer-local" belonging to them**, and **0 of the 30 named
+  in `.kit-manifest.txt`**, whose header states "Anything not here is the project's" — false
+  for every one, and false BECAUSE the manifest is regenerated: the install that withdrew a
+  skill erased the only record that the kit ever shipped it. Not inert: a stale
+  `shared-understanding` cites a rule that moved and breaks `check_xrefs` for the whole
+  install, and its pre-`--depth` `score_alignment.py` produced a BLOCKED verdict on an item
+  the current copy scores ALIGNED at 92%. **By name, never by absence** —
+  `mechanisms/distribution/withdrawn.txt` travels with the kit and is the only list
+  `--remove-withdrawn` may delete by, because absence is how a project's own work would be
+  deleted. Reported by default; a test asserts no entry names a skill still shipping, which
+  would turn the list into a weapon. `check_install_drift` reports them as their own class:
+  `consumer-local 111 → 84` on the consumer measured.
+
+- **`skills/backlog-item/SKILL.md` taught that the routing table lives in `cycle-backlog.md`,
+  which has been the LAST of five fallbacks since 2026-09-11 (#172).** It also claimed "one
+  table and one truth" while `route_domain.py` resolves by precedence over five locations.
+  The sibling skill has it right and warns about this exact failure; `route_domain.py`'s own
+  docstring records the same drift happening to itself. Third instance, so the fix is a test
+  that reads `_TABLE_LOCATIONS` from the source and fails when a document names a location
+  the resolver does not read first — a table written to a shadowed location works until
+  somebody adds a file ahead of it, and then stops with nothing saying why.
+
+- **`test_cli_a_real_audit_names_what_it_could_not_measure` pinned the whole soft-cap list, so
+  it failed on any machine without `knip` (#170).** Any missing optional auditor added its own
+  `auditor_unavailable_*` entry and broke a test that is not about it — permanently red here,
+  taking the whole `skills/code-quality/tests` suite with it. The test's own name says it
+  reports what it could not measure, so an extra entry is the system under test working. Now
+  membership, matching the `>=` assertion directly above it.
+
+### Changed
+- **Every scoring gate now says what shape would have passed, not only what failed.** `score_alignment`, `score_product_alignment`, `run_opportunity_score` and `run_structural` print (and emit in JSON as `accepts` / `accepted_shapes`) the literal heading, table header, field or vocabulary each refused criterion or cap accepts, derived from the constants the gate reads; every empty opportunity corner is listed rather than the first three. (#139)
+- **The plan template shows the ADR heading the checker reads.** An example under `## ADRs` uses `### D<n> — `, one of the two spellings `check_adr_completeness` counts, so a plan written from the template cannot write an ADR the gate does not see. (#204)
+- **`check_english_only` scores each line for Portuguese instead of matching a closed word list, and paths that ship Portuguese on purpose are declared in `rules/english-only-allowlist.txt`.** The old list missed any Portuguese built from words it did not carry (an `install.sh` section header survived four months). Measured on this repository: 130 Portuguese lines found across 43 files the old gate called clean, with no English line flagged; loanwords and names such as "café" or "São Paulo" in an English sentence do not fire. An allowlist row without a reason is refused with exit 2. (#130)
+- **`missing_cost_if_wrong` now says in its own docstring that it caps nothing.** The field is reported under `sub_reports.adr_completeness` and no cap in the golden-rule table refers to it, but nothing said so at the point a reader meets it — and the CHANGELOG argues hard for the signal's value, which invites the next reader to build a threshold on it. On a consumer registry of 34 plans measured 2026-09-23, all but one plan was missing the field on at least one decision: a cap here would fire on ordinary work, which is how a gate earns being switched off. The comment now states report-only, the reason, and the measurement's date and origin. (#192)
+
+- **`rules/testing.md § 4.1` gains the sharper case: the rule you just wrote does not apply
+  to you automatically.** The section already said a builder cannot see the boundary they
+  moved. Three measurements on 2026-09-22/23, across two sessions, say something worse —
+  the knowledge was not merely present, it was FRESH. A session held an item out of
+  `shipped` for four minutes between tag and registry, wrote in three places that
+  integration is not availability, and hours later marked its own item `shipped` on a commit
+  still only on its disk. A session built `TREE_MOVED`, told a peer that swapping a kit
+  mid-run produces a verdict about no tree, then committed twice during its own run. A
+  session wrote that unverifiable is not verified, then ran its own checker against a peer's
+  files and reported the result as the peer's state. **The switch is from verifying somebody
+  else's work to verifying your own**: outward the rule is a lens you hold up, inward it is
+  something you already believe you satisfy, and *I just thought about this* reads as *I have
+  handled this*. Recorded as an extension rather than a fifth decision document, because the
+  section it belongs to already exists — and because a kit whose additions outrun its
+  removals 12:1 should consolidate where it can.
+
+- **A commissioned audit now says which directory its commands run from.**
+  `select_auditors.py` emits an absolute `--output-dir` under the project's write root,
+  and every `loop-*` plugin confines `--output-dir` under its own working directory (a
+  path-traversal fix). Both halves are right; the join holds only at the project root,
+  and neither side said so — `skills/review/SKILL.md` said "run each command exactly as
+  printed", and the plugin's refusal names the FLAG (`--output-dir is unsafe`) rather
+  than the directory the reader is standing in. Acting on that reading means moving the
+  output directory, which is the one thing that must not move: `check_auditor_coverage`
+  looks for the report exactly where the assignment put it. The assignment now carries
+  `run_from` in its JSON and a `run from:` line in its printed form, and the skill says
+  move the caller, never the `--output-dir`.
+
+### Removed
+- **Homes for seven `loop-*` auditors that no code provided.** `rules/review-auditors.txt` named "a deliberate sweep" as the place for architecture, duplication, doc, refactor, licence and reference-compare audits, and `cycle-design` as the place for system cartography; nothing in the kit reads any of their reports or turns a finding into a registry item. The file now says a person runs them and files what they find. Building a converter was weighed and declined for now. (#183)
+
+- **`renumbered` — a finding that read the order blocks sit in a file and stopped the whole
+  machine over it (#169).** It tested `numeric_ids != sorted(numeric_ids)`, where the list
+  is the order ids APPEARED IN THE FILE, and it sat in `IDENTITY_CHECKS` — so a registry
+  listing newest first, a legitimate and common layout, reported `INVALID` and
+  `select_backlog_item.py` refused to hand out **any** item. Measured at 40 and 131 items;
+  the same ids ascending were `SHIPPABLE_WITH_CAVEATS` / `ITEM_SELECTED`. **It could not
+  have worked**: renumbering is a claim about two points in time and a checker sees one
+  snapshot, so sortedness was a proxy for a property nothing here can observe. The
+  observable half — no id appears twice — is `duplicate_id` and always was, and
+  `rules/cycle-backlog.md` justifies the rule by what it protects ("a killed item keeps its
+  number so the audit trail survives"), which is about values assigned over time and which
+  a descending layout satisfies completely. The contract, `README.md`, `SKILL.md` and the
+  selector's docstring now say the layout is the reader's to choose.
+
+  **Found from the outside, and the timing is the lesson.** A peer session reported the
+  finding firing on its 131-item registry, then reported that its selector did NOT stop —
+  and was right to push back on a severity claim it could not reproduce. Its selector was
+  an older generation without the `IDENTITY_CHECKS` refusal. One hour later it upgraded and
+  measured the stoppage on the same registry: `grep -c IDENTITY_CHECKS` went 0 → 3 and the
+  selector went `ITEM_SELECTED` → `BACKLOG_INVALID`. *Does not reproduce here* meant **not
+  yet**, and every install still on the older selector was carrying a latent total halt.
+
+  Two tests encoded the defect and had to be rewritten rather than deleted, because both
+  were named for uniqueness and written for ordering: `test_non_monotonic_ids_are_a_blocker`
+  and `test_a_reused_id_is_refused_for_the_same_reason_as_a_duplicate` each passed `B-005`
+  then `B-002` — two DISTINCT ids — while their names said "reused". They now assert reuse
+  where they claim to, and that mere sequence is not a finding.
+
+### Added
+- **A consumer whose `.gitignore` leaves the study zone committable is told so.** `check_data_root` reports COMMITTABLE when git would stage `.squad/study-material/` and names the `.gitignore` line to add; it never edits the file. (#128)
+- **The cycle says when a gate has refused the same unchanged artifact three times in a row.** A phase end can record the digest of the artifact it judged (`--artifact`), and the third identical verdict on the same bytes prints a note that rerunning will answer the same. An end with no artifact is never counted as a repeat. (#139)
+- **An alignment brief is told when the code it quotes no longer says what it quoted.** `score_alignment.py` checks every `path:line` — `fragment` citation against the line today and reports a changed, moved or unresolvable quote, and names cited files committed after the brief was written. Both are advisories and never change the score. (#127)
+- **An acceptance criterion can be run against the built state and a wrong build, not only today's tree.** `check_criteria_discriminate.py --intended DIR --wrong DIR --baseline DIR` classifies each criterion as discriminating, already passing, failing when built, or accepting a wrong implementation, and exits 2 when the rebuilt baseline does not answer as the current tree does. (#96)
+- **An advisory when an item's evidence lives outside the repository its `repo:` names.** `check_backlog_structure` raises `evidence_outside_repo` when none of the paths an open item's `evidence:` cites exists under the checkout its `repo:` names, and names the other repository when exactly one holds them. It never fails the registry; items whose repository is not checked out beside the registry are listed in `evidence_repo_unverified`. (#210)
+- **ADR-0026 records why a fresh clone routes to a missing specialist.** The table is versioned and `.claude/agents/` is not, so a clone exits 3 until its specialists are written; the ADR names the two alternatives declined, and the message that tells a reader this is pinned by a test. (#152)
+- **A sprint: the declared focus a queue ordered by age does not have.** `rank()` orders by obligation, then by what unblocks a halt, then by status, then by AGE — and age is the only signal nobody can inflate, which is why it stays. But a queue ordered by age alone is a task list: every item individually justified, the set answering to nothing. A sprint is a goal, the items admitted to it, and a close recording what each came to. **Unit of focus, not of delivery** — releasing per item stays, and the model that motivated sprints names releasing a whole sprint as one package an antipattern in the same document that recommends them. The band sorts **third**, after an obligation (costing while it waits) and after an unblocker, and before status: focus does not outrank a live incident. With no open sprint every item gets the same band, so the order is exactly what it was — no sprint means no focus to honour, not a fabricated one. Four refusals: no goal, nothing admitted, a signature that is not `human/<name>`, and closing over an item that can still move. (#211)
+- **What the sprint deliberately does not build.** The WIP block of N items is `pipeline_orchestrator.Pipeline`, whose lane budget is DERIVED after an asserted `8` deadlocked against the agent cap it cited in the same sentence. Pulling the next item when one blocks is `halt_disposition` — `RETURN_TO_QUEUE` when the halt is work, `RETAIN_FOR_PERSON` when it is a material impediment, both moving the item out without holding the session. Re-offering an idle lane is `fleet_router` and `fleet_idle`. Three names for the mechanics, each measured into existence; a fourth answer to one question is the defect this repository has recorded most often. (#211)
+- **The routing advisory read `why_now`, which is the field that legitimately cites the kit.** `why_now` says what CHANGED; `evidence` says what the item is ABOUT. An item citing `rules/autonomy-envelope.md` or a gate by name to justify product work is a well-argued item, which makes it the worst possible population to fire on. Reported by a consumer session that had just made the same mistake at scale: its own scanner marked three product items as kit-subject for citing doctrine, and it had to read `evidence:` on 22 items by hand to separate the subject from the citation. Measured here against that warning: two shapes were flagged and both were false — an item whose evidence quotes a symptom rather than a `file:line`, so the product-path veto never fires, and whose `why_now` names a rule. The detector now reads `evidence` alone. The claim of zero false positives was true of the 27 items it was measured against and false as a property, which is the difference between a measurement and a guarantee. (#208)
+- **A registry can now say which system an item changes, and a consumer's registry refuses items about the kit.** The rule is the owner's, decided 2026-09-22 and recorded in the `kill_reason` of the item it retired — *an item whose subject is the installed kit does not belong in the consuming ecosystem's registry* — with the argument beside it: a `.claude/` is not versioned, so a fix written there protects one machine and the next install overwrites it. The item cannot close where it was filed, and it sat in the queue competing on age with work that could. Decided, and nothing enforced it. `subject: product | kit` is optional and assumed `product`, because 159 items predated it on the registry that motivated it and a required field that fires on every existing block is a gate somebody switches off. `subject: kit` in a project that consumes the kit is a **blocker**; in the kit's own repository the same value is correct, and `squad.layout.has_kit` is what tells them apart. Only while the item can still move: a shipped or killed block cannot be filed elsewhere, and the first run of this gate proved the point — 33 findings over 159 items against 13 counted by hand over the 27 open ones, the whole difference being history. (#208)
+- **An item that declares no subject and whose evidence names only kit paths gets an advisory.** Never a failure: the detector is a path heuristic, and measured against the registry that motivated it, it names **3** of the open items where a hand-read argues for about eleven. Zero false positives either way, so what it reports is a floor and not a count — widening it to the whole block body finds five and still misses eight, because an item naming a kit gate that fails *against this consumer's configuration* names both sides and the veto kills it. A heuristic that fails a registry is a gate somebody switches off; this one counts candidates and a person decides. Declaring `subject:` silences it in both directions. (#208)
+- **A cap the golden rule declares is now proven to be one the scorer can emit.** `rules/plan-confidence-golden-rule.md` is the authority on which caps exist, and its table names eight stable ids. The only guard that read a document back, `test_documented_identifiers_are_the_emitted_ones`, reads `SKILL.md § Hard Caps` — which names two of those eight. The other six were declared and unchecked, and a declared cap nothing can emit is the failure this kit keeps meeting: the rule reads as enforced, the id never reaches `hard_caps_triggered`, and a consumer filtering for it matches nothing — which reads as "the cap never fired". Measured at the time of writing: eight declared, zero unemittable, so the test is a guard rather than a fix. It carries a companion assertion so that a row losing its `Stable id:` marker fails loudly instead of emptying the set and passing vacuously. (#192)
+
+- **`docs/wiki/decisions/the-sweep-inherits-the-scope-of-the-fix.md`** — the sixth recorded class,
+  and the first about the REMEDIATION step rather than about a check. After a defect is fixed, the
+  search for others is scoped to the shape of the one just fixed, and a sibling arriving through a
+  different mechanism is outside that scope by construction — surviving in the one place nobody
+  will look again, because the ground was just declared searched.
+
+  Five measurements from two sessions in one day, four of them self-implicating. A test proved the
+  consumer and not the producer, was fixed, and **the test written for that fix repeated the shape
+  one level up**. A byte parser was fixed and its two-argument call site was not. An extension was
+  corrected in one criterion while two more of the same shape failed on the working directory. And
+  **one class was fixed twice in one day, in two files, without either being recognised as the
+  other**: a slice that ran zero tests reading `PASS` in the morning, a criterion asserting
+  `prints 0` reading red in the evening — both *the passing value is producible by an empty
+  result*, and the second arrived from a consumer hours after the first was fixed.
+
+  The fifth implicates the record that preceded it: `a-reference-is-checked-in-one-direction` was
+  written from a sweep of identifier vocabularies, which is why it found four of that kind and
+  missed `check_adr_completeness`, where the same shape arrived through a spelling.
+
+  It states what it does not fix: in none of the five was the corrector the author's own second
+  look. What it offers is the question — **what else could produce this outcome**, rather than
+  where else does this pattern appear, because the sibling shares the failure and differs in the
+  route.
+
+- **`sq` — one entry point for this cycle's artifacts.** Measured 2026-09-23: **143 scripts**
+  under `skills/*/scripts` and **38 gates** under `mechanisms/gates`, each with its own flags, and
+  no CLI. The count is not the cost. The cost is that a contract — the exact heading a checker
+  looks for — lives only inside that checker's source, so an author learns it one failed run at a
+  time. A consumer found **six exact heading literals by trial and error in one day**, and every
+  one of the six turned out to be a defect on the kit's side (#186 and its siblings). `sq` exists
+  so the seventh is a question somebody asks instead of a run they fail.
+
+  Four verbs: `contract <kind>` prints what the checkers require, `check <path>` runs every
+  checker that applies, `show <path>` reads the same as state, `new <kind> <slug>` scaffolds from
+  the template.
+
+  **The constraint that shaped every one of them: derive, never restate.** `KINDS` is the single
+  declaration of kind → template, directory, checkers. Requirements come from the constants each
+  checker exposes, not from a table inside `sq` — a table would be one more place the headings
+  drift, and this day is a record of what that costs. The per-checker summary is derived from the
+  report's own dataclass fields, after a hand-written attribute list printed `DrawbacksReport` and
+  nothing else for a report carrying ten fields.
+
+  **It names its own blind spot.** Four of seventeen checkers declare what they require; the rest
+  are printed as NOT declaring it, because printing nothing would read as *nothing required* —
+  which is precisely how six literals came to be found by trial and error. And `check` never
+  guesses a kind: it is read from the file name, and a name announcing none is refused, because
+  guessing is how a report says something confident about the wrong contract.
+
+  `tests/test_sq_knows_every_artifact_the_kit_templates.py` keeps the registry honest in both
+  directions — every shipped template is a known kind or declared as not-an-artifact with a
+  reason (it found **24** unclassified on the first run), and a pattern that excludes nothing
+  fails as a rule that quietly stopped applying. Verb coverage is read from the parser: a verb
+  offered and not invoked by a test fails, whatever it is called.
+
+  **Three defects of my own, each caught by a mechanism rather than by reading.**
+  `check_write_containment` refused a hardcoded `".squad/records"` — in the module whose whole
+  docstring argues *derive, never restate*, which is the defect arriving through the door it was
+  written to guard. A direct question found that two of the four verbs had no test at all, and
+  `new` — the only verb that WRITES — was one of them, while `--help` listing all four had been
+  standing in for coverage of the menu rather than of the verb. And
+  `test_no_shipped_instruction_assumes_a_layout` refused six lines of the new `HOW-TO-USE.md`
+  section for spelling `python3 mechanisms/sq.py`, which resolves in the kit's checkout and not in
+  an install.
+
+- **The alignment sign-off has a convened reviewer.** `skills/plan-alignment/SKILL.md` stated the
+  contract — *"a second agent that read the EVIDENCE, not only the brief, and could refuse"* — and
+  `alignment_judge.py` says of itself that *"it takes its verdict on the command line. It does not
+  read the evidence itself."* It is a RECORDER. **Nothing convened the agent whose verdict it
+  records**: `rules/review-panel.txt` declared `discover`, `plan` and `design` and no
+  `alignment`, and the skill's only instruction was the recording command with
+  `--model "<the model doing the judging>"` — a blank an author fills about their own brief, which
+  the skill's own table values at nothing.
+
+  Measured on a consumer: four briefs at 34/34 `AWAITING_REVIEW`, and the practical path to a
+  signature was messaging another session, which depends on one being alive and idle. One item
+  took five rounds that way, and those rounds found **fourteen real defects** — the rigour was
+  never the problem, the waiting was.
+
+  **One seat, not three.** `PANEL_SIZE` is now `panel_size_for(phase)`: a panel VOTES and the
+  2-of-3 majority is its property, while an alignment sign-off is four checkboxes ticked by one
+  reviewer who is not the author. A majority has no meaning over that. `nemesis-claim-auditor`
+  holds the seat, by its own description — *"takes a verdict, a metric or a report and confronts
+  it with the evidence"*; `vera-technical-arbiter` excludes itself in writing, *"never decides
+  whether a stage passed"*.
+
+  **The outside-family rule now applies to phases with a majority.** Its reason is that
+  correlated models are fooled together — *"a plausible fabrication that survives one tends to
+  survive its siblings"* — which is an argument about two of three agreeing, and does not reach a
+  phase with one reviewer, where the guarantee that matters is NOT THE AUTHOR and is enforced one
+  line above. The contrary claim was tested before the rule was narrowed: on 2026-09-23 two
+  same-family sessions reviewing each other refuted three claims between them, and one refutation
+  found a root cause neither had seen. Same-family review is not empty review; correlated VOTING
+  is what the rule prevents.
+
+  **The kit's own check caught the missing half.** Declaring the phase in `panel_phases` without
+  an entry in `PHASE_SOURCES` failed `test_every_panel_phase_has_a_contract`, whose neighbour
+  states why — *"a panel with no golden rule grades against taste, and three reviewers grading
+  against taste disagree for reasons nobody can adjudicate."* The phase's contract is
+  `alignment-threshold.md`, where the sign-off's terms already live rather than a golden rule
+  invented for the occasion, and the **walkthrough is an artifact rather than an `also_read`**: a
+  reviewer who reads only the brief can confirm a document is internally consistent and nothing
+  else, and the flows are where a scenario class either exists or does not.
+
+- **The upgrade path is walked by a consumer, and coverage is asserted at the granularity that
+  failed.** Six defects were filed on 2026-09-23 and the suite found ONE; five were reported by
+  a consumer running the kit against a real install. `test_clean_install.py` already installs
+  into a temp project and runs the gates from inside it — twelve tests, real install — and none
+  of the five was reachable from it, because **a fresh install has no lag**. That is the state
+  every expensive defect needed: a body that is an older kit revision (#173), a skill the kit
+  once shipped (#171), a file with real git history (the two-argument `classify_file` call), a
+  target that already IS an install.
+
+  `tests/test_the_upgrade_path_is_exercised_by_a_consumer.py` materialises an older revision
+  with `git worktree`, installs THAT into a temp project, then asks the current kit about it.
+  A real worktree and a real install on purpose: a fixture that fabricated "an old install" by
+  editing files would test the fabrication — the byte/character defect only appears against
+  git's own `cat-file --batch` output. **Proven to detect, not merely to pass**: with #173's
+  defect restored by mutation it fails with `diverged: 12` where a consumer that wrote nothing
+  must report `0`.
+
+  `tests/test_every_verdict_the_installer_can_reach_has_a_test.py` requires every `case` arm of
+  the per-file mode to be exercised, and every `Drift` member to have an arm. **Flag-level
+  coverage would not have caught the defect it closes**: `--apply-upstream` WAS tested, and one
+  OUTCOME of it — `stale`, the one that mattered — was not. Also proven by mutation: an arm
+  named `quarantined` that no test mentions fails the check. The arms are read out of the
+  installer rather than restated, so a second list cannot drift from the first.
+
+- **`docs/wiki/decisions/a-suite-measures-what-its-author-imagined.md`** — the fifth recorded
+  class, and the only one whose subject is the suite. Three measurements from one day where a
+  mechanism reported green about something it never examined: `check_english_only` saying
+  `clean — 1153 tracked file(s)` about an untracked file, a history reader returning 7 contents
+  for 14 revisions, a flag tested while one of its outcomes was not. It also states what it
+  does NOT fix — the most effective detector that day was a second session disagreeing with a
+  measurement, which is not a mechanism and does not generalise to working alone.
+
+- **`install.sh --apply-upstream <path>` — a consumer could ignore a kit fix or reinstall 400
+  files, and there was nothing in between.** Both existing modes replace the whole kit, and
+  `boundary-check` refuses editing a kit file inside an install — right for a fix somebody
+  WROTE there, since it protects one machine and the next install erases it. Neither answers
+  the other case: a file that differs because the KIT moved and this install did not.
+  Measured 2026-09-23 across four consumers with identical distributions — 400 files differ,
+  splitting into `diverged 349 · install_ahead 1 · stale 10 · kit_ahead 40`. The new mode
+  takes the kit's version of ONE file and **refuses every file this install holds unique
+  lines in**, so it applies to 50 and refuses 350. **Six mechanisms were measured
+  individually and all six classify `diverged` — the mode resolves none of them.** It is
+  not the answer to the drift that motivated it; it is the answer to the cheap half beside
+  it, and the file says so in its first paragraph so nobody arrives expecting otherwise. **The refusal is the design and it costs
+  real coverage**: 22 of the 349 diverged differ by four lines or fewer, 83 by ten or fewer,
+  and this refuses all of them, because *is this my work or my lag* is exactly the judgement
+  `check_install_drift` prints that it cannot make — a small diff is not evidence of the
+  answer, and a command that looked like it settled the question would be used where it does
+  not. `check_install_drift` now names the command on the two classes it accepts and on
+  neither of the two it refuses. The rationale first written here claimed the mode covered
+  "67 files differing by one or two lines"; that number counted differing LINES and never
+  resolved the CLASS, and the files it named are diverged. Corrected before merge, in the
+  code as well as here.
+
+- **`docs/wiki/decisions/the-system-already-said-it.md`** — the fourth class recorded on
+  2026-09-22/23, and the only one whose subject is the investigator rather than a mechanism.
+  Three cases across two sessions in one day: a sidecar lock reported as an escape while
+  `write-exemptions.txt` already declared `.*.lock` with its reason; two pull requests opened
+  by hand and reported as a defect while the workflow announced the behaviour with a
+  `::notice` the log filter excluded; four required formats learned one gate refusal at a
+  time while the template documented all four. **This is not *measure the premise*** — there
+  was no claim to verify, the system had already written the answer in the file whose job is
+  to hold it, and the remedy is opening that file rather than constructing a measurement. The
+  record carries the generalised move that came out of the second case — read the STRUCTURE
+  before the text, since `gh run view --json jobs` answers *which branch ran* where a
+  severity grep cannot — and the question that costs seconds: *which file's job is it to
+  answer this, and have I opened it?*
+
+- **`check_verification_freshness.py` — when did this tree last verify itself, and does the
+  answer still apply?** `run_slice_tests.sh` printed its verdict and exited, so the only way
+  to answer *is it green?* was to run it again for fifteen minutes. Measured 2026-09-22: one
+  session ran it four times in one day to answer that question, and two of the four answered
+  about a tree that had moved underneath them. The runner now writes
+  `.squad/records/verification/last-run.json` — what ran, on which commit, with what result,
+  and whether the tree moved — and this gate reads it **in milliseconds rather than fifteen
+  minutes**, which is the property that made the question go unasked. Six states, and two of
+  them are the reason it exists: `never` is NOT `failing` — a fresh clone has not verified
+  itself and is not broken, and collapsing them would fire on every checkout, which is a
+  signal that always fires. `unattributable` is the runner saying its own result was about no
+  single state of the repository, and reading that as green would launder exactly what the
+  flag prevents. It ADVISES inside `promote_to_develop.py`, at the last moment before work
+  leaves the branch it was written on, and refuses nothing: promoting unverified work is a
+  legitimate call the caller makes, and what the gate refuses is silence about it.
+
+- **`docs/wiki/decisions/a-reference-is-checked-in-one-direction.md`** — the class behind
+  four cross-reference defects found in one sweep on 2026-09-22, in four different slices.
+  A reference has two sides and one author, who writes the check holding one side in mind;
+  the other question is not wrong, it is ABSENT, and absence has no failing test. It is
+  worse than a missing check: a gate that covers one direction **reports a verdict**, and
+  the verdict is read as covering the topic because its name says so — `is_complete: True`
+  over a matrix whose rows point at nothing is not silence, it is an assertion somebody
+  acts on. The record carries the two questions that find the missing half before shipping,
+  the reason the two directions must stay separate findings, and the guard all four fixes
+  needed: when the target document is unreadable, report nothing rather than reporting
+  everything as unresolved.
+
+- **`rules/session-injection.txt` — a project can ask the kit to speak less, and cannot ask
+  a guard to stop refusing.** The kit injects three times per turn on its own initiative:
+  1835 bytes of chain summary at session start, 1249 of parsimony ladder in front of every
+  prompt, and 602 of advisory Stop warnings at the end — measured in a consumer 2026-09-18.
+  The ladder's docstring argues the injection must be unconditional, *"a rule read at session
+  start is a rule forgotten by the fortieth prompt"*, and that is right for a session writing
+  code and wrong for one that is not: asking what time it is got the ladder in front of it,
+  and **a rule injected into a turn it has nothing to do with is not a rule being remembered,
+  it is a rule being spent**. `squad/injection.py` answers the question once for all three
+  hooks. What it cannot reach is by CONSTRUCTION, not by comment: `validate-command` and
+  `boundary-check` do not import it and a test refuses one that does, because a guard a
+  config can silence is a guard that gets silenced by somebody who only wanted less text;
+  and `Stop`'s suppression happens at the REPORT, never at the checks, so blockers still
+  block and `--json` still carries everything found. `SQUAD_QUIET` overrides the file for one
+  session in BOTH directions — turning it back on matters as much as turning it off. Absent,
+  unreadable or undecidable text means SPEAKING: a parse failure that quieted the kit would
+  remove the doctrine and the report that something is wrong at once. **Designed, measured
+  and built inside a consumer's installed `.claude/`**, where the next `install.sh --force`
+  would have erased it; found by reading `check_install_drift`'s `install_ahead: 3`, filed as
+  #164, adopted with the sponsor's decision (#164).
+
+
+- **`docs/wiki/decisions/a-step-that-cannot-fail-loudly-did-not-run.md`** — the defect class
+  behind five measurements taken on one day across three sessions: a step that silently does
+  nothing inside a procedure that reports success. An anchored insertion whose anchor had
+  moved (twice here, three times in a sibling repository), a pytest run that never collected
+  because its exit code belonged to `tail`, a hook measurement that resolved no layout and so
+  refused nothing, and a quoted error message that closed a shell string and truncated the
+  program reading it. None is a bug in the tool: each is the documented behaviour of the
+  thing being used, and the defect is a caller that cannot tell that behaviour apart from the
+  one it wanted. The record names the two defences that are not the same defence — assert the
+  precondition, and have something downstream that fails — and the cheap test: *if this did
+  nothing at all, what would be different?*
+
+- **`check_plugin_freshness.py` — a premise the kit depended on and never checked: is the
+  plugin it audits WITH the one that was committed?** Claude Code installs a plugin into
+  `~/.claude/plugins/cache/…` and records the `gitCommitSha` it was built from;
+  `installed_plugins.py` resolves by `installPath`, so every commissioned audit runs that
+  snapshot rather than the repository. Measured 2026-09-22 by the session maintaining those
+  plugins, walking the commission → audit → read chain end to end for the first time:
+  **17 of 18 installed plugins were behind their repositories**, and the contract under
+  test — `compute-verdict --emit-to` — did not exist in the tree that actually ran. The
+  repository was right, this kit's reader was right, and what executed was neither: each
+  half honest, the joint wrong, and no test positioned to look at the joint. Asked once
+  before the first item, for `check_merge_autonomy.py`'s reason — discovering it per-audit
+  costs the run, because the audit completes and only a missing field says anything was
+  wrong. Scope is `rules/review-auditors.txt` rather than the machine: drift in a plugin no
+  REVIEW commissions is somebody else's finding, and reporting it here trains people to
+  skip the output. `unverifiable` — source not a local directory, no `gitCommitSha`, plugin
+  absent — is reported apart from `aligned` and is never a failure, since treating *I could
+  not ask* as *nothing is wrong* is the defect one layer down. Seven tests, every one
+  driving the STALE case from a fixture: this machine currently reads 7 of 7 aligned, which
+  is precisely the condition under which a gate gets written and never exercised where its
+  defect can occur.
+
+- **A written way back for a checkout that has no registry.** `BACKLOG.md` is unversioned
+  by policy, so a fresh clone and a second worktree both reach that state normally — and
+  nothing said what to do in it. Measured in a consumer 2026-09-21: 93 blocks present
+  against 195 distinct `B-NNN` cited across the tree, 138 ids spent with no block; of three
+  worktrees on that machine one held the file and two had none, and a session in one of the
+  two registered `B-016` in good faith over an id already spent. `records-location.md §
+  A checkout with no registry` now carries the procedure, in the rule that creates the
+  situation rather than in a skill the reader would have to know to open. Four steps, and
+  the first is **do not reconstruct the file**: a registry rebuilt from citations looks
+  complete and is not, which is the state being described. The policy is restated as
+  standing, so the section cannot be read as an argument for versioning the registry (#162).
+
+- **`peer/<session> (what it verified)` — a third kind of signature, for a review that
+  came from another session.** `squad/signoff.py` knew `human/…`, which an allowlist
+  accepts as a person, and everything else, which is an agent. Three sessions worked this
+  kit together on 2026-09-22 and each measured real defects in the others' work — a gate
+  exercised only where its defect cannot occur, a waiver whose reason had never been
+  measured, a status file that outlived the run that wrote it — and none of it could be
+  signed. It reached the record as issue comments and nothing else. **A peer signature is
+  refused unless it says what it verified**, in parentheses and at least four words: a
+  person is accountable by being a person and a judge is named by the contract it ran
+  against, but a peer is another agent with no contract binding it to this document, so
+  the measurement beside the name is the entire value of the signature. It is NOT a human
+  signature — `human_signed` stays false with a peer signer present, the weakest signer
+  decides — and `alignment_judge` refuses to sign as one, the same refusal it already
+  makes for `human/`.
+
+### Fixed
+
+- **A rule asserted a third party's defect in the present tense, three days after it was
+  fixed.** `cycle-judge-codex.md` described the judge plugin hard-coding
+  `knowledge-base/…` paths, with *measured on a consumer 2026-09-18* further down — and the
+  plugin resolved that on 2026-09-22 (`85e55b5`). A reader took the date as *when the defect
+  was found* rather than as *how far this sentence is still true*, believed it correctly,
+  and recommended a fix for something already fixed. **A stale mechanism that answers is
+  worse than an absent one; a stale document that asserts is worse than both, because
+  nothing in it fails.** Verified by reading the installed plugin rather than by taking the
+  report: `codex-companion-judge.mjs:39` carries the current root first and accepts both
+  `-opportunity.md` and `-blueprint.md` rather than choosing. The passage is now past tense
+  with the commit named, and the reasoning is kept — deleting it would erase why the seam
+  exists. A sweep for other present-tense claims about third parties in `rules/*.md` found
+  none.
+
+- **A commit scope could name two areas and not one path.** `HEADER_RE` accepted
+  comma-separated kebab-case segments — added because a change touching two areas had three
+  bad options, *name one and be incomplete, invent a portmanteau nobody greps for, or drop
+  the scope* — and refused a `/`. Measured 2026-09-23 on a consumer: five commits scoped
+  `infra/tests`, a directory and its tests, reported as `header_shape` and reachable by **no
+  override**, because `commit_scopes` is consulted only after the pattern matches. The three
+  options left were the same three the comma fix already rejected, and `infra-tests` is the
+  portmanteau: the hyphen stops matching the path it names. The segment rule did not loosen
+  — each part is still lowercase kebab-case, and `infra//tests`, `infra/` and `Infra/tests`
+  still fail; a scope may now be several parts separated by `/`, the way the comma made it
+  several separated by `,`. The two compose.
+
+- **A rule linked to `../docs/` and broke the post-install validation of every consumer.**
+  `docs/wiki/` is the kit's authored knowledge and `install.sh` does not copy it — a
+  deliberate placement, since `rules/README.md` places a file by who OWNS it and a consumer
+  owns none of that. A relative link added to `current-constraint.md` resolved HERE
+  (`rules/../docs/wiki/…` is `docs/wiki/…`) and resolved to `.claude/docs/` in an install,
+  where nothing writes. `check_xrefs --strict` passed in this repository, `install.sh`
+  exited 1 in a consumer, and **43 tests failed from one link**, all of them in the install
+  suite. The sibling rules already had the convention — `cycle-release.md` and
+  `autonomy-envelope.md` cite the wiki by absolute URL — and it was not followed. This is
+  the shape `run_slice_tests.sh` names in its own banner: *red in an install and green
+  upstream is a different finding from red everywhere*, and the kit's own checkout cannot
+  see it by construction.
+  `tests/test_a_rule_links_to_the_wiki_the_way_a_consumer_can_follow.py` reads the trees
+  that travel **from `install.sh` itself** rather than listing them, because a second copy
+  of what travels is a second thing to keep in step — which is this whole class of defect.
+
+- **One installed auditor was neither commissioned nor mentioned, so nobody had weighed it.**
+  `rules/review-auditors.txt` is careful about what it leaves out: `loop-project-purge` and
+  `loop-pentest-audit` are refused with a reason, seven more carry a collective one — *no
+  domain here derives them from a change* — and two carry their own. Measured 2026-09-22:
+  seventeen `loop-*` plugins installed, seven commissioned, ten idle, and nine of the ten
+  reasoned. `loop-system-cartography` appeared in no rule in this kit at all. That is not a
+  mapping somebody rejected; it is a capability nobody weighed — and because the file is
+  otherwise a record of decisions, **a reader counting the reasons concludes every absence
+  was chosen.** Its reason is now written (it maps a system rather than auditing a change,
+  and the question belongs to `cycle-design`), and
+  `tests/test_every_installed_auditor_was_decided_about.py` fails on the next plugin that
+  arrives undecided. The control test refuses the degenerate pass: a file that mentions every
+  plugin and commissions none would satisfy a mention check and answer nothing.
+
+- **The product chain was checked forwards and never backwards, so a goal nothing serves
+  reached DESIGN.** `score_product_alignment` resolves both citations that point UP the
+  chain — a `REQ-N` whose `serves:` names no declared objective, a `PIECE-N` whose
+  `realises:` names no declared requirement — and asked nowhere whether every objective is
+  SERVED and every requirement REALISED. Probed 2026-09-22 with two objectives and one
+  requirement serving only `OBJ-1`: no cap, no dangling entry, nothing. The gap is caught
+  eventually — `check_objective_coverage` exits 1 on an objective no ITEM serves — but that
+  is at `/backlog-approve`, after DESIGN drew a system without the goal in it and BACKLOG
+  filed items against that system. `check_merge_autonomy`'s argument applies verbatim:
+  discovering it per-item costs the run, announcing it here costs one criterion. Guarded on
+  the documents being readable, because reporting every objective as unserved when the TRD
+  is missing turns an inability to measure into a measurement. **Fourth instance of one
+  class in one day** — an identifier counted rather than resolved, or resolved in one
+  direction only.
+
+- **The system map could draw a piece nobody declared, and the design gate said nothing.**
+  `check_design_completeness` computed coverage one way — every `PIECE-N` in
+  `technical-pieces.md` must appear in the map — and never read the map back. A map naming
+  `PIECE-99` against a list that declares only `PIECE-1` passed in silence. The two
+  readings mean different things: a piece missing from the map is work the drawing forgot;
+  **a piece in the map that nobody declared is the map drawing something no one decided**,
+  or a piece list that lost an entry. `cycle-design` exists to settle the shape before any
+  item is filed against it, so both answers are worth having then. Matched with the same
+  whole-id rule the existing direction uses, for the same measured reason — `PIECE-1` is a
+  substring of `PIECE-10`, and a substring test here would call `PIECE-10` declared on the
+  strength of `PIECE-1`. **Third instance of one class found in one day** — an identifier
+  counted rather than resolved — after the Coverage Matrix counting a row without opening
+  the task it named, and a review finding carrying a path nobody opened.
+
+- **A review finding pointed at a path nobody could open, and the report said nothing.**
+  `consolidate_findings` carried each finding's `file`, deduped on it, rendered it and
+  computed the verdict from the set — without ever opening it. Probed 2026-09-22: one
+  BLOCKER at `src/this/path/does/not/exist.py:42` produced `NEEDS_FIXES` with no field,
+  line or heading saying the path was gone. The argument for why that matters was already
+  written one gate over, for the backlog's evidence pointers: *the next reader follows the
+  pointer, finds nothing, and cannot tell whether the finding moved or was never real.* It
+  applies verbatim to a review finding and had been applied to neither. Same shape as the
+  Coverage Matrix counting a row without opening the task it named — **an identifier
+  counted rather than resolved** — found by looking for more of that class. Resolved
+  against the same roots `check_evidence_freshness` uses, asked of its owner rather than
+  re-listed, because one root reported 41 dead pointers where 22 were dead. **Reported,
+  never blocking**: a backlog item's evidence points at something that WAS measured, while
+  a review finding may legitimately cite a path that does not exist — *the file is missing*
+  is a defect somebody can report — so the caller keeps the judgement.
+
+- **An empty `file:` became the four-character path `None`.** `_normalize_finding` used
+  `str(f.get("file", ""))`, and a YAML `file:` with nothing after it parses to `None` with
+  the key PRESENT — so the default never fired and `str(None)` produced a path that
+  resolves nowhere and looks like one that could. Found by the pointer check above
+  reporting a file nobody had written.
+
+- **The Coverage Matrix gate counted a row and never opened the task it named.** It checked
+  the TASK relation in both directions — a row naming no task is unmapped, a task no row
+  names is an orphan — and checked the rest of the row in neither. A row reading
+  `| G1 | something | T1.1 | AC-999 |` counted as mapped with `AC-999` declared nowhere in
+  the plan, and the report came back `coverage_ratio: 1.0, is_complete: True`. Reported
+  2026-09-22 with the consequence measured rather than imagined: a reviewer found `AC-004`
+  orphaned — the row said `T2.1` and `T2.1`'s block declared something else — and a
+  hand-written three-line cross-check then found **five more** the gate was approving as
+  complete. The orphaned criterion was the one that would have caught the plan's shape
+  defect, so **the gate that exists to prove coverage approved away the gap that mattered.**
+  Both directions are now reported and kept apart: a row citing what no task declares caps
+  under `matrix_cites_undeclared_criterion`, and a task declaring what no row cites is
+  reported without capping — the matrix maps gaps to tasks, and a task may promise more
+  than a gap asked. Identifiers are read from the WHOLE row rather than one column, because
+  a plan may name its fourth column `Resolution` or `Criterion` and a row cites what it
+  cites either way.
+
+- **The rule that refuses flow metrics listed four absences, and three had stopped being
+  true.** `current-constraint.md` declined to gate on flow with a good argument — *a hard
+  gate against data that does not exist is answered by assertion* — and backed it with a
+  blanket claim: *"we do not currently instrument flow across the ecosystem. There is no
+  per-stage lead time, no wait time, no WIP series, no cumulative flow diagram."* By
+  2026-09-22 the board computed throughput, WIP and item lead time. The sentence outlived
+  the fact that justified it. **A stale refusal is worse than a missing metric**, because
+  the refusal is what somebody reads before deciding not to measure — a reader acting on
+  that paragraph would have rebuilt three measures the system already had. The rule now
+  carries a table: what is computed, what is derivable with no substrate yet (per-stage
+  timing, where `cycle_events` already emits start and end with slug and timestamp and the
+  stream is empty only because no chain has finished here), and what is genuinely absent.
+  **The five DORA metrics are refused specifically rather than by blanket** — four measure a
+  DEPLOYMENT and this system does not deploy, it cuts a tag a consumer installs; the fifth
+  needs commit → production and `git tag` returns zero here. Each carries what would change
+  its answer. Decided and closed as #163.
+
+- **`install_ahead: 3` printed beside `kit_ahead: 38`, and only one of them was a
+  deadline.** `check_install_drift` rendered all four classes as `<class>: <count>` plus a
+  file list, and the summary gave `DIVERGED` its consequence — *a copy in either direction
+  deletes the other's fix* — while `INSTALL_AHEAD` got only the fact: *the install holds
+  lines the kit does not*. True, and it omits what matters. `install.sh --force` snapshots
+  `.claude/` into `.install-backups/` and replaces it, so INSTALL_AHEAD is **the only class
+  whose lines are gone after an upgrade**: KIT_AHEAD is pure gain, IDENTICAL is nothing, and
+  DIVERGED at least survives on both sides until somebody chooses. Measured 2026-09-22 on a
+  real consumer: `install_ahead: 3` — three hooks carrying the wiring for a 94-line module
+  the kit does not have at all (#164). The number printed on every run, was read twice that
+  day by the session maintaining the kit, and nobody opened the files. Each class now
+  carries what it COSTS beside its count, because a count in the same voice as a count that
+  loses nothing reads as inventory.
+
+- **`check_xrefs` resolved a citation against `.install-backups/` and named the backup as
+  the file's location.** The markdown-link walk already skipped that directory, with the
+  reason written above the line: *a backup of an old ecosystem is not this ecosystem*. Two
+  other passes in the same file searched the whole tree and did not apply it —
+  `_resolve_cited_doc` and the `bare_rule_name_resolves` check. Measured 2026-09-22 against
+  a real install by the session that maintains it: *"rules/README.md cites
+  `domain-routing.txt` as if it were in rules/; the file is in
+  `.install-backups/20260829T121853/rules/`"*. That is the worse of the two possible
+  answers — the file is gone, and the message says it is misfiled, sending the reader into
+  a snapshot of a tree that has since moved. One predicate, `is_excluded_tree`, now serves
+  all three, compared PART BY PART rather than as a substring so a document *about* backups
+  is not mistaken for one. Applying it surfaced a citation in this repository that had only
+  ever "resolved" by finding a file in an excluded tree.
+
+- **The slice runner could not say whether the tree stood still while it ran.** Measured
+  2026-09-22 in this repository: a run was started, three modules were edited during it, and
+  the root bundle came back `1 failed`. The sentence was true and was about a state that
+  never existed on disk as a whole — every other suite passed, because none of them reads
+  the files that were being edited. `/review` already refuses that shape for its reviewers,
+  recording HEAD and a status digest when the agents are spawned and reporting a moved tree
+  above every finding; the runner those same sessions use to check their own work did not,
+  so the one place a person looks before reporting a result was the one place that could not
+  tell them the result was unattributable. It now captures HEAD plus a
+  `--untracked-files=all` digest before the fan-out and again after, emits a `TREE_MOVED`
+  trailer line for `sq test` to read, and prints the notice ABOVE the verdict. **It does not
+  change the exit code:** a moved tree is not wrong on its face, it is unattributable, and
+  that judgement belongs to the caller — failing here would turn every legitimate concurrent
+  edit into a red suite, and staying silent is what produced the measurement above.
+
+- **The board reported `lead_time_p50_hours: None` with a comment saying the item carries
+  no entry date. It carries one.** `check_backlog_structure._parse_items` reads
+  `Registrado|registered YYYY-MM-DD` into `Item.registered_on`, and `board_state` imports
+  that exact parser — but `_board_items` dropped the field when building the dicts
+  `_delivery` measures, so the fact existed two calls upstream and was discarded on the way
+  down. The comment was right about `_delivery`'s INPUTS and wrong about the item, and a
+  reader of that line concluded the registry had no entry timestamp and that adding one was
+  a schema change. It is now `lead_time_p50_days`, computed: **days** because
+  `registered_on` is a DATE, so the arithmetic is exact and the input is not — every figure
+  carries ±1 day from the start side, and rounding to whole days would hide the arithmetic
+  without removing the uncertainty. The p50 travels with `lead_time_measured_over` and
+  `lead_time_terminal_total`, because most items predate the registration line and a median
+  over the ones that had a date is a median over a subset.
+
+- **A fixed-and-merged issue looked exactly like one nobody had touched.** `kit_issues.load()`
+  lists open issues and filters those a person must decide; everything else goes to a lane as
+  work. An issue whose fix is written, reviewed and merged — open only until the release that
+  makes it installable — is open, unlabelled for a person, and indistinguishable from
+  untouched. A lane given one spends an agent re-solving a solved problem and writes a report
+  that looks like progress. `AWAITING_RELEASE` reads the `in-develop` label the project rule
+  already prescribes, and `holding_reason` reports *waiting for a person* and *waiting for a
+  release* apart: collapsing them would tell a reader that twenty issues need their attention
+  when none of them does. Measured against the twenty this repository is holding in exactly
+  that state (#163 is the fifth gap of the same review, filed rather than fixed).
+
+- **A production incident entered the queue by age, behind everything filed before it.**
+  `select_backlog_item.rank()` ordered on *(does not unblock a halt, status, item number)*.
+  Age deciding among equals is right — it is the one signal an agent that wants to proceed
+  cannot inflate — but some items are not equals for a reason unrelated to when they were
+  filed. `source: live-incident` was already in the schema and already meant *something is
+  wrong in the running system NOW*; it now opens an obligation band ahead of everything
+  else, because the cost of waiting depends on the incident's age rather than the item's.
+  Above the unblocking rule, and nothing is reversed: the two bands never competed before
+  this one existed, and between them the one already burning goes first. **The band covers
+  `live-incident` and nothing else** — a security finding or a legal obligation belongs
+  there by the same argument, the registry has no field that identifies one, and the claim
+  stops where the schema does. Inside the band, status still ranks before age: a `raw`
+  incident is one nobody measured, and putting the chain on `evidence: none-yet` is the
+  state G5 exists to hold.
+
+- **A killed item could not name what replaced it.** `supersedes` and `regression_of` are
+  written on the NEW item and validated in that direction, so a reader arriving at the dead
+  one found `status: killed`, a `kill_reason`, and no way to discover that the question had
+  been re-asked and answered. The registry held the answer — every edge is in the same file
+  — and nothing exposed it. `lineage_successors()` computes the reverse edges and
+  `check_backlog_structure` reports them, DERIVED and stored nowhere, like `blocked`: a
+  second copy of an edge the file already carries drifts the moment somebody edits one of
+  them. An id nothing replaced is absent from the map rather than present with an empty
+  list.
+
+- **The freshness gate was declared in two rules and run by nothing, and it answered to the
+  wrong flag.** Four of this repository's own meta-gates caught it in the full suite:
+  `check_plugin_freshness` took `--project` where the contract in `mechanisms/gates/_contract.py`
+  says `--root`, it was absent from the roster that sweeps gates by that flag, and
+  `test_something_runs_this_gate` reported it as *executed by nothing — not the CI, not a
+  hook, not verify_ecosystem, not any script*. Being declared in `cycle-review.md` and
+  `mechanisms/README.md` is being DESCRIBED, not being run. It now answers `--root` with
+  `--project` surviving as its own alias, and `select_auditors.py` asks it at commission
+  time, which is the moment before any audit runs. **The premise was also stated wrongly and
+  is corrected:** the first draft said "asked once before the first item". Measured the same
+  afternoon — 7 of 7 aligned, and the same 7 stale sixty minutes later, because the session
+  maintaining those plugins had been committing. Drift is not an incident that happened once;
+  it is the normal state of any plugin under active development. It ADVISES rather than
+  blocks: which revision a consumer installed is theirs, and refusing the audit over it would
+  stop a review for something the reviewer cannot fix from there. One unrelated failure in
+  the same run: the recovery procedure added to `records-location.md` spelled an invocation
+  that resolves in only one of the two install layouts.
+
+- **The freshness gate resolved the home directory itself, and the installer's post-install
+  validation failed on it.** `check_produced_files` reads the code for a module that
+  CONSTRUCTS a destination under `$HOME` and requires it to be declared in `HOME_WRITERS`
+  with a reason; `check_plugin_freshness.py` shipped with two such calls and no declaration.
+  `verify_ecosystem` then failed inside `install.sh`, and **29 of 36 install tests failed
+  with symptoms that named the installer** — not one of them said *an undeclared home
+  writer*, which is why the first hypothesis was a stray untracked file at the root. Fixed
+  at the root rather than by widening the exemption: both manifests are now read by
+  `mechanisms/conventions/installed_plugins.py`, which already owns `~/.claude/plugins/`
+  and already carries that exemption under the reason *reading the user's own configuration
+  is not a write*. `Plugin` gained `commit` — the `gitCommitSha`, and the only field that
+  says which revision is actually RUNNING, since `install_path` points into a cache — plus
+  `marketplace`; `marketplace_source()` reads `known_marketplaces.json`. A second module
+  needing the same exemption for the same reason is a second place to get the path wrong.
+
+- **A `.squad` forgotten in `/tmp` made `/tmp` a project, and every throwaway run under it
+  recorded there.** `project_root_for` walks up from the work it touched looking for a
+  directory that owns a write root, and `/tmp` holds the throwaway tree of every test,
+  smoke run and hand-made `mktemp -d` on the machine. One leftover turns all of them into
+  one shared project, and nothing reports it because recording somewhere IS the success
+  path. The system temp directory is now never accepted as a root — `/tmp`, `/var/tmp` and
+  whatever `TMPDIR` names — while everything UNDER it still resolves normally, because
+  `pytest`'s `tmp_path` lives there and the install suite builds real projects in it.
+  `/tmp/.squad` is somebody's leftover; `/tmp/pytest-of-x/test_y0/.squad` is a fixture.
+  Applied to both walks, `cycle_events.project_root_for` and
+  `consolidate_findings._project_root_for`: they answer the same question about the same
+  tree, and a guard on one of them is a guard on half the paths.
+
+- **The release mechanism could not express the shape its own consumers release in.**
+  `promote_unreleased.py --version` took one semver and refused
+  `create-toolkit 3.0.2, @acme/http 2.3.0, acme-core 0.69.0`, while the three sections
+  below the one being written in that CHANGELOG were multi-package headings of exactly that
+  form. So the script could not perform the promotion `cycle-release.md` prescribes for the
+  common case, and the promotion was done by hand — the heading read off the file rather
+  than invented, which is the only reason it stayed consistent. `squad.semver.parse_release`
+  now reads a release line as one bare version or several `<package> <version>` components.
+  Every component is validated and one bad component refuses the whole line: partial
+  acceptance writes a typo into a heading nobody edits again, and `render_release_notes.py`
+  looks the section up by exact string. A pre-release in ANY component refuses the line,
+  because promoting at rc empties `[Unreleased]` for every package in the heading (#151).
+
+- **A reviewer's brief forbade the write it also required.** The same template said *"never
+  in the shared tree"*, *"scratch files go under /tmp, never under the repository"*, and
+  *"save to `{FINDINGS_DIR}`"* — an absolute path in the shared checkout. A reviewer reading
+  all three had no legal way to deliver its findings, and one of them staged in `/tmp` and
+  copied; the one that does not improvise loses its file at the last step, after the whole
+  review has run, and an absent findings file is indistinguishable from a reviewer that
+  found nothing. The five templates now name the findings file as the one expected write
+  into the shared tree. The boundary half of that report did NOT reproduce on re-measurement
+  — `is_project_owned` asks what the install manifest claims rather than what sits under
+  `.claude/`, so an agent worktree was already the project's; a test now pins that, since
+  correct-but-unasserted behaviour is what a later tightening removes silently (#149).
+
+- **A requirement closed by the Final Phase was unexpressible, so eleven rows read as
+  requirements nothing closes.** `TASK_ID_RE` is `T<n>.<n>` and no plan gives its Final
+  Phase a task id — the heading is `## Final Phase: Integration Validation`, an H2 rather
+  than a task — so a matrix row citing `Final Phase` matched nothing. Measured 2026-09-21,
+  once readable matrices made them visible: 19 rows closed nothing and 11 had this
+  structural cause. One plan closes NFR-002 by name in its Final Phase acceptance criteria
+  while its matrix row could only say `Final Phase`. **The decision, with the option that
+  was refused:** the Final Phase does not get a task id; the parser accepts it by name.
+  An id would have made it a task to `check_tdd_in_bugfix.py`, which demands a RED-test
+  shape per bugfix task, and to `check_concurrency_tests.py`, which reads the same shape —
+  propagating a requirement through three gates to fix a citation in one, and forcing a RED
+  test onto a phase that validates work already done. The citation is checked rather than
+  merely recognised: a row may cite the Final Phase only if the plan has one, since a
+  section nobody wrote is the dead pointer this kit refuses everywhere else.
+  `plan-template.md` now states what the Task column accepts, so a bare em-dash and prose
+  like *already shipped* are visibly not closures (#150).
+
+- **A Coverage Matrix the parser could not read reported as a matrix with no rows, and
+  nine plans of twelve were INVALID for it.** `_parse_matrix_rows` took the task from
+  `cells[2:]` by POSITION and dropped any row with fewer than four cells. The template
+  declares four columns, so a plan that wrote two parsed to nothing — and
+  `CoverageReport(total_gaps=0, mapped_gaps=0)` is byte-identical to what an empty matrix
+  produces. `coverage_lt_100` then fired at cap 49 and the plan came back INVALID, with
+  nothing anywhere saying the table had not been read. Measured 2026-09-20 across twelve
+  plans on disk: seven wrote two columns, two more wrote `Requirement | Closed by |
+  Verified by` with the task in `cells[1]`, and only two scored SHIPPABLE. The parser now
+  finds the task column BY HEADER NAME, accepting the template's `Task(s)` and the
+  `Closed by` that plans in the wild wrote, and an unrecognised header caps under its own
+  id — `coverage_matrix_unreadable`, same INVALID consequence, stated cause. Chosen over
+  refusing a non-conforming header at authoring time, which would help the next plan and
+  none of the nine (#155).
+
+- **The review recorded the tree the SPAWNER ran in and the agent prompts called it the
+  reviewers'.** `capture_tree_state` writes HEAD and a status digest and said nothing about
+  whose tree they belong to, while five reviewer templates told each agent *"the consolidator
+  records the tree state when you are spawned and compares it afterwards"* — so a clean
+  comparison read as evidence the reviewers saw the change. It is evidence about a tree none
+  of them opened. Measured 2026-09-20: the record held the shared checkout at `a84eda52a`
+  while every spawned reviewer ran in a worktree at `0051d2f6b`, which
+  `git merge-base --is-ancestor` says does NOT contain the change under review. Two of five
+  noticed the code looked pre-change and re-derived their findings against the right ref;
+  neither was told to, and nothing downstream could tell them from the three who did not.
+  `.tree-state` now carries `recorded_by` and `recorded_in`; each reviewer declares the
+  `tree_head` it actually read; and `check_reviewer_trees` reports — in the markdown above the
+  findings and in the JSON a gate reads — every reviewer whose tree lacks the change. Stale,
+  undeclared and unresolved are three answers, not one: an unquoted sha of only digits loses
+  its leading zeros to YAML and is reported as unusable rather than as either (#148).
+
+- **A locally-hosted panel seat is a change to the machine, and the table it is written in
+  could not say so.** `rules/review-panel.txt` now records what pointing a seat at a
+  self-hosted model implies. Measured in a consumer 2026-09-20: three outside seats moved to
+  a local `llama3.2`, `ollama serve` began listening on 11434, and a unit test that mounts an
+  `ollama/` provider — documenting in its own comment that nothing listens in CI, so the call
+  fails fast — instead CONNECTED and hung to a 30 s timeout. 1 failed of 8107 with the port
+  open, 3 of 3 with it closed. That run's `/implement` validation reported `coverage` FAIL,
+  and the failure was the panel's server rather than the codebase (#147).
+
+- **A panel recorded which document it voted on and never which version of it, and the
+  class of records nobody could verify was still growing.**
+  `check_panel_approval._artifact_drifted` compares `artifact_sha256` against the bytes on
+  disk and treats its absence as *cannot verify* rather than as drift — a deliberate
+  allowance for records written before the field existed. Nothing wrote the field:
+  `convene_panel.py` never mentioned it and `cast_vote.py` copied `artifact` out of the
+  assignment without hashing it, so the only place it existed was prose in two SKILL files
+  telling an agent to hand-write the record. Measured 2026-09-20: a record written at 13:09
+  approved a plan last edited at 20:04 the same day, and the gate printed `panel APPROVED`
+  with nothing a reader could act on. `cast_vote.py` now hashes the artifact when it creates
+  the record — once, because the hash belongs to the panel and not to a seat — and writes no
+  key at all when the path is empty or the file is absent, because a record that looks bound
+  and binds to nothing is worse than one that admits it cannot be checked (#145).
+
+- **A reviewer who returned a document was frozen at the verdict it earned before the fix.**
+  `cycle-plan.md` describes the loop — return, revise, re-score — and no mechanism completed
+  it: `cast_vote.py` refused a second vote from one seat, and the only other route was
+  re-running `convene_panel.py --write`, which `skills/panel/SKILL.md` lists as an
+  anti-pattern in its own words. Re-voting happened anyway, by hand, surviving only as
+  `<slug>-plan.roundN.json` filenames a previous session chose. `cast_vote.py --supersede`
+  makes it a supported path: the verdicts on the previous text are archived into `rounds[]`
+  with the hash of that text, the other seats' votes are carried and MARKED
+  `carried_from_round` so a tally cannot read three seats agreeing about one document when
+  they agreed about two, and the flag is refused when the artifact has not changed —
+  otherwise it is the duplicate refusal with an extra argument. The shape is `/review`'s: a
+  fixed BLOCKER is marked CLOSED keeping its severity, never deleted (#144).
+
+- **A skip outlived the defect it waited on, and the test went green through the branch
+  that says the work is unfinished.** `tests/test_kit_manifest.py` guarded its `legacy_gone`
+  assertion with a conditional `pytest.xfail` while the kit still shipped an empty
+  `rules/domain-routing.txt` for `install.sh` to copy. When that file was deleted and the
+  installer stopped recreating the retired path, the condition became false, the branch stopped
+  being taken, and the assertion started passing — with no signal that the thing it was waiting
+  for had landed. A skip whose condition has become false does not announce itself; it simply
+  stops being exercised. The assertion is now unconditional and the comment records what the
+  scaffolding was for (#157).
+
+- **The git guard told a citation apart from an invocation, and each round of that fix
+  opened bypasses of the rule it protects.** `hooks/validate-command.py` was refusing
+  prose that merely NAMED a forbidden command — `echo "…git checkout main"`, a heredoc
+  carrying the phrase, a `grep` searching for it — and correcting that in the direction
+  being complained about turned seven false blocks into zero and, across four rounds,
+  opened six bypasses, then three, then five. Every one was found by running the same
+  payloads in BOTH directions. The guard now reads the command POSITION rather than the
+  text: a quoted name (`"git" checkout main`) executes and is blocked, the
+  same name inside an `echo` is a citation and stays quoted, and a wrapper (`xargs`,
+  `env`) holds the command position open across its own flags rather than merely the next
+  token — which is why `xargs git checkout` blocked while `xargs -I{} git checkout {}`
+  did not. `tests/hooks/test_citing_a_command_is_not_running_it.py` pins both directions.
+  The lesson generalised into `rules/testing.md`: when you are FIXING, the lens you skip
+  is the one you just moved.
+
+- **The panel premise gate answered a wrong path with a verdict about the roster.**
+  `check_panel_capability.py` returned `VIOLATED` whenever the roster could not be read,
+  on the argument — correct for the DEFAULT path — that a project with no declaration
+  cannot form a panel. With `--panel` given by the caller, the same branch printed
+  `PREMISE VIOLATED — no valid review panel can be formed from rules/review-panel.txt`
+  for a file it had never opened. Measured 2026-09-21: `--panel discover` (the phase name,
+  where a path belongs) reported the premise violated for all three gated phases while the
+  roster on disk in fact HOLDS, and the reader acted on it. A roster the caller named and
+  that is absent establishes nothing about the project's panel, so it is now `UNCHECKED`
+  (exit 2) and the default path keeps `VIOLATED` with its argument intact — the split
+  `check_auditor_coverage.py` already makes on its own side, under the same sentence: an
+  inability to measure must not become a passing measurement, and must not become a
+  failing one either.
+
+- **The panel waiver outlived the obstacle it named, and the roster contradicted the
+  cycle rules it serves.** `rules/review-panel.txt` seated three Anthropic reviewers per
+  gated phase under `single_family_panel = accepted`, whose reason named codex CLI 0.120.0
+  refusing every model the account exposes. Measured 2026-09-21: the installed CLI is
+  **0.154.0**, and `codex exec "Reply with exactly: SEAT_OK"` PRINTS `SEAT_OK` on
+  `gpt-5.5`. The obstacle was gone and the waiver was not — so `cycle-discover.md` and
+  `cycle-plan.md`, which both already name `judge-codex:*` as the orthogonal chair, were
+  describing a seat the roster did not hold. One `argus-pattern-analyst` row per phase now
+  names the judge-codex seat and both waiver keys are deleted; `check_panel_capability.py`
+  reports `9 seats across anthropic, openai` and stops printing the single-family warning,
+  and `convene_panel.py` resolves the seat to family `openai` in all three phases. The
+  design seat is `plan-judge` because judge-codex supplies no design-judge — an
+  approximation the roster states rather than glosses. `tests/test_a_single_family_panel_is_declared_not_assumed.py`
+  asserted the waiver unconditionally, so it failed on a roster that had just got better;
+  it now checks both directions — one family requires the declaration, two or more require
+  its absence — which is the side that was missing and the side the defect was on.
+
+- **The panel waiver named a reason that was false on this machine, and nothing re-read
+  it.** `rules/review-panel.txt` declared `single_family_reason = no non-Anthropic
+  provider is configured for this project` while `codex` sat on PATH at `/usr/bin/codex`,
+  `~/.codex/auth.json` existed, and the `judge-codex` plugin was installed supplying the
+  `discover-judge` / `plan-judge` / `final-judge` seats that `cycle-discover.md` and
+  `cycle-plan.md` both name. The panel is genuinely single-family — the installed CLI
+  (0.120.0) is refused by every model the account exposes, `400: gpt-5.5 requires a newer
+  version of Codex` — but the file named the wrong cause, which is the difference between
+  a cost somebody chose and one nobody could see. The reason now states what was measured
+  and carries the upgrade path, and `check_panel_capability.py` grew `waiver_contradicted()`
+  so a waiver claiming "no provider is configured" is refuted when a provider binary is on
+  PATH. Only that class of reason is checkable: a broken CLI or a refused model is a claim
+  about behaviour, and probing it would cost a live call on every gate run.
+
+### Added
+
+- **A rule can now be cited by something a rename cannot break.** A rule's only handle
+  was its path, and paths move: 1209 citations of the form `rules/<name>.md` inside this
+  kit, and on one consumer's registry 33 of 109 backlog items citing a path in here —
+  including items about that project's own product. Of the 6 dead pointers a freshness
+  check found in that registry, 5 were paths that had moved. `squad/rules.py` gives every
+  rule a stable id (`SQ-ERR-01`) that survives any rename, and
+  `mechanisms/gates/check_rule_identity.py` holds the three properties a citable id needs:
+  every rule declares one, ids are unique, and a retired id is never reused — a reused id
+  makes an old citation resolve to the wrong rule, which is worse than a dead one. The
+  shape is ESLint's, for its three stated reasons: portability across versions, freedom to
+  reorganise internals without breaking consumers, and one namespace for core and plugin
+  rules alike.
+
+- **Evidence age is reported and a dead pointer fails.**
+  `mechanisms/gates/check_evidence_freshness.py` separates two things a single "staleness"
+  number conflates. OLD is not a defect — a thirty-day-old measurement of something nobody
+  has touched is still true, and failing on age trains people to re-measure on a calendar
+  rather than on a reason. WRONG is: evidence citing a path that no longer resolves leaves
+  the next reader unable to tell whether the finding moved or was never real.
+
+- **A wired hook that points at nothing is now caught.**
+  `mechanisms/gates/check_wired_hooks.py` checks that every hook an install wires in
+  `settings.json` resolves to a file that is there. `hooks/validate-command.sh` left this
+  kit in `260892f` when the hooks became Python, and an install predating that commit kept
+  the shell copy wired. Measured against the live `.py`: the retired shell hook diverges in
+  2 of 36 payloads and BOTH divergences are permissive — it allows `git stash` (forbidden
+  while worktrees exist) and `--force-with-lease` on `workspace`. The upgrade left a gate
+  running that the kit had already replaced, with the replacement's stricter rules not in
+  force, and nothing said so because nothing looked.
+
+- **Commissioned audits now carry a cost ceiling.** `select_auditors.py` built
+  `/{plugin} {target} --output-dir … [scope]` and stopped, so every auditor ran at its own
+  default — 60 global iterations for the `always` one, 80 for most, 200 for
+  `loop-performance-audit`. A change touching `security` and `testing` commissions three of
+  them: up to 220 halt-loop iterations for one backlog item, at a depth nobody in the chain
+  chose and no reader of the assignment could see. `rules/review-auditors.txt` gains one
+  `max_iterations` key, `parse_ceiling()` refuses anything that is not a positive integer,
+  and the value reaches every commissioned command as `--max-iterations N`. Declaring none
+  omits the flag entirely — the kit does not invent a depth the project never chose. The
+  shipped value (40) is a chosen floor, not a measured one, and says so where it is
+  declared.
+
+### Changed
+
+- **The kit stopped shipping a `rules/domain-routing.txt` placeholder it had already
+  moved.** The routing table lives in the write root — where `squad.paths.write_routing_table`
+  puts it and where `detect_domains.py --write` writes it — and the kit went on recreating
+  a placeholder under `rules/` on every reinstall for three weeks after the destination
+  moved. `rules/README.md` names the real location now, and its own file count follows.
+
+- **The read-only study zone moved into the write root: `study-material/` →
+  `.squad/study-material/`.** `rules/reference-provenance.md` guards third-party material
+  for a legal reason, not a stylistic one — *"a literal copy carries the original licence
+  into this repository"* — and the zone was a TOP-LEVEL directory, kept out of the index
+  by a single `study-material/**` line in `.gitignore`.
+
+  One deletable line stood between a cloned peer project's licence and this repository's
+  history. Inside `.squad/` the question does not arise: the write root is ignored whole,
+  so nothing under it can reach the index at all. The guard is unchanged — nothing is
+  written into the zone, nothing leaves it by command, no commit message cites it — and
+  the path it guards can no longer be committed by accident.
+
+  **The cost, stated rather than discovered.** A consumer still holding material at the
+  old top-level path is no longer guarded: writes into it are allowed, copies out of it
+  are allowed, and the leakage detector does not read it. `reference-provenance.md` § 1
+  says so and says to move it, the same way it already stated the cost of retiring
+  `records/references/`.
+
+- **The zone is spelled once.** It was written three times, in three shapes:
+
+  ```
+  hooks/boundary-check.py       (^|/)(\.claude/)?study-material/
+  hooks/validate-command.py     (\./)?(\.claude/)?study-material/
+  check_reference_leakage.py    ZONE_DIRS = ("study-material",)
+  ```
+
+  `squad/boundaries.py` owns it now, which is where its own docstring already argued it
+  belonged: *"a rule living in one file and missing from another is how the gap
+  reopens"* — recorded there about the previous instance, where `boundary-check` refused
+  `Edit`/`Write` into an installed kit while `validate-command` knew nothing about it,
+  so `sed -i` reached the file `Edit` had just refused.
+
+### Fixed
+
+- **A checker mis-read the prose it audits, and blamed the code.**
+  `test_boundary_check_prose_agrees` extracts every backticked zone path from
+  `SECURITY.md` and `hooks/README.md` and asserts the hook blocks each one. Its pattern
+  required a zone to start with a LETTER, so when the prose began saying
+  `.squad/study-material/` it extracted `squad/study-material/` — and reported the hook
+  failing to block a path the prose had never named. A checker that mis-reads its own
+  input accuses the code of the checker's bug. It reads a leading dot now.
+
+- **The zone pattern was anchored too tightly for the text the guards actually feed it.**
+  The first version required start-of-string or a slash before `.squad/`, which is right
+  for a clean path and wrong for the free text these hooks receive: a shell command line
+  and a `-m` body. `git commit -m "see .squad/study-material/x"` stopped being blocked.
+  A lookbehind gives the same protection without the anchor — `mine.squad/study-material/`
+  still does not match, and neither does the `squad/` PACKAGE, which has no leading dot.
+
+### Changed
+
+- **`.squad/` in this repository now means what it means in a consumer: one machine's
+  run data, ignored whole.** The kit kept its own eleven ADRs and SOPs at `.squad/wiki/`,
+  versioned through a `!.squad/wiki/` negation in `.gitignore`, on the argument that
+  *"this kit's durable knowledge IS its source"*.
+
+  The argument was true and the location was the problem. `records-location.md` declares
+  `.squad/` the write root **of the project being maintained**, so one path meant two
+  things — authored product here, run output in every consumer — and the kit carried a
+  worked example in its own tree of writing authored documents into a write root.
+
+  The bundle moved to `docs/wiki/`, versioned like the rest of the product. `.squad/` was
+  deleted, `.gitignore` ignores it whole, and
+  `tests/test_write_root_is_versioned_correctly.py` now refuses a TRACKED file under it
+  at all. A `.squad/` appearing here from a cycle run is not an error — that is what the
+  directory is for.
+
+  **Nothing changes for a consumer.** A project maintained by the kit still keeps its OKF
+  bundle at `<project>/.squad/wiki/`, and `wiki_dir()` still resolves there. The new
+  `authored_wiki_dir()` answers for the other kind — documents people wrote, shipped with
+  the product — and is deliberately a separate function rather than a third fallback
+  inside `wiki_dir()`: making it a fallback would put both kinds back behind one name,
+  which is the ambiguity this move removed.
+
+### Fixed
+
+- **The move silently narrowed a sweep, and the sweep read the same.** `check_sop_structure`
+  covers the OKF bundle plus every skill's `SOP.md`. It finds the bundle through
+  `resolve_knowledge_dir`, which answers from the write root — so the moment the kit's
+  four SOPs left it, they stopped being swept:
+
+  ```
+  before the move:  read 43 SOPs: 237 step(s), 167 decision branch(es)
+  after the move:   read 39 SOPs: 209 step(s), 142 decision branch(es)   ← unreported
+  ```
+
+  Four procedures carrying `last_reviewed` and a review interval, with nothing reading
+  those dates any more, and a gate reporting a clean sweep of the remainder. That is the
+  defect this kit names more often than any other, caused by the move rather than found
+  by it. Both gates sweep both bundles now, and `check_sop_run` resolves a run-file's SOP
+  from either — a step-count mismatch against a SOP that cannot be found reads exactly
+  like a SOP with no steps. Back to 43.
+
+- **Rules cited documents a consumer never receives, and nothing said so.** Six links
+  in `rules/`, `skills/` and `README.md` pointed at the kit's own ADRs with a relative
+  path. In an install those resolved to `.claude/../.squad/wiki/…` — outside the tree
+  `check_xrefs` walks, so the gate never looked and every install reported zero broken
+  links. Moving the bundle to `docs/wiki/` brought the same links INSIDE that tree and
+  the warnings appeared at once: not a regression, an exposure. They are repository URLs
+  now, which resolve for whoever installed the kit. A clean install reports **0**
+  markdown-link warnings, measured.
+
+### Added
+
+- **The chain now confirms that what it published exists.** `cycle-release` ended at
+  `gh release create` and emitted `RELEASED`. Nothing looked afterwards — so a release
+  left as a DRAFT, a `gh` call that failed *after* the tag was already pushed, or a tag
+  that never propagated each produced `RELEASED` over an artifact no consumer can fetch.
+  That verdict is what `cycle-maintenance`'s ADVANCE reads to write `shipped` into the
+  registry.
+
+  `mechanisms/gates/check_release_reachable.py` runs in Step 7, immediately after the
+  publish, and checks three ways the last step half-succeeds: a release exists for the
+  tag, it is not a draft, and it names the tag that was cut. It runs for **every** item,
+  with or without a `milestone_id`.
+
+  **What it deliberately does not claim.** That a package is installable from npm, PyPI
+  or crates.io — that needs the network and a registry. And that the delivery works —
+  `/acceptance` exercises that, against declared criteria. Saying so in the gate keeps
+  it from being read as the stronger check it is not. An absent or unauthenticated `gh`
+  exits 2: an inability to look is not a look that found nothing. 6 tests.
+
+  This came from an external review, which read the milestone-only acceptance rule as
+  leaving every off-roadmap item unverified. Half of that reading was right.
+  `cycle-acceptance.md` argues that an item nobody promised a user has no user-visible
+  promise to exercise, and for the PRODUCT question the argument holds — it was
+  answering a different question from the one being asked. Whether the thing shipped at
+  all has an answer for every item, and nobody was asking it.
+
+- **`README.md` § Where this ends.** The system never said where it stopped, so every
+  outside reading had to assume it meant to cover the whole life of software — and
+  report the absences as failures. Deploy, operation, security beyond dependencies,
+  deprecation and product discovery are now named as absent, each with what stands in
+  for it and why a phase pretending to cover it would produce the exact failure this kit
+  refuses: a green verdict over something nobody measured.
+
+  The security row is the one worth reading precisely. One mechanised gate exists and it
+  is narrow — `check_deps_audit.py` caps a plan at INVALID on a CRITICAL/HIGH CVE in a
+  declared dependency — plus `hooks/boundary-check.py` on write paths. SAST, DAST, SBOM,
+  licence audit, threat modelling and secret scanning are not here, and the row says so
+  rather than letting two mechanisms imply a practice.
+
+### Changed
+
+- **The three conditional transitions are part of the chain, not exceptions to it.**
+  `HOW-TO-USE.md` called the chain unbreakable and then documented three ways around it
+  — DESIGN skipped when the system is drawn, entry at DISCOVER for a `--mode bug` with a
+  failing test, no ACCEPTANCE without a `milestone_id`. Each is correct and each was
+  written as an exception. A chain called unbreakable while three documented paths go
+  around it teaches its readers that the word is decorative, and the next shortcut gets
+  taken without one. They are a table now, with the condition and the cost of each.
+
+- **"Until a person signs" was re-freezing unattended runs.** `HOW-TO-USE.md` said DESIGN
+  ends at `AWAITING_REVIEW` until a person signs, while
+  `skills/_kit-rules/alignment-threshold.md` § 80 lets `alignment_judge.py` sign when no
+  person is coming, and `score_alignment.py` reports `signed_by_is_human` beside
+  `reviewer_signed_off` so a judge's approval reads as the weaker claim it is. Read
+  literally, the sentence promised a human block the system does not enforce — the same
+  stale wording `cycle-implement.md` records having re-frozen every unattended run at
+  `AWAITING_REVIEW`. The diagram's "the ONLY phase a human attends" is now "the only
+  phase that WAITS for a human", which is what is true.
+
+- **`SQUAD_AGENTS.md` → `docs/SQUAD_AGENTS-HISTORICAL.md`.** The file has carried a
+  `Status: HISTORICAL` banner since 2026-09-08, explaining in its first paragraph that
+  its "14 agents" mixes agents with the scripts they run and that only VERA is on disk.
+  An external review read it anyway as a live roster and reported "two competing truths".
+  The banner was not the problem: the NAME is what a reader meets first — in a directory
+  listing, in a search result, in a link — and a file whose name claims to be the
+  manifest is read as the manifest whatever its first paragraph says.
+
+### Fixed
+
+- **Two allowlists exempted nothing, and one of them was printed as the remedy.**
+  Three files in `rules/` document the same exemption contract — pipe-separated fields,
+  an ISO sunset within 90 days, expired entries ignored, malformed entries refused. One
+  of the three was read by anything:
+
+  ```
+  code-quality-allowlist.txt     load_allowlist()   parsed and enforced
+  deps-audit-allowlist.txt       -                  no reader anywhere
+  plan-confidence-allowlist.txt  -                  no reader anywhere
+  ```
+
+  `check_deps_audit.py` is the worse case, because its HARD cap TELLS a reader to use
+  the file nothing opened: *"Bump the dependency, or allowlist the CVE in
+  `rules/deps-audit-allowlist.txt` with rationale and sunset."* Following that
+  instruction wrote an entry, changed nothing, and produced the same message on the next
+  run — a gate teaching a remedy it had not implemented. Both allowlists are now read.
+  A waived CVE is stated in the reason rather than waved through in silence: an
+  exemption a reader cannot see is indistinguishable from a CVE that was never there.
+
+  `plan-confidence-allowlist.txt` promises *"Plans listed here are permitted to return
+  verdict=INVALID without failing CI"* in the file itself, in `PORTABLE.md` § 4 and in
+  `plan-confidence-golden-rule.md`. `setup.sh` installed it and `test_portability.py`
+  asserted it EXISTS — a test that attests presence and never behaviour, which is how a
+  dead allowlist looks alive. The waiver now applies **to the exit code alone**: the
+  verdict still prints `INVALID`, because rewriting it would hide the plan's state from
+  every reader, which is a different and worse thing than not failing CI.
+
+  **One thing the allowlist still cannot do, stated rather than discovered.** Its own
+  example — `my-followup-plan|…|Follow-up note (not a full plan); no Coverage Matrix by
+  design` — describes a plan with no Coverage Matrix section, and that never reaches
+  `INVALID`: `run_structural.py` exits **2**, "No '## Coverage Matrix' section found in
+  plan", the code for a plan it could not read. The waiver deliberately does not cover
+  exit 2 — exempting it would turn "unreadable" into "passed".
+
+- **`records-location.md` sent readers to a directory nothing writes, in the section
+  that verifies such claims.** The rule declares **"`<project>/.squad/` is the one write
+  root. Always, in every layout"** and **"There is no layout exception"**. Its
+  *Enforcement* section opens: *"Measured 2026-09-05, because this section named three
+  mechanisms and two of them do not exist. A rule that lists enforcement a reader cannot
+  find is worse than one that lists none: it stops them looking."*
+
+  The third item — the only one marked **This one holds**, with line numbers — claimed
+  `install.sh` and `patch_install.sh` scaffold `.claude/records/{…}`. Measured on a clean
+  install: `.squad/records/{acceptance,audits,backlog,brainstorms,discoveries,…}` is
+  created, `.claude/records/` is not created at all, and `install.sh:772` is a comment
+  about `merge_settings.py`. The one item that said HOLDS had aged into the same defect
+  as the two it struck through. It now names the real lines, and points out that neither
+  shell script spells the root — both ask `squad/paths.py` — so the claim cannot drift
+  the same way twice.
+
+- **39 records paths across 11 cycle rules pointed outside the write root.** Measured:
+
+  ```
+  rules/cycle-*.md    22 paths `records/…`      1 `.squad/records/…`
+  the skills           0                       35 `.squad/records/…`
+  ```
+
+  A clean split: what EXECUTES uses the write root, what DOCUMENTS sends the reader
+  where nothing is written — and `records-location.md` opens by naming that exact cost,
+  *"a reader who checks the wrong one reports absence where evidence exists."* Same
+  defect as the install message corrected two entries above, at seven times the size.
+  `tests/test_a_rule_points_at_the_write_root.py` holds every `cycle-*.md` to it, with
+  one narrow exemption: the rule ABOUT the move must still be able to write the old path
+  in order to say it is old.
+
+### Changed
+
+- **One sunset policy for every allowlist.** `squad/allowlist.py` owns the window, what
+  an expired entry means, and that a malformed line is refused rather than silently
+  dropped — the knowledge three files documented and one enforced. The FIELDS stay with
+  their consumers: a CVE exemption names a package and an advisory, a plan exemption
+  names a slug. What was duplicated was never the shape; it was the policy.
+
+  `check_deps_audit.py` also stopped hand-rolling `rules/` vs `.claude/rules/` and asks
+  `squad.paths.rules_dir`, whose own docstring records nine sites resolving that pair by
+  hand — six in one order, three in the other — so a table edited in one place was
+  invisible to half its readers. This would have been the tenth.
+
+### Fixed
+
+- **The normative `ROADMAP.md` block in `cycle-acceptance.md` was one no parser accepted.**
+  Copying the rule's own example produced a milestone that could never be accepted.
+  Measured on that example, verbatim:
+
+  ```
+  extract_acceptance_criteria  ->  NOT_VALIDATED, "no `- [ ]` bullets"
+  select_next_milestone        ->  {"dod": [], "depends_on": []}
+  ```
+
+  Two details were wrong. The DoD bullets were shown without the `- [ ]` checkbox every
+  parser requires and every fixture in the repository has. And the dependency line was
+  shown as `**Depends on:**` while the parsers read `**Dependencies:**`.
+
+  The two are corrected differently, on purpose. The bullet shape is the parsers' — they
+  are what runs, and the rule now matches them, the same way `code-quality-allowlist.txt`
+  was corrected when its header documented a four-field shape `load_allowlist` never
+  accepted. The dependency spelling is read BOTH ways, because that mismatch failed in
+  **silence**: a bullet mismatch exits 1 and names what is missing, while `depends_on: []`
+  is indistinguishable from a milestone that declared no prerequisite. A milestone whose
+  dependency was never delivered read as one with no dependency at all.
+
+- **`[-]` meant CANCELLED in one script and nothing in the other two.** `select_next_milestone`
+  alone had the character in its class and alone acted on it. To `extract` and to the flip
+  script a cancelled milestone was not cancelled — it was absent: `Milestones present: (none)`
+  over a file holding one, and `WARN … not found — skipping flip`. A state one reader can
+  spell and two cannot is worse than a state nobody supports, because the two that cannot
+  each invent their own story about the silence. All three read it now and each refuses it
+  by name.
+
+- **A flip that did not happen exited 0.** A milestone whose header sits at `##` instead of
+  `###` printed `WARN roadmap-checkbox: M1 not found — skipping flip` and returned success,
+  so a caller running `flip || exit 1` was told the milestone closed while the checkbox
+  stayed `[ ]`. The rule DOCUMENTED that silence — *"never closes, and never says why"* —
+  and left it standing. It exits 1 now and names the header shape it expected.
+
+- **`ACCEPTED` over evidence that does not exist.** The phase-contract table gates the
+  `record` phase on *"evidence files exist at the cited paths"*, and the skill repeats
+  *"the paths must resolve"*. The check asked whether the list held a non-empty string:
+
+  ```
+  evidence=[""]          ->  NOT_VALIDATED
+  evidence=["   "]       ->  NOT_VALIDATED
+  evidence=["e/x.png"]   ->  ACCEPTED        <- no such file
+  ```
+
+  This is the gate the rule says the whole cycle rests on — *"with the human sign-off
+  deliberately out of scope, recorded evidence is the only thing standing between a real
+  validation and a confident sentence"* — and it was satisfied by typing a plausible
+  filename. Paths now resolve against the evidence record's own directory
+  (`--evidence-root` overrides), and a **zero-byte file counts as unresolved**: a failed
+  screen capture leaves one, and it reads downstream as a successful capture. An evidence
+  root that is not a directory is `NOT_VALIDATED`, never an unchecked pass.
+
+- **The flip script had never heard the word `verdict`.** `grep -c verdict` returned 0,
+  while `cycle-acceptance.md § Hard gates` has required a green one since the flip moved
+  there — carried as an open regression note since 2026-08-31, when the skill that used to
+  catch a wrong flip after the fact was cut. Nothing between "the script computed
+  `NOT_VALIDATED`" and "the checkbox is now `[x]`" would have objected. `--verdict` is now
+  required and checked against `ACCEPTED` / `ACCEPTED_WITH_CAVEATS`.
+
+- **The cycle's verdict had no mechanical consumer, and the rule said it had one.**
+  *"a verdict that `cycle-maintenance` consumes"* — `advance_items.py` selects on
+  `event.get("verdict") == "RELEASED"`, and no `.py` outside this slice reads `ACCEPTED`.
+  The verdict was computed, written to a record, and read by nobody. Passing it into the
+  flip gives it exactly one consumer, and § Purpose now says which one rather than naming
+  a cycle that never looked.
+
+### Changed
+
+- **One reading of `ROADMAP.md`.** `cycle-acceptance.md` claimed *"Three scripts parse it
+  and all three agree"*; the table under that sentence listed two, and the three disagreed
+  about the checkbox — the field the whole cycle turns on. `squad/roadmap.py` owns the
+  header, the DoD block and the dependency line now, alongside `squad/semver.py` and
+  `squad/rubric.py`, and a test refuses a fourth private regex.
+
+- **`records/` → `.squad/records/` in `cycle-acceptance.md`.** `records-location.md`
+  declares one write root and the skill already used it; the rule named the legacy path in
+  four places. Same class of defect as the install message corrected in the previous entry
+  — a document pointing a reader at a directory nothing writes.
+
+
+### Fixed
+
+- **The release cycle could not read the releases it had itself cut.** `cycle-release.md`
+  makes `--pre` the default because *"most cuts are pre-releases"*, and the first step of
+  the chain matched `^v?(\d+)\.(\d+)\.(\d+)$` — no pre-release at all. Measured on a
+  repository holding `v0.2.0`, `v0.3.0-rc.1`, `v0.3.0-rc.2`:
+
+  ```
+  detect_current_version  ->  0.2.0        "note: 2 tag(s) not semver, skipped"
+  compute --mode pre      ->  0.3.0-rc.1   ← a tag that already exists
+  ```
+
+  The rc series never reached `rc.3`; every cut collided with `rc.1` and fell into the
+  "tag already exists" stop condition. Worse, a repository whose ONLY tags were rc was
+  refused outright as having "no semver tag" — and `test_detect_current_version.py`
+  PINNED that refusal, so the defect had a test protecting it. The tag it used to build
+  its "unreadable" case is now `-beta.1`, which is what that refusal was always about.
+
+  The note also lied: `0.3.0-rc.1` **is** semver. It is simply not a version this kit
+  cuts, and saying "not semver" sent people looking for a typo in a tag spelled
+  correctly. (#R-1, #R-5)
+
+- **Every pre-release published an empty body.** The rule says *"an rc reads
+  `[Unreleased]` for its release notes and leaves it in place"*. Nothing implemented the
+  first half: the chain rendered notes by version, and on an rc no such section exists
+  because `promote_unreleased.py` has not run and must not. Measured:
+
+  ```
+  $ render_release_notes.py --version 0.3.0-rc.1
+  version section [0.3.0-rc.1] not found in CHANGELOG.md
+  exit=1   RELEASE_NOTES=[]
+  ```
+
+  stderr, not stdout — so `RELEASE_NOTES=$(...)` captured the empty string and the shell
+  carried on. The PR and the GitHub release both opened with nothing in them, silently,
+  in the one place a reader goes to find out what shipped. An rc now falls back to
+  `[Unreleased]` and SAYS it did, because those notes are a snapshot of a section that
+  keeps growing. A final with no section still fails loudly: falling back there would
+  publish the right text under a version whose record was never written. An empty body
+  is refused rather than printed. (#R-3)
+
+- **The tag-cut gate could not be passed by a correct release.** The phase-contract table
+  demanded `git tag --verify` resolve; Step 7 cuts the tag with `git tag -a`. `--verify`
+  checks a GPG **signature**:
+
+  ```
+  $ git tag -a v1.0.0 -m "release" && git tag --verify v1.0.0
+  error: no signature found
+  exit=1
+  ```
+
+  Beside it sat a second clause — *"Tag must be annotated … pushed only after merge to
+  `main`"* — carried as declared debt since 2026-09-01 with the note that "nothing
+  inspects the tag object's type or the branch it was cut from". Two unmechanised
+  clauses about one object, and the contradiction between them survived precisely
+  because no code ever had to hold both. `mechanisms/gates/check_tag_integrity.py` now
+  asks the question that is worth asking — annotated (`git cat-file -t`), and contained
+  in the trunk (`git merge-base --is-ancestor`, not a branch-name match) — and the skill
+  runs it in Step 7 BEFORE the push, while a wrong tag is still local. Signature is
+  deliberately not checked. An absent tag exits 2. (#R-2, #R-4)
+
+- **A gate accused a compliant file of having no docstring.** `check_semantic_names.py`
+  matched a triple quote only at the start of a line, so a docstring carrying a string
+  prefix — `r"""`, the form any module explaining itself with a regex needs — read as no
+  docstring at all. It reported an 18-line one as `purpose_not_stated`. Found when it
+  fired on a file written in this same change. A gate that accuses a compliant file
+  teaches its readers to ignore it.
+
+  The kit already knew the answer in another file: `tests/test_every_gate_is_reachable.py`
+  carries `_PY_TRIPLE`, whose comment reads *"Match a Python triple-quoted string in its
+  four flavours … optional string prefix"*. The gate and the test each solved the same
+  parsing problem, independently, and only one of them got it right — which is the case
+  for one reader that this release keeps finding. (#R-7)
+
+- **The install reported migrating a routing table to a path it had not written.**
+  B-198 moved the write to whatever `squad.paths` resolves and left the message naming
+  the old `rules/domain-routing.txt`. A reader who went to check found the placeholder
+  the install recreates there, read "(no domain yet)", and concluded their table was
+  lost — which is exactly what `tests/test_clean_install.py` concluded, failing for the
+  same reason on a migration that was working. The path is now printed from the value it
+  was written to.
+
+### Changed
+
+- **One reading of a version, for the whole release slice.** Three scripts parsed semver
+  three ways — no pre-release, `-rc.N` only, any pre-release — and the disagreement
+  landed on the default path. `squad/semver.py` now owns it, alongside `squad/rubric.py`
+  and `squad/backlog.py`, and a test refuses a fourth regex appearing in the slice.
+
+  It also mechanises a rule that was only ever prose: `promote_unreleased.py` refuses to
+  run under a pre-release. *"The CHANGELOG moves once, at the final"* has been written
+  in `cycle-release.md` from the start, and the loosest of the three patterns accepted
+  any pre-release suffix — so emptying `[Unreleased]` at `-rc.1`, which leaves `-rc.2`
+  and the final nothing to publish, was one flag away and nothing stopped it.
+
+- **The bump-derivation rule is stated once.** It was written twice in `cycle-release.md`,
+  the second time as an orphaned line outside the list with different wording from the
+  script it describes. Same outcome today; it is the shape that diverges later. What
+  replaced it is the fact the prose was missing — that `Added` is consulted before
+  `Changed`, so a section carrying both derives `minor` from the first rule that matches
+  rather than from whichever clause a reader reaches first. (#R-6)
+
+
+### Changed
+
+- **This project's review panel runs three Anthropic seats, and says what that costs.**
+  The kit imposes one composition rule — *"At least one counted vote must come from a
+  recognised family outside the one the kit itself runs on. Three Claudes asked three
+  times share their failure modes: a plausible fabrication that survives one tends to
+  survive its siblings"* — enforced at intake by `check_panel_capability.py` ("three
+  seats from one family. Fails everywhere, CI included") and at tally by
+  `review_panel.tally()` ("APPROVED on a majority that spans two recognised families;
+  RETURNED otherwise").
+
+  This project has no non-Anthropic provider configured, so swapping the `judge-codex`
+  seats for Anthropic ones without more would have stopped DISCOVER, PLAN and DESIGN
+  outright: the capability gate failing at intake and every document returning at the
+  tally. The honest options were two — run no panel, or run one and say what it is worth
+  — and this is the second.
+
+  `rules/review-panel.txt` now declares the waiver with its reason, on the layer the
+  installer PRESERVES, because which models a project can reach is not the kit's
+  business. The kit's rule and its argument are untouched for every other consumer.
+
+  **Declared, never inferred.** A roster that happens to be one family and one that was
+  meant to be read identically on disk, and only one of them is a decision — so the
+  mechanisms read the keys rather than counting families and guessing. And the waiver is
+  never silent: `check_panel_capability` appends `SINGLE FAMILY, BY DECLARATION` with the
+  reason to its HOLDS line, and `Panel.outcome_note` carries the same into every outcome,
+  so an APPROVED under the waiver reads as the weaker claim it is. Both keys come out the
+  day a second provider is reachable.
+
+  The third seat is `argus-pattern-analyst`, which reads many cases together and decides
+  what is common to them — orthogonal by LENS rather than by family. That is less than
+  the rule asks for, and more than nothing, and this entry says so rather than letting
+  the roster imply otherwise. 4 tests.
+
+  A fourth reader of the two-family rule turned up afterwards, in
+  `skills/design/tests`, counting families directly and failing on the new roster. It
+  reads the declaration now, like the other three. Found by `run_slice_tests.sh` — the
+  slice suites are the only thing that runs it, and a check scoped to the changed area
+  had not.
+
+
+### Added
+
+- **An impediment nobody here can clear now gets a number.** `blocked_by` is prose that
+  MAY name ids, and the contract records what that measured: **seven of the eight items
+  carrying it named a sponsor decision, a ratification, or a revocation in a hosting
+  panel** — none of them an id. Accepting prose was right; a parser demanding `B-NNN`
+  would have called seven honest impediments malformed. What it cost is in
+  `parse_blocked_by`'s own words: *"nothing in this repository can tell you whether a
+  sponsor has decided."* Such an impediment resolves only when somebody remembers to
+  delete the line, is invisible to G6 and G7 because there is no edge to verify, and
+  appears in no report as a thing that is itself pending.
+
+  `source: external-blocker` files the constraint as an ordinary `B-NNN`. `blocked_by:
+  B-900` becomes a verifiable edge, and closing the stub frees every item naming it
+  **with no second edit** — the property prose could never have, and the one the
+  impediment model was built around.
+
+  Three things differ from an ordinary item and nothing else does: no `suggested_mode`
+  (it never reaches DISCOVER), no `traces_to` (it is not work, so it serves no
+  objective), and `select_backlog_item.py` never hands it out — asking for it by name
+  returns `ITEM_EXTERNALLY_BLOCKED`, in the same band as `ITEM_IN_FLIGHT` and for the
+  same reason: the work stands, the queue moves on, and the impediment is real rather
+  than a defect in the item.
+
+  Four of the seven tests passed before a line of this was written, which is the
+  argument for the shape: the edge, the resolution with no second edit, and the report
+  all fell out of machinery the registry already had. What was missing was permission to
+  give the constraint an id.
+
+  Imported from a cross-read of
+  [`gringolito/github-backlog-management`](https://github.com/gringolito/github-backlog-management-skill)
+  (2026-09-20), whose `/add-external-blocker` files the constraint as a stub issue — on
+  the board, never milestoned, skipped by execution — and registers it as a real
+  dependency. The mechanism here is ours, because the registry is a file rather than the
+  GitHub API. 7 tests.
+
+
+### Added
+
+- **BRAINSTORM has eval batteries, which is where its two most expensive gates were
+  measured by nothing.** `score_product_alignment.py` can see that `## Who it is for`
+  holds 80 characters; it cannot see that those characters say `developers`, which is a
+  category and settles no trade-off. The rubric says so on every run — three things it
+  does not score — and until now nothing else looked either, while four other skills
+  (`backlog-item`, `discover-plan`, `discover-edge-cases`, `discover-execute`) had
+  batteries and the one cycle a person attends had none.
+
+  `skills/brainstorm-vision/evals/evals.json` (5 cases) exercises the conversational half
+  of G-B1: a category offered as the named user, a problem stated as the absence of the
+  solution, and a session trying to close with no non-goal. Two are negative — a single
+  feature, and an aligned scope asking for a re-cascade — because a FALSE trigger here
+  costs a human session, the most expensive thing this kit spends.
+
+  `skills/brainstorm-pieces/evals/evals.json` (4 cases) covers what a script cannot reach
+  even now that the gate refuses a forged signature: being ASKED to tick the reviewer's
+  boxes, reporting a copied template as unwritten rather than as low-scoring, what is
+  legitimately available while the gate is closed, and refusing to file backlog items from
+  a cycle that has no write access to the registry.
+
+  `run_eval.py` measures only whether the skill triggered; the `assertions` are the
+  judgement a human or a judge makes on the transcript. That split is stated in both
+  batteries rather than implied, because a coverage claim resting on something nothing
+  runs is the defect `tests/test_eval_batteries_are_runnable.py` was written to close.
+
+### Changed
+
+- **Three imports from a cross-read of `obra/superpowers` `skills/brainstorming`
+  (2026-09-20).** Its gate is prose where ours is an exit code, and its tests cover the
+  visual companion's server and whether the skill triggers — not the gate. But it holds
+  three things this kit had left implicit.
+
+  **A reply approves the artifact it was shown, and no other**
+  (`alignment-threshold.md`). The kit had the signature and not the rule, which leaves
+  the most common way past a human gate unaddressed: not forging a signature, but
+  CARRYING one forward from a conversation about a different document. Approval is now
+  per artifact, an enthusiastic yes is not a wider yes, work resumes at the earliest
+  unapproved artifact rather than the furthest one the conversation reached, and editing
+  a signed document withdraws the signature it carried.
+
+  **What a block forbids, and what it does not** (`rules/blocking-verdicts.txt`, applied
+  in `cycle-brainstorm.md`). A blocking verdict stops the item from ADVANCING; it does
+  not stop the agent from reading. Written down because the two readings fail in opposite
+  directions — an agent treating the block as total sits idle until a person who may be
+  days away returns, and one treating it as advisory starts the chain the signature
+  exists to hold. Upstream states the permission rather than only the prohibition:
+  *"Read-only project exploration is allowed while those prerequisites remain
+  incomplete."*
+
+  **Red flags written in the voice of the rationalisation** (`cycle-brainstorm.md`). The
+  anti-patterns name the error; the table names the thought that produces it, which is
+  what the reader is holding at the moment the gate is about to be skipped. Eight rows,
+  this cycle's own — "94% — that's basically aligned", "they're busy, I'll sign and
+  they'll confirm next week", "I'll add the non-goals once we know more".
+
+  **Not imported, and why.** Upstream announces its spike/bounded/architectural
+  classification so the human can override it. This kit DERIVES depth instead —
+  `classify_alignment_depth.py`, and `cycle-plan.md` says "Derived, never chosen" after
+  measuring 2,740 KB of briefs signed zero times. An announced classification a person
+  can override is also one an agent can argue for, and the derivation exists precisely to
+  remove that conversation. The half that does not collide — complexity discovered
+  mid-task raises the path and never lowers it — is not imported either, because nothing
+  here re-derives depth mid-item and saying so in prose without the mechanism is the
+  contract-without-mechanism shape this kit refuses.
+
+
+### Fixed
+
+- **Two of the review phase's own mechanisms were invoked by nothing.** A sweep of
+  `skills/`, `rules/`, `mechanisms/` and `hooks/` on 2026-09-21, excluding each script
+  and its tests, found no caller for either:
+
+  ```
+  check_finding_continuity.py   173 lines · tested · in squad-map · invoked by: (nothing)
+  check_record_scope.py         165 lines · tested · in squad-map · invoked by: (nothing)
+  ```
+
+  The first is the worse one, because its docstring says what it was for: *"`consolidate_findings.py`
+  scores from OPEN findings. A re-review that deletes a finding, or lowers a BLOCKER to
+  MEDIUM, therefore passes — and until now the only thing standing against either was a
+  sentence in `skills/review/SKILL.md`, guarded by a test asserting `"delete" in text`. A
+  grep over a contract is not a guard … **This is the mechanised half.**"* The mechanised
+  half was written and never connected, so the guarantee stayed the prose it was meant to
+  replace — for three weeks, a re-review could delete a BLOCKER and score from what
+  remained.
+
+  It enters `consolidate_findings.py` the way `check_upstream_gate` already does, at
+  **HIGH** rather than BLOCKER: the checker refuses to rule on intent — *"an honest
+  re-scope and a quiet deletion look identical on disk"* — and a BLOCKER would assert the
+  judgement it declines to make. HIGH reaches the reader and, through
+  `unregistered_high`, has to be named and owned before the review hands off.
+
+  `check_record_scope` measured the other hole — 2 of 48 reviews declared a reviewed
+  range, 3 of 16 audits a scope — and concluded *"the past is permanently unrecoverable,
+  and the only honest move left is to stop the same hole opening again."* Wiring it as a
+  finding about somebody else's old record would not have stopped anything; the report
+  this phase writes now opens with a frontmatter declaring the item it covered, and the
+  checker runs against that record. The gate verifying the artifact its own phase
+  produced.
+
+- **The report a person reads omitted the auditors it could not read.**
+  `_read_findings_file` returns `None` for a malformed file and promises the caller
+  "lists the file under `unreadable`, by name, **in the report and in the JSON**".
+  Measured with three findings files, one carrying broken YAML:
+
+  ```
+  JSON:      unreadable: ['perf-auditor.yaml']
+  report.md: "**Reviewers (spawned agents):** 2 (quiet-auditor, security-auditor)"
+             grep -ci "unreadable|perf-auditor" -> 0
+  ```
+
+  `_render_markdown` even declared an `unreadable` parameter and the call site passed it;
+  the body never rendered it. The JSON kept the promise, the markdown did not, and the
+  markdown is the phase's declared Output — a count of two, alone, reads as the whole
+  roster.
+
+- **A BLOCKER whose evidence said `looked in None`.** `records_dir()` returns `None` when
+  the directory is absent and `check_upstream_gate.py` interpolated the result straight
+  into the sentence. It told nobody where it looked and conflated two facts: the audit is
+  missing from a records directory that exists, and there is no records directory at all.
+  The sibling BLOCKER in the same report writes the honest form — *"the gate was pointed
+  at the wrong tree — it has NOT established that no audit is required"* — and this one
+  does now.
+
+  Checked and found correct, recorded because it nearly became a false finding: the
+  decision that a `None` edge-case ratio does NOT reach `NEEDS_DEEPER` is deliberate and
+  its promise is kept — the report header carries `**Edge-case coverage:** NOT MEASURED —
+  the band below was not applied, so this verdict says nothing about edge-case coverage.`
+
+- **The allowlist's own example was in the format the file warns against.**
+  `code-quality-allowlist.txt` opens by recording the fix for #343 — *"this header used
+  to document a FOUR-field format … that `load_allowlist` has never accepted … so
+  following the documentation produced a WORSE outcome (FAIL_HARD, cap 49) than adding
+  nothing at all"* — and closed, eight lines later, with a four-field example. Measured
+  2026-09-21, uncommenting it: `malformed entry (expected 6 pipe-separated fields, got
+  4)`, which is `allowlist_malformed_entry`: HARD, and it aborts allowlist processing for
+  the whole run. #343 corrected the header and left the example, so the obvious way to
+  write a first entry — copy the example — was the worst available move. A test now
+  parses every example under the `# Example` marker.
+
+- **The mandatory sunset window was checked by nothing.** Two documents call it
+  mandatory — the golden rule's `| Sunset window | ≤ 90 days from entry creation date |`
+  and the file's own "MUST be ≤ 90 days" — and `load_allowlist` validated the ISO shape
+  and stopped. A sunset in 2029 was accepted: a permanent exemption with a date on it,
+  which § anti-patterns names as *"allowlists growing stale forever"*. Measured against
+  today rather than the creation date, which nothing on disk records — an approximation
+  strictly tighter than the contract, since a sunset beyond today+90 could not have
+  satisfied the rule on any creation date. A sunset already PAST still parses: the
+  contract is that an expired entry is ignored at scoring time and REPORTED as expired,
+  and refusing to parse it would hide the expiry instead of surfacing it.
+
+- **A detector that ran and found nothing was indistinguishable from one that did not
+  run.** Measured on a repository with a committed orphan function, `vulture` installed
+  and D1 clean at its threshold:
+
+  ```
+  findings_by_detector: {'d3_orphan_export_skipped': …, 'd4_mutation': …,
+                         'd2_symbol_fab': …, 'd5_architecture': …}
+  skip_reasons: {}
+  ```
+
+  D1 — the detector the golden rule lists first — appeared in neither, nor in
+  `languages_skipped`. `detectors_run` now names every detector per language, derived
+  from `languages_audited` because the audit loop runs all five for every language it
+  audits. Same defect this session fixed in `/implement`, where a SKIP meant two
+  opposite things.
+
+- **"D1 clean" was a claim with a number missing.** The golden rule defines D1 as *"No
+  exported symbol unreachable from a caller or a test"*; `vulture` scores exactly that
+  class — unused function, class, variable — at **60%** confidence, and the default
+  `min_confidence` is **80**. Measured on one file: 0 findings at 80, 2 at 60, both real
+  orphans. So the default D1 reports the 90% class (unused imports) and not the orphan
+  symbol its own definition describes.
+
+  The default is NOT changed. The golden rule argues for it directly — turning D1 up
+  before the debt is paid *"is how a gate becomes something people work around"* — and
+  `--write-baseline` exists for the day a project decides to. What changed is that every
+  run reports `thresholds_applied`, so a clean D1 carries the number it was clean AT, and
+  the D1 row now says which class the default covers. Counting the below-threshold
+  findings would have meant running the detector twice for the same answer.
+
+- **The thresholds rule documented a fallback that a test forbids.**
+  `code-quality-thresholds.txt` pointed three times at
+  `skills/code-quality/defaults/thresholds.txt` — *"Defaults shipped with the skill"*,
+  *"When unset, the value falls back to …"*, *"Defaults remain in … for portability"*.
+  The directory does not exist, and `test_no_dead_fallback_copies_of_the_project_config`
+  requires that it does not, with the reasoning intact: *"**Nothing fell back.**
+  `run_code_quality.py` reads `rules/code-quality-*.txt` and, when one is missing, prints
+  an error and exits 2 … the copies served nothing and drifted anyway: 80 lines in
+  `rules/`, 83 in `rules/templates/`, 37 here."* The copies were deleted on 2026-09-01
+  and the rule went on describing them for three weeks. The defaults live in the detector
+  constructors, and the file says so now.
+
+- **The final gate of IMPLEMENT said "proceed" about a repository where `/implement` had
+  not run.** `run_validation.py` consolidates twenty checks with `overall = "FAIL" if
+  fails else ("PARTIAL" if skips else "PASS")`, and `PARTIAL` exits 0. Every SKIP counted
+  the same, and SKIPs have two opposite natures. Measured 2026-09-21 on a tree holding a
+  plan and no checkpoint:
+
+  ```
+  overall_status: PARTIAL   exit 0
+  2 pass · 16 skip · 1 warn · 0 fail
+  SKIP checkpoint_consistency: no progress checkpoint — implement may not have run
+  SKIP wiring_triad:           no progress file found — implement may not have been invoked
+  ```
+
+  The check writes the suspicion in its own reason string and returns SKIP. A SKIP now
+  declares its kind — `not_applicable` when the check has no subject here, which is
+  honest, or `precondition_missing` when it has one and the thing it reads is absent —
+  and the second is counted with the failures. The kit had argued exactly this twice
+  before, in the comments of the two checks it fixed one at a time: *"FAIL, not SKIP. The
+  plan FILE exists… As a SKIP it counted into `skips`, `overall` became PARTIAL, and
+  PARTIAL exits 0, so IMPLEMENTATION_COMPLETE could be emitted with the TDD shape never
+  verified."*
+
+  A missing checkpoint counts only when a plan for the slug exists. Without one,
+  `/implement` was never supposed to run and its absent checkpoint is the honest state of
+  a pre-code tree — the first cut ignored that and turned `test_pre_code_phase_all_skip`
+  red, which was the test saying so.
+
+- **"Pre-code phase" was measured by the absence of a manifest, not of code.**
+  `test_execution` SKIPs only for *"a repo with no language manifest at all (genuine
+  pre-code phase)"*. Measured with `src/thing.py` committed and no `pyproject.toml`:
+
+  ```
+  SKIP test_execution: no language manifest at the repo root        PARTIAL, exit 0
+  ```
+
+  Adding a two-line `pyproject.toml` and touching no code:
+
+  ```
+  FAIL test_execution: manifest(s) for python present but no suite executed   exit 1
+  ```
+
+  What separated proceed from refuse was a metadata file. A repository with sources and
+  no manifest is not in a pre-code phase — this kit describes itself as shipping *"loose
+  scripts"* — so sources present with no runnable suite is a missing precondition, read
+  from `git ls-files` rather than a walk, because an untracked scratch file is not the
+  repository's code. It is reported as a precondition rather than as a FAIL: the honest
+  next step is "declare the manifest this repo needs", not "your tests failed".
+
+  The test that carried the old behaviour is named `test_pre_code_phase_all_skip` and its
+  fixture holds `src/` — the name asserting a phase the fixture contradicts.
+
+- **Pulling the blocked checks out of the skip list broke the census.** The first cut
+  removed them from `skips`, which the summary counts, so two checks vanished from
+  `pass + fail + skip + warn + partial + n_a == total` —
+  `test_summary_buckets_account_for_every_check` caught it on the next run. The
+  distinction belongs to the verdict, not to the census: every SKIP is counted, and the
+  blocked ones are listed separately under `preconditions_missing` so a reader can tell a
+  gate that failed from one that could not run at all.
+
+  Writing that up reintroduced the very shape another gate exists to refuse:
+  `test_no_procedure_concludes_a_project_phase_from_a_missing_file` caught the new
+  paragraph concluding "pre-code phase" from an absent manifest — the defect whose
+  docstring records that it *"landed in code and not in what invokes it … eight
+  occurrences across four files, after the code was fixed"*. The rule says what was
+  looked for and not found instead.
+
+  Four checks verified by sampling before any of this was changed, all of them sound:
+  `check_wiring` (orphan symbol → HALT on pillar a), `check_tdd_shape` (prose-only TDD →
+  BLOCKED), `check_test_obligations` (plan promises failure scenarios, tree has none →
+  FAIL), `test_execution` with a manifest and no suite → FAIL. IMPLEMENT is the most
+  mechanised phase in the kit; these three findings are the edges its own two earlier
+  fixes did not reach.
+
+- **Four skills used `$ECO` as a path prefix and assigned it nowhere, and the test
+  written for the first one could only ever see the first one.** An empty expansion makes
+  the command an absolute path from the filesystem root, so the step silently does not
+  run:
+
+  ```
+  $ python3 "$ECO/skills/plan-alignment/scripts/classify_alignment_depth.py" . B-001
+  python3: can't open file '/skills/plan-alignment/scripts/classify_alignment_depth.py'
+  ```
+
+  That one matters most: `cycle-plan.md` describes `classify_alignment_depth.py` as
+  **"Derived, never chosen"**, and with it unrunnable the depth is chosen — with the
+  document's own default being FULL, the outcome the script exists to prevent after a
+  consumer produced 2,740 KB of alignment briefs signed zero times. `release` and
+  `issue-confidence` carried the same defect.
+
+  `test_every_shell_variable_the_skill_uses_is_one_it_assigned` was written for this on
+  2026-09-20 and lived in `skills/design/tests/`, reading one SKILL.md. It has moved to
+  `tests/test_a_skill_assigns_the_variables_it_uses.py`, which reads all forty — the only
+  scope that could have caught the other three. A test scoped to one slice catches the
+  defect in one slice.
+
+- **`plan-write` told the reader to close the phase before opening it.** The `end` block
+  sat on line 145 and the `start` block on line 161, under the instruction *"Emit the
+  START of this phase before doing the work"* — by which point the work was done. A
+  SKILL.md is executed in the order it is read, so the outcome is either an `end` before
+  its `start` in the stream, which `check_phase_drift` reads as disorder, or no start at
+  all. Swept across every SKILL.md: one file had them in that order and seven had them
+  the right way round. A test keeps it that way.
+
+- **The gate auditor reported 42 phase rows as naming no enforcer, and most of them
+  named it by id.** A phase-contract table is a summary — one line per phase — and the
+  gate itself is declared below with an id and a mechanism. `cycle-brainstorm.md` is the
+  clearest case: G-B1 to G-B5 each name `score_product_alignment.py`, and the five rows
+  above cite `(G-B1)` … `(G-B4, G-B5)`. The auditor did not follow the reference, so
+  seven honest rows were reported as unenforced.
+
+  Burying the rows that really have no mechanism among rows that do is also what made
+  `--strict-phase-rows` unusable: a flag that fails the build on 42 findings, most of
+  them false, is a flag nobody turns on. `check_gate_mechanisms.py` now resolves an id
+  the same rule declares — and refuses to launder one, so a row citing an id nobody
+  declared, or a gate that is itself unmechanised, is still reported.
+
+  42 → 35 from the resolution, → **31** after `cycle-plan.md`'s own four rows were fixed:
+  `check_coverage_matrix.py` and `check_deps_audit.py` now name the runner that composes
+  them, `plan-confidence` names what derives its verdict, and `plan-edge-cases` carries
+  the exemption it always needed — *judgement*, because whether an owner is the right
+  owner and whether a criterion closes the edge case is the call G3, G4 and G5 are left
+  conversational for. A regex would pass `owner: TBD, criterion: it works`, which is
+  worse than no check: it reads as enforced.
+
+  The 31 that remain are in eight other cycle rules and are declared debt, reported by a
+  gate that exits 0 until somebody passes `--strict-phase-rows`.
+
+- **Two `apply_fixes.py`, 328 lines of code apart.** `plan-improve` fixes weak
+  imperatives, loopholes and missing TDD blocks in a PLAN; `discover-improve` fixes prose
+  smells inside an opportunity's `## Recommendation`. Comparing the syntax trees without
+  docstrings: 223 lines against 151, and 328 differing — the same name for two programs,
+  which is the collision `run_slice_tests.sh` isolates processes to survive. Now
+  `apply_plan_fixes.py` and `apply_opportunity_fixes.py`, named for what each one fixes.
+
+- **G-M named a checker that only read the word `bug`.** `cycle-discover.md` is
+  categorical — *"`bug` has a hard floor: no failing test, no bug"* — and G-M promised to
+  block *"the mode's mandatory evidence is incomplete, most often `bug` without a failing
+  test"*. `check_opportunity_completeness.py` verified that the line `**Mode:**` existed
+  and carried one of four tokens. Measured 2026-09-21 on an opportunity declaring
+  `**Mode:** bug` whose Corner 1 says, in words, *"No test written yet — the shape is
+  obvious enough from the repro"*: `opportunity_completeness: 100.0`, `weighted_avg:
+  100.0`, no mode cap.
+
+  The floor is declared structurally now — `**Failing test:** path/to/test.py::test_name`
+  — and the gate asks two questions it can answer: is the line there, and does the file
+  resolve. A regex hunting for "the test fails" in prose would produce verdicts about
+  language, which is precisely why G3, G4 and G5 are left conversational. Whether the
+  test genuinely fails is what `/discover-execute` runs and what the panel judges.
+
+- **The BLOCKED marker's defect lived in three files and was fixed in one.** The
+  proximity window was ~80 characters and crossed newlines, so a marker on one list item
+  absolved the item above it. That was corrected in `check_evidence_pointers` and the
+  same rule sat untouched in `check_measurement_targets` (a character-for-character copy
+  of the helper) and `apply_fixes` (the window, inlined). Measured on the untouched one:
+
+  ```
+  `src/real/thing.ts` alone                        -> verified=1
+  the same, with a BLOCKED item on the next line   -> verified=0, blocked=2
+  ```
+
+  `squad/blocked_marker.py` owns the convention — the pattern and the rule that a marker
+  excuses what is on its own line — and a test refuses a second definition. Three
+  readers of one convention is three places for it to drift, and this one had already
+  drifted by being fixed once.
+
+- **DISCOVER opened its phase at step 4 of 6.** Only `/discover-execute` emitted events,
+  so the lead time measured the execution of the measurement and not the three phases
+  that produce and approve the measurement plan — and a chain stalling at
+  `/discover-plan-confidence`, whose INVALID returns to `/discover-plan`, had no open
+  start at all and showed as work nobody had begun. `/discover-plan` opens the phase now
+  and `/discover-execute` closes it with the verdict; the fast lane still emits its own
+  start, because there `/discover-plan` never ran.
+
+- **"Sweeping without registering" was an anti-pattern with no gate, and the kit had
+  already measured that.** `grep BACKLOG` across every DISCOVER scorer returned nothing;
+  `phase_coverage.py` walks only the other direction and says so in its own source —
+  *"two entry paths and only one writes an opportunity file"*. Gate G-R resolves
+  `**Item:** B-NNN` against the registry through `squad.backlog.BLOCK_RE`, so a finding
+  that never reached `BACKLOG.md` is capped rather than scored. With no registry at the
+  project root it reports NOT CHECKED, because `None` is not an empty set and calling
+  every opportunity an orphan would assert a violation the evidence does not support.
+
+  The kit knew. `skills/discover-confidence/fixtures/good-opportunity.md` — shipped as
+  the EXAMPLE of a good opportunity — is an opportunity about this exact gap, ending
+  *"The gate that the anti-pattern implies does not exist."* Measured, written up, used
+  to teach, never closed. The fixture now records that the gap it measured is closed,
+  because a fixture describing a live defect teaches a reader that the defect is live.
+
+  Two of the kit's own gates caught this change while it was being written:
+  `check_gate_mechanisms` refused G-R for naming a checker with no entry point without
+  naming the runner that composes it, and `check_xrefs` refused a citation of
+  `good-opportunity.md` that read as if the file were under `rules/`.
+
+- **The evidence gate scored 100 for evidence nobody could verify, and a BLOCKED marker
+  absolved the pointer above it.** G-E is the cycle's cardinal gate —
+  `cycle-discover.md` calls fabricated evidence *"the one unrecoverable defect in this
+  cycle: everything downstream trusts it"* — and it promised to block *"a URL never
+  actually fetched, a trace id never observed"*. Measured 2026-09-21 against an
+  opportunity whose entire Corner 1 was three HTTP calls nobody made:
+
+  ```
+  evidence_pointers_score: 100.0
+  weighted_avg:            100.0
+  hard_caps_triggered:     []
+  ```
+
+  `check_evidence_pointers` is honest about why — an HTTP observation is not
+  re-verifiable on disk, so no code pointer could have failed — but `100.0` in a
+  dimension named `evidence_pointers` reads as "every pointer resolved". The dimension
+  now reports itself **unmeasured** and drops out of the weighted average, which is
+  what `active_dimensions` and `weight_normalization_factor` were shaped for: both were
+  hardcoded, the list naming all four unconditionally and the factor the literal `1.0`,
+  so a reader could not tell a full score from a partial one. G-E now states what it
+  cannot check instead of promising it, and names the panel as what judges a recorded
+  observation.
+
+  The `<!-- BLOCKED: … -->` marker had a worse defect than the one first reported. Its
+  proximity window was ~80 characters and it crossed newlines, so a marker on one list
+  item absolved the item ABOVE it:
+
+  ```
+  src/real/thing.ts:3  alone                            -> verified=1
+  the same, with a BLOCKED item on the next line        -> verified=0, blocked=2
+  the same, with 100 chars of prose between them        -> verified=1, blocked=1
+  ```
+
+  A Corner 1 is written as a list, so this fired on the ordinary shape — one declared
+  gap erased the verified pointer above it, and an unmarked fabrication beside a marked
+  one was absolved by its neighbour. The marker now has to sit on the pointer's own
+  line, and a blocked pointer counts in the denominator: a declared gap is not a
+  fabrication (no cardinal cap) and not a verification either (it costs proportion).
+  Without that, an author cleared their own unresolvable pointers with a comment —
+  1 real + 4 marked scored 100.0.
+
+- **`check_spec_smells.py` existed three times, and the three were the same file.**
+  `plan-confidence`, `discover-confidence` and `discover-plan-confidence` each carried
+  one, and each said so: *"Copy of plan-confidence/scripts/check_spec_smells.py — same
+  algorithm"*. Measured by comparing the three syntax trees with docstrings and comments
+  stripped: **89 lines of code, 4 of them different, and all four were the name of one
+  parameter** (`plan_path` against `artifact_path`). A smell fixed in one scorer left
+  the other two detecting the old shape, silently. `squad/spec_smells.py` is the
+  implementation; the three are documented re-exports, exactly what `_rubric_loader.py`
+  became when it turned into `squad/rubric.py`. What stays local is the rubric each
+  skill reads — the categories and penalties are the skill's, only the scan is shared.
+
+- **One name for two different questions.** `check_corner_coverage.py` existed in
+  `discover-confidence`, where it asks whether the four corners of a finished
+  opportunity are POPULATED, and in `discover-plan-confidence`, where it asks whether
+  each corner is COVERED by a Measurement Question or excused by a `DEFER-CORNER`
+  marker — 80 of ~50 lines of code different. That is the collision `run_slice_tests.sh`
+  isolates processes to survive, and the G-C row named only one of the two. Now
+  `check_corners_populated.py` and `check_corners_questioned.py`, with the gate table
+  naming both and `conftest.py`'s worked example pointing at `apply_fixes.py`, a
+  collision that still exists.
+
+  Renaming broke a pointer in the kit's own `good-opportunity.md` fixture, and G-E
+  caught it on the next run — `fabricated_evidence`, one citation, exact line. Then the
+  paragraph recording the rename named the retired file, and
+  `test_rules_cite_mechanisms_that_exist` refused it: *"a rule is read as instruction —
+  naming a gate that does not exist tells the reader the constraint is enforced and stops
+  them looking."* The retired name lives here instead, which is where a name that no
+  longer resolves belongs. Two gates catching their own author inside one change is the
+  most useful thing that happened in it.
+
+- **Six readers of `BACKLOG.md`, two ideas of what an item block is — and the item that
+  fell in the gap corrupted its neighbour.** Measured 2026-09-20 on `## B-003 - Title`,
+  written with a plain hyphen instead of the schema's em dash:
+
+  ```
+  check_backlog_structure.BLOCK_RE   (the canonical one)   did NOT see it
+  backlog_status.BLOCK_HEADER_RE     (the WRITER)          did NOT see it
+  detect_domains, phase_coverage                           did NOT see it
+  build_approval_brief.ITEM_HEAD_RE                        saw it
+  check_objective_coverage.ITEM_RE                         saw it
+  apply_delegated_decisions.ITEM_RE                        saw it
+  ```
+
+  So an item could enter the approval brief, be ticked and signed, and be invisible to
+  the only module allowed to write its status. And because a header no parser recognises
+  does not OPEN a block, the unseen item's fields were read as the PREVIOUS item's.
+  Measured with two items, the second written with a hyphen:
+
+  ```
+  Items   : 1                                  ← there are two
+  [BLOCKER] B-001 duplicate_field: `status` is declared 2 times
+  [BLOCKER] B-001 self_block: `B-001` names itself in `blocked_by`
+  [BLOCKER] B-001 blocker_cycle: B-001 -> B-001
+  ```
+
+  Three blockers, all false, all on the wrong item, and one real item gone from the
+  count. `check_intake_gates.py` had already reasoned this out and imports the parser
+  rather than writing one — *"A second regex here would diverge silently, and the two
+  would disagree about what the registry contains"* — and five other readers had not.
+  `squad/backlog.py` owns it now: the header (all three separators), the id patterns,
+  the block spans and the split. The contract states the header shape, which it never
+  did.
+
+- **An id of one or two digits was half-valid.** `## B-15` parses as a block, and
+  `ITEM_ID_RE` and the mention pattern both want three digits — so the item exists, the
+  writer refuses it on the command line, and `blocked_by: B-15` names no edge. The
+  parser deliberately still matches it (a skipped header takes the next item's fields
+  with it) and `malformed_id` now reports it, saying the fix is zero-padding rather than
+  renumbering.
+
+- **A commitment nobody was attached to.** `rules/cycle-backlog.md` requires
+  `approved_by` from `approved` onward and calls a bare `approved` *"not evidence that a
+  person decided"*. Nothing asked for it: `backlog_status.py … --to approved` returned
+  `OK` and wrote a block with no attribution, `check_backlog_structure.py` reported
+  nothing, and `rules/cycle-maintenance.md` prescribed that very command without the
+  flag. The writer now refuses the move, the structure check reports
+  `approval_unattributed`, and the documented command carries `--approved-by`.
+
+- **`traces_to` was required by the contract and by nothing else.** *"Required once
+  `.squad/wiki/product/objectives.md` exists"* — and with an objectives document present
+  and an item carrying no link, the structure check said nothing.
+  `check_objective_coverage.py` does measure it, correctly, but it is a report run beside
+  the approval brief rather than a gate on the path that writes. `objective_link_missing`
+  now fires, and only where objectives exist: a project that never ran
+  `/brainstorm-objectives` has nothing to trace to, and calling every item an orphan
+  against a standard it never adopted is the failure that same script refuses by name.
+
+- **A refusal that named the wrong cause.** `REFUSED: B-14 is not in this backlog` was
+  printed about a block sitting in the file, whose header the writer's parser did not
+  recognise — sending the reader to look for a missing item that was right there. One
+  parser removes the case; the message now distinguishes an absent item from a heading
+  that does not parse, and says what the shape is.
+
+  18 tests.
+
+- **A commit touching two areas could not say so.** `fix(gates,boundary):` and
+  `fix(board,gates):` were refused as `header_shape` — not for the scope's content but
+  for the comma, which the header pattern had no room for. That left three bad options
+  for a change that genuinely spans two areas: name one and be incomplete, invent a
+  portmanteau nobody greps for, or drop the scope, and all three lose what the field
+  exists to carry. A scope may now name several areas, comma-separated with no space.
+  Each segment is still lowercase kebab-case, so the rule about a scope did not loosen —
+  there may be more than one of them — and a declared `commit_scopes` list is checked
+  segment by segment, because comparing the whole string would have passed
+  `gates,ghost` while refusing `ghost`.
+
+  With `change` declared in `rules/contribution-overrides.txt` alongside it — for a
+  commit that alters an existing contract without fixing a defect and without adding a
+  capability — `verify_ecosystem` returns 0 for the first time in this branch, and the
+  kit stops failing the gate it ships. 8 tests.
+
+- **The DESIGN gate agreed a design the agent had signed, and refused the one a person
+  signed.** Both measured 2026-09-20 against a complete, covered set of five drawings:
+
+  ```
+  <!-- signed-by: daedalus-tech-lead -->                 DESIGN_AGREED    exit 0
+  <!-- signed-by: human/paulo (approved in session) -->  AWAITING_REVIEW
+  ```
+
+  `verdict_of` refused the single prefix `judge/`, which is a denylist of one against an
+  open set of names, so the tech lead who draws the diagrams could agree them; and the
+  local `([^\s>]+)` pattern stopped at the first space, so a signature carrying its route
+  captured nothing at all. `cycle-design.md` says of this gate: *"a person, and only a
+  person"*. A gate that accepts the author and rejects the reviewer is worse than no
+  gate — it returns the wrong answer confidently. A checklist whose boxes were DELETED
+  also passed, because nothing counted TICKED boxes.
+
+  The root cause was three copies: `score_alignment.py`, `score_product_alignment.py` and
+  `check_design_completeness.py` each compiled their own `signed-by` pattern and each
+  decided for itself what the captured name meant. `squad/signoff.py` is now the one
+  reader — pattern, both checkbox counts, and `is_human` as an allowlist — and
+  `tests/test_one_signature_reader_for_every_gate.py` refuses a second. The POLICY stays
+  per gate, because it genuinely differs: a judge may sign an ITEM's brief and may not
+  sign a product vision or a system design.
+
+- **`DESIGN_AGREED` was unreachable by the documented path, and the panel gate it
+  declares was never run.** Three defects meeting in one phase:
+
+  * **Nothing wrote `design/sign-off.md`.** The gate reads it, the SOP says to sign it,
+    and `/sign` refuses what does not exist — *"is neither a path that exists nor a slug
+    of any document waiting for a signature. Nothing was signed."* `brainstorm-pieces`
+    generates its equivalent from a template at step 3; this phase had neither step nor
+    template. Both now exist.
+  * **`$ECO` was used by two steps and assigned by none.** Step 5 and Step 5b expanded to
+    `/skills/...` and `/mechanisms/...` — absolute paths from the filesystem root. The two
+    commands that did not run were "score the drawings" and "convene the panel". Step 0
+    now assigns it, and a test refuses a shell variable the file never set.
+  * **G-D8 was declared and never invoked.** The gate table names
+    `check_panel_approval.py`; nothing in SKILL.md, SOP.md or the verdict asked it, and
+    `DESIGN_AGREED` was measured against a project with no panel record at all. The gate
+    itself is sound — exit 2 with no roster, exit 1 on `NO_RECORD` — it was simply never
+    called. Step 5b now reads its verdict, and the SOP has the step it was missing.
+
+- **A drawing that could not be READ was reported as ABSENT, and a piece was covered by a
+  longer id that contained it.** `_read` swallowed `OSError` into `""`, so a
+  present-but-unreadable file came back `MISSING` and `INVALID` — "draw it", about a file
+  the person already has; `FileNotFoundError` still returns `""`, because absent and shut
+  are different facts and only the second one was missing a name. And coverage tested
+  `piece_id not in map_body`, a substring: measured with eleven pieces and a map naming
+  only PIECE-10 and PIECE-11, the report read **"11 declared, 3 covered"** — `PIECE-1`
+  passed inside `PIECE-10`. It fails only in the permissive direction and it fires on any
+  product with ten or more pieces. Also `\?\?\?` sat in the placeholder pattern behind a
+  `\b` that can never match beside a `?`, the same defect the product scorer carried in
+  the same expression.
+
+- **`BACKLOG_INVALID` was declared and named no band, and that failed the install.**
+  `rules/cycle-maintenance.md` declares it; `rules/verdict-bands.txt` did not classify it,
+  so `check_verdict_bands` reported `DRIFTED`, `verify_ecosystem` failed, the post-install
+  validation failed, `install.sh` exited 1 — and 43 tests across `test_clean_install`,
+  `test_kit_manifest`, `test_permissions_retirement` and their siblings fell with it.
+  Classified `structural`: SELECT returns nothing because every id it could return is
+  ambiguous, and a `traces_to` pointing at an ambiguous id is the same broken pointer
+  `INVALID` names one level down.
+
+- **Every eval battery failed in the root suite and passed alone, and the batteries were
+  not what failed.** `run_eval.py` reached its helper with `from scripts.utils import
+  parse_skill_md`, which resolves through whatever `sys.modules["scripts"]` already holds
+  — and nine slices ship a directory called `scripts`, eight of them with an
+  `__init__.py`. Whichever one a wide pytest process imported first owned the name, and
+  the import then died on `ModuleNotFoundError: No module named 'scripts.utils'` about a
+  file sitting beside it. Measured 2026-09-20: 12 failures in `tests/` and 13 passes from
+  `pytest tests/test_eval_batteries_are_runnable.py`. A test that passes alone and fails
+  in company reports the import order rather than its subject — which is exactly the
+  collision `run_slice_tests.sh` exists to keep out of the slices, arriving through the
+  root suite instead. The helper is now loaded by path under a unique module name, so no
+  other slice can take it.
+
+- **The product-alignment gate passed a cascade nobody wrote and a signature no person
+  gave.** Two measurements on 2026-09-20, both against `score_product_alignment.py`, the
+  gate the entire unattended chain rests on.
+
+  **The four shipped templates, copied into `wiki/product/` and not edited, scored
+  100.0% — 34/34, every one of the seventeen criteria green.** G-B0 was written to stop
+  `touch` from buying 35% and it asked whether a file held anything but headings; a
+  template holds instructions, and an instruction is text. A 132-character guide comment
+  satisfied "this section is complete", `metric:` found its required number in the words
+  "Gate G-B2", the template's two bare `- ` bullets counted as two non-goals, and
+  `serves: OBJ-<!-- … -->` was non-empty enough to count as a citation while matching no
+  `OBJ-\d+` — so it was not dangling either, and a requirement walked through G-B3 by
+  being unreadable. Guide comments are now stripped before anything is scored, a bullet
+  must carry a non-goal, a citation must match the id pattern it claims to be, and a
+  surviving `{{SCOPE}}` is its own hard cap (`unfilled_template`) rather than a low score
+  — "revise this" is the wrong instruction for a document nobody has started. The same
+  copy now returns `INVALID`, 29.4%.
+
+  **A cascade signed `<!-- signed-by: iris-product-designer -->`, with the four
+  checkboxes DELETED, returned `PRODUCT_ALIGNED`, exit 0** — the agent that writes these
+  documents signing them under its own name. Two independent holes: `verdict()` refused
+  the single prefix `judge/`, which is a denylist of one against an open set of names,
+  and `TICKED_RE` was defined in the module and read nowhere, so a checklist with no
+  boxes satisfied "nothing is unticked". The gate now requires ticked boxes, a signer,
+  and `human/{who}` on every signature — the allowlist `score_alignment.py` has applied
+  at item level all along, reporting the weakest signer so one human tick cannot launder
+  an agent's. `SIGNED_BY_RE` also stopped at the first space, dropping the route from
+  `human/paulo (approved in session)` (the defect the item-level scorer records having
+  fixed in its own pattern) and capturing a signer called `" "` from the unsigned marker
+  the template ships.
+
+  Two more defects fell out of the same read. `_field` used `\s*` after the colon, which
+  matches a newline: an empty `horizon:` reached across the blank line and returned the
+  NEXT field's value, so a field with nothing in it was reported as carried. And
+  `_gate_signature` was annotated `-> None` while returning the report.
+
+  Templates, SOP, SKILL.md and `cycle-brainstorm.md` now state the signature format where
+  the reviewer reads it — being refused for the format is a confusing way to learn it.
+  13 tests.
+
+- **Eight skills decided where the kit lives by testing a directory the installer
+  deletes.** Thirteen call sites used `[ -d .claude/scripts ]`, and
+  `mechanisms/distribution/install.sh` removes `.claude/scripts/` on every install — the
+  migration to `mechanisms/<family>/` says so in its own echo. In any consumer installed
+  since that rename the probe is false by construction, the branch falls through to `.`,
+  and the command becomes `./mechanisms/cycle/cycle_events.py` — a path that exists only
+  in the kit's own repository. The phase event was simply never written, and nothing said
+  so: `cycle_events` is fail-open by design, and a missing event reads exactly like a
+  phase that was skipped. Three of the four brainstorm skills carried the broken probe
+  two lines below a correct `[ -d .claude/skills ]` for the scorer, in the same file.
+  Invisible here, which is why it survived: in this repository neither directory exists
+  and both branches resolve to `.`. 2 tests, parametrised over every SKILL.md.
+
+- **`brainstorm` recorded four phase ends against one start, and `design` recorded an end
+  against none.** `tests/test_a_phase_that_ends_also_began.py` holds the pair for the four
+  programmatic emitters and defers skills to "its own prose test", which did not exist —
+  and the stream it quotes (37 ends, 1 start) names `brainstorm` as the one open start.
+  All four cascade skills then emitted `end --cycle brainstorm --slug {scope}` for a phase
+  `rules/cycle-phases.txt` declares once, so WIP, lead time and "is a session running right
+  now" were uncomputable for the only cycle a person attends. The cascade's middle phases
+  hand off instead of closing; `/brainstorm-vision` opens the phase and `/brainstorm-pieces`
+  closes it with the gate's verdict, and an abandoned cascade correctly leaves an open start.
+  `design` gained the Step 0 it never had. 3 tests, parametrised over every cycle a
+  skill emits for.
+
+- **The TypeScript symbol detector reported every workspace package as a fabricated npm
+  import.** `_find_workspace_package_names` collected member names with two fixed globs —
+  `*/package.json` and `*/*/package.json` — while its own docstring claimed to walk "the
+  declared workspace globs". It read no declaration. A consumer declaring `apps/*/packages/*`
+  keeps its manifests at depth 4, so every import of them fell through to the npm registry and
+  took a 404: **98 HARD findings, one message shape, none of them in the change being audited**.
+  D2 carries the `symbol_fabrication_typescript` hard cap, so `/code-quality` returned
+  `FAIL_HARD` for the whole language whatever the change did, and that blocks `/review`.
+
+  The defect ran both ways. A `package.json` at depth 2 that NO pattern names was collected
+  anyway, so a genuinely fabricated import from such a directory would never have been reported
+  either.
+
+  The collector now reads what the project DECLARES — `pnpm-workspace.yaml#packages`,
+  `package.json#workspaces` as an array or as `{packages: [...]}`, `deno.json#workspace` — and
+  filters one pruned walk by the declared pattern set. A repository declaring nothing keeps the
+  previous behaviour, and that is the only path that does.
+
+  Three things this required that are worth stating, because each is a trap measured rather
+  than reasoned about:
+
+  * **Neither `Path.glob` nor `fnmatch` can execute pnpm's dialect.** `Path.glob` raises an
+    uncaught `ValueError` on the documented `!**/test/**` — a crashing detector, which halts
+    the cycle — and descends `node_modules` on `**`. `fnmatch`'s `*` crosses `/`. Negation is a
+    property of the SET, so no per-pattern loop expresses it. The matcher is ~20 lines here.
+  * **`pathspec` implements the OTHER dialect.** It is gitignore's last-match-wins, under which
+    two of pnpm's four documented rows re-include. Adopting it would have swapped a matcher
+    that crashes for one that silently disagrees — and it is not a declared dependency.
+  * **The root marker had to change with it.** pnpm 10 moved non-workspace settings into
+    `pnpm-workspace.yaml`, so stopping the upward walk at the filename now finds a file that
+    declares nothing. Reading the declaration is what makes the old marker unsound.
+
+  A missing PyYAML is reported and falls back to the previous behaviour, never to "this
+  workspace declares no members" — an absent parser must not read like a repository with no
+  workspace.
+
+  Extracted to `detectors/_workspace.py` alongside the existing `_arch`, `_wiring` and
+  `_mutation` helpers, so `typescript.py` stays under its row budget without the reasoning
+  being cut to fit.
+
+
+- **The LOCAL alignment depth can now reach the floor it is scored against.**
+  `classify_alignment_depth.py` returns `LOCAL` for a small item and names what it removes —
+  "DROPPED: the prose sections and the walkthrough HTML" — while `score_alignment.py` graded all
+  seventeen criteria, five of which measure exactly those sections. Measured on a real item
+  (`B-001`, on a consumer): a LOCAL brief complete by its own contract scored 22/34 = 64.7%, and closing
+  both remaining authoring gaps reaches 24/34 = 70.6% — **19.4 points below the 90% floor**. An
+  author who followed the classifier wrote a brief that could not pass, and `check_alignment_gate.py`
+  hard-caps an unaligned plan at 49 with no `--skip` and no dismissing ADR. The scorer now takes
+  `--depth`, and a dropped criterion leaves the total as well as the score: scored out of the
+  criteria in force, never out of a constant. The depth is a parameter derived from the ITEM and is
+  never read from the brief — a document that declared its own depth would grade itself, which is the
+  "reaching 90% by rewording" path `alignment-threshold.md` refuses.
+
+### Added
+- **A reader outside the kit can ask where a phase's artifact goes** (#147)
+  `panel_brief.py --locate --phase <p> --slug <s>` prints the artifact path, whether it
+  is there, and the contract that grades it — without convening anything and without
+  failing on absence. `PHASE_SOURCES` already held that table and its comment already
+  said why: *"a reviewer pointed at the wrong artifact returns an honest verdict about
+  the wrong thing, which reads as coverage."* It happened anyway, to a reader that could
+  not reach it. Measured 2026-09-18: `judge-codex` hard-codes
+  `knowledge-base/discoveries/blueprints/<slug>-blueprint.md`, where this kit writes
+  `.squad/records/discoveries/opportunities/<slug>-opportunity.md` — two stacked
+  renames, `records-location.md` moving the root and `cycle-discover.md` renaming
+  blueprint to opportunity. All four of its stages missed, every panel came back
+  incomplete, and an incomplete panel is abstention and never agreement, so a full
+  registry sat at `ITEM_IN_FLIGHT`. The plugin was not careless: there was nothing to
+  call. `main` demands a slug and a phase, builds a whole brief, and REFUSES when the
+  artifact is missing — so a caller whose question is *where does this file go* was
+  answered with a refusal for not having found it, and hard-coding was the only move
+  left. Locating and judging fail on different things and are now separate. A phase the
+  table does not hold exits 2, this kit's word for could not measure, rather than
+  composing a path from the pattern of the others: a convention invented on a caller's
+  behalf is what went wrong the first time. Tracked as issue #2 in the plugin's own tracker.
+
+### Changed
+- **DISCOVER is optional, and the evidence it produces is not** (#161)
+  `cycle-phases.txt` declared `discover | required` while `cycle-plan.md` said the
+  opposite in its own pre-conditions — *"A feature has a defined goal and known prior
+  art (otherwise, run DISCOVER first)"*. **Otherwise.** `cycle-discover.md` agreed with
+  the second reading and always had: it triggers on `status: raw`, and an item already
+  `triaged` is in its own do-NOT-trigger list. One word in the chain declaration was the
+  outlier, and it was not decoration — `check_phase_drift --expect-complete` reports
+  `phase_declared_never_ran` for a required phase that left no event, so every item that
+  arrived already measured was filed as an incomplete run. It is `conditional` now, with
+  a note naming when it is absent, as every other conditional phase carries.
+  **What did not change is the part that protects anything.** The guard against planning
+  on a hunch was never the phase declaration: it is `triaged_without_evidence`, a BLOCKER
+  in `check_backlog_structure.py`, which asks for the EVIDENCE rather than for the
+  ceremony that usually produces it. An item at `status: triaged` with `evidence:
+  none-yet` is still refused, and the tests that assert the relaxation assert that
+  refusal in the same file — a relaxation whose companion protection is not pinned is one
+  nobody can audit later. Optional is not skipped-by-default: an unmeasured item is
+  exactly what this cycle exists to pick up, and the selector still hands it out.
+  `backlog` remains the one `required` phase, so the drift report still has something to
+  measure — `phase_declared_never_ran` now fires for it alone.
+
+### Fixed
+- **Six hard gates named a mechanism the reader could not run** (#160)
+  `check_gate_mechanisms.py` asks whether a gate line says what enforces it, and is
+  explicit about the question it refuses — *"proving that a given `.py` implements a
+  given English sentence is not something a text scan can do"*. Between that refusal and
+  what it does check sat a question that IS decidable and was not asked: **can the named
+  thing be run at all?** Measured 2026-09-19 across the nine cycle rules: 22 mechanisms
+  named under `## Hard gates`, six of them modules with no `__main__`. Every one is
+  genuinely enforced — each is imported by a runner that has an entry point, so this was
+  never a hole in coverage — but a reader following the rule to the mechanism got:
+  ```
+  $ python3 .../check_evidence_pointers.py --root .
+  $                      (no output, exit 0)
+  ```
+  Silence and zero are what a passing gate looks like, reached through the document that
+  exists so "the reader of a rule can reach the mechanism". The gate now reports
+  `not_runnable`, per line rather than per script, because a line naming a library
+  ALONGSIDE its runner has told the reader what to run. The six lines in
+  `cycle-discover.md`, `cycle-implement.md`, `cycle-backlog.md` and `cycle-review.md` now
+  name both. **Not a CLI per library**: six entry points into scores that are only
+  meaningful composed would be six second ways to reach a partial answer.
+
+- **The selector handed out work from a registry its own gate called INVALID** (#159)
+  `select_backlog_item` imports `_parse_items`, `Item` and three helpers from
+  `check_backlog_structure` — the parser, never a verdict — so the two read the same
+  file and disagreed in the one direction that matters. Measured 2026-09-19 on a
+  registry holding `B-001` twice: the checker returned `INVALID` with *"ids are the
+  audit trail; two blocks sharing one destroys it"*, and the selector returned
+  `ITEM_SELECTED → B-001` with a queue of `['B-001', 'B-001']`. The caller cannot tell
+  which of the two blocks it was handed, and the loop would run the id twice. Nothing in
+  the selector's output named the structure. It now refuses with `BACKLOG_INVALID`,
+  naming the findings rather than counting them.
+  **Identity only, and the first draft got this wrong.** Keying on `verdict == INVALID`
+  took every blocker with it, so one `triaged_without_evidence` stopped the registry from
+  handing out any work — this gate blocking the machine over the very condition the
+  machine exists to fix, and a gate that does that is one people route around. Three
+  existing tests caught it. The line is now `IDENTITY_CHECKS` — `duplicate_id` and
+  `renumbered`, the two the checker itself describes as making a reference ambiguous —
+  declared in the checker so a third one joins both readers at once. A content blocker
+  leaves the id intact and the item selectable. The lead needed no change: its branch is
+  generic on anything that is not `ITEM_SELECTED`, and the comment beside it now names
+  the third verdict rather than telling a reader only two arrive there.
+
+- **The origin-name gate could not see a file until after it was committed** (#158)
+  It enumerated `git ls-files` — tracked paths only — so a file not in the index yet was
+  invisible, and the author got a pass at exactly the moment they made the mistake.
+  Measured 2026-09-19: a session wrote a new test carrying ten occurrences of a
+  consumer's app and scope names, ran the gate, and it passed; the file was `??`. On a
+  branch two sessions share, the finding then lands on whoever commits next. Scanning
+  untracked files sounds expensive and is not — `--exclude-standard` honours
+  `.gitignore`, and measured in this repository at the same moment that is **1 path**
+  against **2277** for the unfiltered form. So the repository's own ignore rules draw the
+  line and the gate carries no second list of what to skip. `--cached` was the other
+  candidate and sees the file one step later, at `git add`, which is still after the
+  author has stopped looking at it. A tracked path deleted from disk is dropped, because
+  reading it would be reading nothing.
+
+- **A `touch` on four filenames scored 35% of a product brainstorm** (#156)
+  `score_product_alignment` asked the filesystem whether each cascade document existed
+  and never asked what was in it. The line below that cap already scored a MISSING
+  document from `""`, so missing and empty ran the identical scoring path and only the
+  cap separated them — on the wrong question. Measured 2026-09-19 with four files holding
+  one heading each: `NEEDS_REVISION`, 35.3%, `hard_caps: []`. The 35.3% is six criteria
+  that are vacuously true of emptiness — `no placeholder` ×4 and `0 dangling citation(s)`
+  ×2 — which stay as they are, because a real document can fail them and presence is
+  already a separate criterion. What could not stand is a recoverable verdict asking
+  somebody to revise what nobody had written. Reported as `empty_document`, never folded
+  into `missing_document`: one sends a person to create a file and the other to open one
+  they already have. "Empty" is drawn narrowly — whitespace and headings only — because a
+  heading AND a paragraph is a partial document, and partial is what `NEEDS_REVISION` is
+  for; the wider rule would call a badly structured but genuinely written document absent.
+
+- **The 90% alignment floor was stated three times and read none** (#157)
+  `cycle-brainstorm.md` G-B4 claimed the cycle "reuses them rather than choosing a second
+  number for the same purpose". It did not: `alignment-threshold.md` carried the prose,
+  `score_alignment.py` carried `THRESHOLD = 0.90`, and `score_product_alignment.py`
+  carried `FLOOR_PCT = 90.0` — not even the same type, so a change to one could not be
+  made mechanically in the other and nothing would report the disagreement. They agreed
+  by coincidence. The figure now lives in `squad/rubric.py`, whose docstring already
+  carried this argument for the rubric PARSE — *"three copies of one convention are three
+  places for it to drift, and the drift would be silent"* — and both scorers read it, the
+  ratio derived from the percentage rather than written again. The reasoning stays in
+  `alignment-threshold.md`: a constant cannot hold an argument and a rule file cannot be
+  imported, so each keeps the half it can carry.
+
+- **Removing a Squad hook from `settings.json` now sticks** (#154)
+  `settings.json` is Claude Code's own configuration and the kit writes its hooks into
+  it — the same shape `spec-kit` uses, where an integration's events go into the agent's
+  native config and are removable through it. That is the one configuration surface, and
+  it did not hold: measured 2026-09-19, a project removed `UserPromptSubmit`,
+  reinstalled, and the hook was back. `merge_hooks` placed *"the kit's groups first,
+  verbatim"*, so a removal was invisible to it and the file only looked like
+  configuration. A surface that does not hold is why somebody ends up asking for a flag
+  instead — and a flag would give one system two behaviours and two sets of gates.
+  `.kit-hooks.json` already recorded what the kit shipped and was read in one direction
+  only, to retire what the kit dropped, never to respect what the project dropped —
+  while `merge_permissions` one function below states the rule verbatim: a rule present
+  in the consumer and absent from the kit is *"either something the kit retired or
+  something the project added, and those must never share an outcome"*. The install now
+  prints `left out — you removed it from settings.json` for each rather than re-wiring
+  in silence, and a hook the kit never shipped before is not read as a removal, so gates
+  added since a consumer's last install still arrive. **No exemption for the guards** —
+  removing `PreToolUse` removes the refusal to write into the installed kit, and nothing
+  puts it back. One mechanism, one meaning.
+
+- **A first install left no record of what it shipped** (#155)
+  `.kit-hooks.json` and `.kit-permissions.json` were written only by the merge path, and
+  a fresh install took the other branch — `cp settings.plugin.json`, because the target
+  had no settings yet. Measured on a clean target: both absent. So on a freshly
+  installed consumer the first removal was not respected, and the install after THAT one
+  was, because by then a merge had finally written the baseline. A rule that starts
+  working on the second attempt is one nobody can rely on and nobody can explain. The
+  branch is gone rather than patched: `{}` is seeded and the merge always runs, which
+  produces the kit's settings exactly — same 108 deny rules, same hooks, differing only
+  in the order of `deny`, and the merge is idempotent. A freshly installed consumer now
+  holds byte-for-byte what a reinstalled one holds; before this they differed and
+  nothing said so.
+
+- **A rollback was either silent or impossible, and the rule asked for neither** (#152)
+  `cycle-maintenance.md § Rollback` says an item advanced in error "is moved back with a
+  note recording the advance and why it was withdrawn — never silently reset."
+  `backlog_status.py` implemented half of that and implemented the half without the
+  note: measured 2026-09-18, `approved -> triaged` was accepted and left the block
+  reading `status: triaged` and nothing else — the fresh-looking item the rule names as
+  the thing to avoid — so an item could be walked back through the whole open chain
+  leaving no trace. Meanwhile `triaged -> raw`, the same move one step down, was refused
+  outright, which is the gap a consumer actually hit. A move to an earlier entry of the
+  open chain is now a withdrawal: it requires `--withdraw-reason`, held to the bar
+  `--kill-reason` already holds a committed item to — who withdrew the call and what
+  changed, not what the evidence showed — and writes `withdrawn_from` beside it, since
+  after the move the status line cannot say what the item used to be. The chain is
+  ordered rather than enumerated as legal pairs, because a list of rollbacks is a list
+  somebody extends the table without updating, which is how this half arrived.
+  `shipped` stays terminal: reopening it changes what shipped means to every reader that
+  counts delivery, and that is a person's call.
+
+- **A block could carry another item's evidence and stand at `triaged` on it** (#151)
+  `duplicate_field` reported `status` and nothing else, and the narrowing was reasoned:
+  `partial_progress` four times is an append-per-increment log a team keeps on purpose,
+  and `evidence: none-yet` followed by a pointer is an item advancing. That holds while
+  the second line is about the same item. Measured on a consumer 2026-09-18 it was not —
+  B-001 carried a second `evidence:` and a second `blocked_by:` describing **B-006**,
+  its authorization work and its line count, while B-006's own block read `evidence:
+  none-yet, status: raw`. Seventeen blocks read, one finding, and it was `index_stale`.
+  B-001 stood at `triaged` on another item's evidence; removing the foreign lines made
+  `triaged_without_evidence` fire immediately, which was the honest state all along. The
+  two extra lines also shifted every pointer below them by exactly 2, breaking three
+  `BACKLOG.md:N` citations in a scored opportunity that three reviewers then spent a
+  round on. A placeholder replaced by a real value is still silent — that is the case
+  the narrowing existed for — but two substantive values are two claims, and `blocked_by`
+  is reported on any repeat because it names the whole edge set rather than adding to
+  it, so every line but the last leaves the dependency graph without a trace.
+
+- **On every plugin install, a panel that convened and voted read as one that never
+  ran** (#150)
+  `convene_panel.default_panel_path()` was fixed months ago and carries the reasoning in
+  its docstring: `install.sh` copies `rules/` into `<target>/.claude/`, so the roster is
+  at `<project>/.claude/rules/review-panel.txt` and the project-root path does not
+  exist. `check_panel_approval.py` held a function of the **same name** with the unfixed
+  body. Measured on a consumer 2026-09-18, against a panel with three seats, two
+  families and a unanimous verdict on disk: `UNCHECKED: cannot read the roster:
+  .../apps/theoclaw/rules/review-panel.txt`. `UNCHECKED` reaches the opportunity scorer
+  as `ITEM_IN_FLIGHT` — *the panel could not convene* — so a panel that ran and returned
+  was indistinguishable from one that never ran, and the item stalled. Two functions
+  with one name and only one of them fixed is a shape this kit has paid for repeatedly;
+  the resolution now lives in `squad/layout.py`, which already answers where the kit is,
+  and both callers pass the project they were given rather than falling back on the
+  process directory. Verified on the same consumer: the gate now reports `RETURNED →
+  NEEDS_REVISION` with all three seats, without the `--panel` workaround.
+
+- **A third gate charged `/review`'s own output for being output** (#149)
+  `check_xrefs.py` has exempted `review-{slug}-{role}-knowledge` since the day the
+  predicate was hoisted out of an inline check, and its docstring closed with *"One
+  definition, two consumers: that is what stops the next half from escaping."*
+  `check_skill_map.py` never learned it, and warns about that exact shape in its own
+  prose while being it. Measured on a consumer 2026-09-18: 13 `missing_from_map`
+  findings plus `missing_sop` and a disagreeing count, every one about a file `/review`
+  had just written, on an install whose own files were correct. The only exemption
+  available was `rules/auxiliary-skills.txt`, maintained by hand — so the remedy on
+  offer was to re-list, after every review, the artifacts the kit generates by itself.
+  The predicate now lives in `squad/paths.py` with the rest of what the kit knows about
+  its own produced data, and both gates import it, so a fourth sweep inherits the answer
+  rather than re-deriving it.
+
+- **`/review` generated skills that the kit's own gate then failed, and that Claude
+  Code could never load** (#148)
+  All five paired-knowledge templates began with an `#` heading and carried no
+  frontmatter, so every `/review` run wrote up to five `SKILL.md` files without `name`,
+  `description` or `user-invocable`. Two costs, and the second is the expensive one.
+  `validate_skill_frontmatter.py` runs as post-install validation and requires exactly
+  those three fields: measured on a consumer 2026-09-18, thirteen generated skills, and
+  `=== SOME CHECKS FAILED ===` on an install whose own files were all correct. The gate
+  was right; the kit had produced what it failed. The larger cost is that Claude Code
+  reads a skill's name and description from that frontmatter — a `SKILL.md` without it
+  is not discovered at all, so the "paired knowledge skill" the template calls
+  *auto-discovered by Claude Code* has never been loadable by the mechanism it names.
+  The reviewer agent ran; its knowledge layer did not. The `name` is now
+  `review-{SLUG}-{ROLE}-knowledge`, and `ROLE` is substituted by the function that names
+  the output directory rather than by its caller — a skill whose frontmatter name
+  disagrees with its directory is discovered under one identity and referenced under the
+  other, which surfaces as a missing skill and nothing else. Verified end to end: five
+  skills generated, five accepted by the gate, every name matching its directory.
+  Skills already written by past runs are inert and stay on disk — the kit does not
+  write into another project's repository to repair them.
+
+- **A stale report from another run counted as this run's audit coverage** (#145)
+  `check_auditor_coverage` globbed the plugin's output directory and took whatever it
+  found, with no date, commit or diff base behind the choice. Measured on a consumer
+  2026-09-18: it reported COVERED with "2 blocking findings" from a report written
+  **2h45 earlier by a different run**, while the audit of the change actually under
+  review sat in a sibling directory with four. The assignment file records when the
+  audit was *commissioned*, so a report older than it cannot be the audit that was
+  asked for — an ordering fact the gate already held both sides of and never compared.
+  It now refuses a report that predates its assignment. It deliberately does **not**
+  claim the converse: a newer report may still describe the wrong change, and proving
+  otherwise needs a `diff_base` only the plugin can declare. A report the gate cannot
+  date is still accepted, because a gate that refused everything it could not measure
+  would be routed around.
+
+- **The kit refused writes to files belonging to other plugins** (#146)
+  `.claude/` is shared — every plugin a project installs writes there — and the boundary
+  treated the whole directory as the kit's. Measured on a consumer 2026-09-18 it claimed
+  `code-review-loop.local.md`, `code-review-loop.completed.md` and
+  `test-audit-loop.local.md`; deleting the first is `loop-code-review`'s own documented
+  way to cancel a run. The refusal was not just inconvenient, it was **false about why**,
+  and a guard that misstates its reason teaches people to route around it.
+  `.kit-manifest.txt` already answered the question — its header reads "Anything not here
+  is the project's" — but the boundary consulted it for `skills/` alone. It now asks
+  whether any prefix of the path is claimed, which covers all three granularities the
+  manifest uses at once. That widening had a precondition: the manifest enumerated
+  `skills/`, `rules/`, `agents/` and four directories and named **no loose file at all**,
+  so at the kit root it answered by omission — exactly what its header promises it never
+  does. The installer now lists the files it copies there, declared once and read by both
+  the copy loop and the manifest writer so the two cannot drift. With no manifest the
+  boundary concedes nothing and the old refusal stands, because treating an unreadable
+  manifest as a blanket unlock is this kit's most-repeated defect wearing the other face.
+  The manifest's authority stops at the trees the kit ships whole (`hooks/`,
+  `mechanisms/`, `squad/`, `commands/`, `rules/`), where structure answers and no file
+  has to. Without that limit the fix opened a larger hole than the one it closed: the
+  manifest once covered `agents/`, `rules/` and `skills/` only, by `install.sh`'s own
+  admission, so every consumer installed before it widened would have had `hooks/` and
+  `mechanisms/` handed to the project. `test_kit_is_read_only` builds exactly that
+  manifest and caught it.
+
+### Added
+- **The board opens with a verdict, and every column says whether work is happening
+  there** (#143)
+  It drew ten lanes and a search box: everything true, nothing a conclusion, so the
+  reader assembled one by counting amber cards and remembering which lanes had not moved.
+  Three readings by the person it is built for found five things it could not answer.
+  There is now one band at the top — `blocked` → `at_risk` → `working` → `stalled` →
+  `idle`, ordered by urgency rather than by count, because one item waiting on a person
+  outranks nine in backlog that move on their own. Each column carries its own state and
+  idle time; each card names any phase behind it with no event on the stream, worded as
+  "no record" rather than "skipped" because a conditional phase can be legitimately
+  absent and the page cannot tell that from one that ran silently. Delivery reports
+  shipped, killed counted apart, and throughput over a stated window — rendering `—`
+  rather than `0/day` while nothing has shipped, since those are different facts and only
+  one is alarming on a young registry.
+
+- **The board classifies every column and computes WIP** (#141, #142)
+  Each lane now says whether work is happening there — `working` (a phase started and has
+  not ended, or uncarded work moved recently), `queued` (items here, something moved
+  inside the stall window), `stalled` (items here, nothing moved — or nothing ever did)
+  and `empty`. Card count told the reader how much was there and never whether anything
+  was happening: on one consumer `plan` held four cards nothing had touched in two hours
+  and looked exactly like a lane in flight. Undated counts as stalled rather than fresh,
+  because an item the stream never mentioned has not just moved. A WIP strip reports
+  items in flight, the peak over the window, and the smallest concurrency that never
+  idled — **derived, never prescribed**: when the window has an idle gap it reports no
+  minimum at all rather than the lowest level it ran at, because a system that stopped
+  was not kept fed by any concurrency, and four items waiting on an access impediment are
+  not helped by starting a fifth.
+
+- **A backlog item that declares itself closed and is filed as open is now reported**
+  `check_backlog_structure` read the fields and never the prose, so a block could say
+  `remeasured …: **closed in code.**` in its own body while `status: triaged` sat four lines above
+  it, and the report still read SHIPPABLE. Measured on a consumer 2026-09-18: twelve items in that
+  state across a registry of 44, with the gate clean on every one.
+
+  The cause is structural rather than careless. `backlog_status.py` refuses `triaged -> shipped` —
+  from triaged an item may go to `approved` or `killed` — and `approved` is a human decision an
+  agent may not make. A remeasurement that finds an item DONE therefore has nowhere legal to put
+  that. It goes in the prose, and the two halves of the block disagree from then on.
+
+  `status_contradicts_body` asserts nothing about whether the item is really done; nothing here can
+  measure that. It asserts that a reader has two answers and no way to choose. The pattern is
+  deliberately narrow — the remedy must be NAMED (`closed in code`, `closed by deletion`), never the
+  bare word, which appears in ordinary prose about closing a connection. On that consumer it
+  correctly excludes two blocks saying `three of five closed` and `two fresh instances`.
+
+  The comment shipped saying **fourteen**, which was the first draft's count before the narrow
+  pattern was written; the code it describes measures twelve. Corrected here.
+
+- **The signing preview now says what the document is, not just which box to tick**
+  (#133)
+  It showed the sign-off section and the path. Four product documents wait at once and
+  their sign-off sections read alike — `- [ ] Read and holds`, four times — so a batch
+  preview told them apart by filename, which puts the signer in the position the gate
+  exists to prevent: ticking a box whose subject they are taking on trust. Each preview
+  now opens with the document's own `# ` title, its own `## ` headings, and its length.
+  **Everything in it is extracted, never generated**: a model-written summary would be
+  one more thing the reader has to verify, and the signature already asserts that they
+  read the document. A test fails on any word in the summary that is not in the file.
+- **`/sign --all` signs every document that is waiting, and shows each one first** (#133)
+  `/brainstorm-pieces` stops with four product documents waiting at once — they are
+  written together and read together — and the tool took one path per invocation. `--all`
+  takes the same list `--list` reports. It is deliberately **not** a `--yes`: the default
+  run prints every document's sign-off section in full and writes nothing, so what the
+  flag removes is the repetition of the command and not the reading. A refusal stops one
+  document rather than the batch, because aborting on the first would leave the earlier
+  ones signed and the later ones untouched with nothing saying where it stopped; the run
+  exits 1 when any document was refused, since a caller that asked for *all* and got some
+  did not get what it asked for.
+
+### Fixed
+- **WIP counted abandoned phases as work in flight** (#143)
+  A `brainstorm` opened 22 hours earlier and never closed held the figure at "1 in
+  flight" while no item was being worked at all — so the owner's question, *which item is
+  being worked*, returned nothing while the number said one. `_phases_running` had
+  already learned that an unclosed start is a fact about the STREAM rather than a claim
+  about the WORK; `_wip` counted raw starts and did not inherit it, which made the figure
+  grow monotonically as lanes died — the opposite of what it measures. A start past four
+  hours is now `abandoned`, named with its age and its slug so it can be closed, and
+  withdrawn from the series by removing its `+1` rather than adding a `-1`: a phantom
+  close would put a false drop on the timeline and invent an idle gap that never
+  happened, corrupting the minimum-WIP figure derived from it. Four hours and not the
+  stall window's thirty minutes, because an implement slice legitimately occupies an
+  afternoon.
+
+- **Four emitters recorded only phase ends, so nothing could be drawn as working**
+  (#142)
+  `cycle_events.emit_phase_start` has existed since the stream did and nothing called it:
+  code-quality, review, implement and acceptance each called `emit_phase_end` and none
+  called its sibling. One consumer's stream held **37 ends against 1 start**, so every
+  instant read as zero in flight — no column could be working, no phase had a duration,
+  and WIP was uncomputable by construction. `code-quality` alone emitted 29 ends against
+  one slug, with no way to tell 29 runs from 29 reports of the same one, which is exactly
+  what WIP measures. All four now emit the start **before the work**: a run that dies
+  mid-phase leaves a start with no end, which is what an interrupted phase is. This
+  measures from now on — the historical events gain no retroactive starts, and no
+  computation can invent them.
+
+- **The board discarded 37 of 38 events and rendered a blank page while the cycle was
+  working** (#141)
+  The only link between a plan and its item was the filename convention `bNNN-name`.
+  Plans called `composition-di-plan.md` and `ci-coverage-plan.md` carry no item number,
+  so every event under those slugs resolved to nothing and was dropped — and the ids were
+  inside the plans all along, where nobody looked. The owner opened the page while a
+  `review` phase ended `READY_TO_MERGE_WITH_FOLLOWUPS` and saw no work at all.
+  `item_id_of`'s docstring already recorded the smaller version of this — *"12 events, 6
+  of them plan slugs, every one invisible"* — and fixed it by teaching one more filename
+  shape; a third pattern would have postponed the next occurrence rather than ended it.
+  The link now comes from the plan's body, and **work that still cannot be attributed is
+  shown rather than dropped**: a strip naming the slug, its phases, its event count and
+  its last verdict. The board already counted these as `unplaced` and reported them as a
+  failure to place — honest, and useless, because it said something was missing without
+  saying what. Placed events went from 1 of 38 to 36 of 38.
+
+- **Eight held items drew eight identical chips, and half were the queue's own work**
+  (#141)
+  The board carried each wall's prose and never the verdict on it, so the reader's real
+  question — which of these is waiting on ME — had no answer on screen.
+  `delegated_decision.classify_wall` had answered it since the delegation file existed,
+  one import away from the view built to show it. Each blocked card now states who can
+  clear it and which class the registry puts it in. Measured on one consumer: **4 the
+  system's, 4 the person's**, where the page had shown eight of the same. The person's is
+  drawn at full strength and the system's quieted — the queue needs no prompting and the
+  person does. Nothing is decided here: an unmatched wall stays `unclassified` and belongs
+  to the person, because `on_no_match = retain` is the registry's rule and a view that
+  softened it would claim a consent nobody gave.
+
+- **An item waiting on another item was sent to a person, with nothing to decide** (#140)
+  `classify_wall` had no class for a wall naming another item in the same registry, so it
+  fell to `UNCLASSIFIED` and `on_no_match = retain` addressed it to somebody who was never
+  going to answer: the answer is "finish the blocker", which is the queue's own ordering,
+  and `autonomy-envelope.md § What the human owns` reserves WHAT is worth doing rather
+  than the order the system works through it. A second defect sat beside it — the `SCOPE`
+  pattern demanded `scope decision` as adjacent words and missed *"committed scope is a
+  decision nobody has taken"*, so a class the sponsor had delegated never reached a wall
+  it covers. Measured on one consumer holding six items: **one of six was the system's
+  before, three of six after.** The three that remain are an access impediment no
+  mechanism resolves and two items whose code lives in other repositories. `on_no_match =
+  retain` is untouched: one shape stops reaching it, and `DEPENDENCY` is tested last so a
+  wall citing an id while being about something else keeps its more specific class.
+
+- **A nested registry reported every route broken, on specialists that exist** (#138)
+  `check_backlog_structure` resolved `agents/<specialist>.md` against the registry's own
+  directory, so a monorepo with `apps/<app>/BACKLOG.md` and one installation at the root
+  looked in `apps/<app>/agents/` and found nothing. Resolution now starts from the
+  directory the routing TABLE was read from — `agents/` hangs off that tree, not off
+  wherever the registry sits — with the registry's directory kept as a fallback so a
+  registry beside its own `agents/` keeps working. A sub-project with its own table still
+  points at its own specialists, and a domain routing to nothing is still a blocker.
+
+- **Refusals that hid the list sent their reader to the gate's source** (#139)
+  Measured over one 20-hour consumer session: **64 of 676 commands — 9% — were the agent
+  reading a gate's `.py` with grep or sed to discover the shape it wanted.** The gates
+  were honest about what failed and silent about what would pass, which is a different
+  property. `check_opportunity_completeness` named three missing sections out of ten, so a
+  reader fixed three, re-ran, and met the next three. `check_concurrency_tests` carried a
+  hand-written parenthetical naming six accepted signals while its matcher held
+  thirty-nine, and the two could drift. Both now render the whole list, derived from the
+  constant the matcher actually uses rather than restated beside it.
+
+- **A consumer's own cycles and verdicts had nowhere to be registered that survived an
+  update** (#137)
+  The gates require every cycle to be placed in `rules/squad-map.md` and every verdict to
+  be banded in `rules/verdict-bands.txt`, and `install.sh` overwrites both. A project with
+  a cycle of its own could register it, watch its gates go green, and have the edit
+  reverted by the next install — with no action on its side that lasts longer. Measured on
+  one consumer: one cycle and four verdicts, registered by hand, gone after the next
+  `--merge`. Two files now carry the extension and are preserved like every other
+  `rules/*.txt`: `auxiliary-cycles.txt`, the sibling of `auxiliary-skills.txt` and read
+  the same way, and `verdict-bands.local.txt`. The verdict file needed a different shape —
+  a skill or a cycle can be EXCLUDED from a sweep when the project claims it, but a
+  verdict cannot, because `check_phase_drift` has to classify every verdict that reaches
+  the event stream or an unclassified one silently disables the check. So the local file
+  adds rows, and the kit's file stays authoritative: a local row naming a verdict the kit
+  already classifies is reported and **not applied**, because quietly reclassifying `PASS`
+  is the drift a single registry existed to prevent. The reports name which file an entry
+  came from. `skills/map.md` needed no change — `rules/auxiliary-skills.txt` has answered
+  this for skills since 2026-09-02, and the consumer had edited the wrong file.
+
+- **A registry created exactly as `/backlog-init` instructs was born INVALID** (#136)
+  Two rules of the kit contradicted each other. `backlog-init` Step 3 says *"Seed no
+  items — an item nobody filed is a placeholder that will be inherited as though it were
+  a decision"*, and `check_backlog_structure.py` blocked on `content.strip() and not
+  items`, true of every freshly-seeded registry: the scaffold has a header, an `## Index`
+  and an `## Items` section, and zero items. Measured over a registry built to the letter
+  of Step 3: BLOCKER `registry_parses`, verdict INVALID — obeying the kit produced a
+  non-conformant artifact. The check stays, because an unparseable registry reporting
+  SHIPPABLE is what it was written for; what it gained is the ability to tell the two
+  apart. A registry declaring `## Items` and holding none is empty; one with no such
+  section, or with headings under it the parser cannot place, is unreadable and blocks.
+
+- **A registry one directory down had its routing silently unchecked** (#136)
+  `_routing_table_path` looked in `.squad/`, `rules/` and `.claude/rules/` relative to
+  the registry's own directory and did not climb, so a monorepo with `apps/<app>/BACKLOG.md`
+  and `.claude/` at the root never had routing checked — on a table present and valid two
+  directories above. The search now walks up, stopping at the repository boundary, and
+  the nearer table still wins: a sub-project with its own routing answers a different
+  question than the umbrella's. The warning also said *"routing table unreadable"* for
+  three different facts — tooling absent, no table found, table found and unparseable —
+  so an operator looking at a valid table read it as a false alarm and read the next real
+  one the same way. Each cause now names itself.
+- **The merge-autonomy premise was never once verified, on any repository that reaches
+  GitHub through an SSH host alias** (#134)
+  `check_merge_autonomy` asked `gh api repos/{owner}/{repo}/...` and left the placeholders
+  for `gh` to expand. `gh` refuses any host it does not recognise, so a remote of the form
+  `git@git-alias:owner/name.git` failed with "none of the git remotes ... point to a known
+  GitHub host" and the gate returned UNCHECKED. Measured on one consumer ecosystem: 16 of
+  17 repositories, every one of them, permanently — while the answer was one call away and
+  the slug sat in the remote URL in plain text.
+
+  `UNCHECKED` was never a pass and the file said so at length, which was right. What was
+  wrong is that it also grouped this cause with the private-repository 403 as one that
+  "NEVER resolves", and that sentence is what stopped anyone fixing it. The slug is now
+  read from `origin` and the placeholder form is only the fallback; the 403 keeps its
+  permanent status because it genuinely does not resolve.
+
+- **The cross-reference gate read code specimens as references, and 96% of what it
+  reported was noise** (#132)
+  A skill that teaches a markup language writes that markup out. `check_xrefs` resolved
+  every link inside a fenced block against the document's own directory, so
+  ```` ```markdown ![bg](image.png) ```` — four lines teaching Marp image syntax — became
+  four broken links in a file that has none. Measured on one consumer install: **44 of 46
+  findings were specimens**, all in the two skills that document a markup language; the
+  other two were real. A gate whose output is mostly noise is a gate somebody switches
+  off, and the silence after that is indistinguishable from a clean repository — which is
+  the failure this directory exists to prevent. Links are now read from `prose_only()`,
+  so `squad/markdown.py` owns the fence regex here as it already does for the six
+  checkers that disagreed about whether `~~~` opens one.
+
+- **Three gates reported a verdict about a tree they had not read** (#129)
+  `check_prose_tests --root <empty tree>` answered `no test pins the wording of shipped
+  prose (394 test file(s) parsed)` — it had swept the repository it was standing in.
+  `check_chain_preconditions` did the same under a heading naming the other tree, and
+  `check_merge_autonomy` printed `HOLDS` because `gh` inherits the working directory, so
+  the flag it accepted changed nothing about what it asked. The first two shared one
+  `dest` between a positional and its option, and argparse applies the absent
+  positional's default after parsing the option. All three now answer for the tree they
+  were given, and an unreadable one exits 2 rather than reporting a pass.
+
+- **One question had eight spellings, so three callers each carried the whole table**
+  (#129)
+  Thirty-three gates take a tree to sweep and named it eight different ways — 12
+  `--root`, 4 `--repo-root`, 3 `--project`, 3 `--project-root`, 2 `--repo`, 2
+  `--ecosystem-dir`, two more, and 7 gates taking none. `mechanisms/gates/_contract.py`
+  now declares one flag, with every older spelling kept as an alias so no existing
+  invocation breaks, and reuses `squad/cli/report.py`'s exit vocabulary rather than
+  restating it. The three hand-kept tables are gone: `verify_ecosystem`'s adapters, the
+  22-entry `ROOT_FLAG` map — whose own comments record `check_xrefs` sitting outside the
+  empty-sweep protection for a week because it spelled its flag `--ecosystem-dir` — and
+  the obsolete half of `run_checks.py`'s reason for not globbing. The roster is now the
+  glob, which took it from 22 gates to 29 plus 4 that need a slug or an install path to
+  run at all, each named with its reason and held to it by a test.
+  `check_gate_mechanisms.py` reports any gate that drifts off the contract, reading the
+  AST: grepping for the flag called `check_produced_files.py` compliant, and it takes no
+  root — the literal is there because it invokes other gates with it.
+
+- **The gate that aggregates every other gate had no machine-readable answer** (#129)
+  `verify_ecosystem.py` runs 25 checks and is what a consumer points at to ask whether an
+  install is sound. A programmatic caller got an exit code and, in prose, `(N not run —
+  each ⊘ above says why)`: the reasons were on screen and nowhere a parser could reach
+  them, so sixteen skipped checks were indistinguishable from a clean run. It now accepts
+  `--json` and emits a `Report` whose `not_checked` names every check that did not run and
+  why, with the human text carried in `lines` rather than racing it to stdout.
+
+- **A Portuguese section header shipped in the installer for four months while the
+  language gate called the tree clean** (#130)
+  `mechanisms/distribution/install.sh:203` and one ADR heading were in Portuguese.
+  `check_english_only` matches a closed list of markers and none of those words carried an
+  accent or appeared on it, so 997 files were reported clean on every run. Both lines are
+  translated and two markers joined the list. The list's structural gap is filed rather
+  than papered over: a first attempt at a dozen more words produced 22 findings across 14
+  files, of which one was a defect and the rest were fixtures that carry Portuguese by
+  design.
+
+- **Two required CI steps failed on the tree they ship with, and half the suppressions in
+  the repository said nothing about why** (#87)
+  `ruff check` exited 1 on 90 findings at HEAD and `check_prose_tests.py` exited 1 on five
+  asserts, so the job was red from the code and not only from the Actions billing block.
+  Both now exit 0. The ruff half was not a formatting sweep: 41 `# noqa` directives named
+  rules nothing enforces, 100 `# noqa: PLW1510` hid a `subprocess.run` whose exit code
+  nobody declared — each now carries an explicit `check=False` instead of a suppression —
+  and 7 `l` bindings, 8 compound statements and one lambda assignment were rewritten rather
+  than silenced. 450 suppressions carried no reason at all; every one now states what the
+  rule cannot see, except six `E402` lines too long to take a clause, which their file's
+  bootstrap note covers. Two real defects surfaced underneath: `run_opportunity_score.py`
+  imported the rubric loader and never called it, so a malformed rubric reached the scorers
+  and produced a score from nothing, and `run_structural.py` computed an impediment report
+  its own comment called REPORTED and then dropped it. The five prose asserts were kept
+  with the exemption the gate ships, each naming why the contract text is the subject and
+  not a proxy for behaviour.
+
+- **The documentation offered three entry points that resolve to nothing, and pointed at
+  the wrong routing table** (#87)
+  `HOW-TO-USE.md` listed `/plan-grill`, `/session-goal` and `/trajectory-review`; the kit
+  ships no skill or command for any of them, and `skills/plan-write/SKILL.md` told an agent
+  to halt and recommend the first. `README.md` and `HOW-TO-USE.md` both named
+  `rules/cycle-backlog.md` as the domain routing table, which is worse than stale: the file
+  is kit-owned and `squad/boundaries.py` admits only `rules/*.txt`, so an adopter following
+  the instruction is refused by `boundary-check`. The table is `rules/domain-routing.txt`
+  and the documents now teach the bare `--write`, which resolves its own destination.
+  `CONTRIBUTING.md` prescribed a `lib/` submodule that `check_semantic_names.py` refuses in
+  CI and cited a precedent directory that does not exist. Four role prompts carried an
+  orphaned table row that rendered as a stray one-line table, and their heading counted
+  four roles over a table of fourteen.
+
+- **Eight spellings walked through the git-safety hook, and its own suite could not see
+  any of them** (#87)
+  The guard normalises a command and then matches verbs in it; every normalisation step
+  had a hole. `_GIT_GLOBALS` enumerated six of git's twenty-plus global options, so
+  `git --no-pager checkout main` carried a verb no guard saw. `_QUOTED` deleted a quoted
+  span entirely, so `git "commit" -m x` lost its subcommand. `_git_prefix` took the first
+  `-C` anywhere in a compound, so `git -C /tmp status && git commit -m x` asked the wrong
+  repository which branch it was on. `_git_out` returned `""` for both "git failed" and
+  "git answered nothing", so every trunk guard fell silent exactly when the hook could not
+  see. `DANGEROUS_PATH_RE` anchored on whitespace and missed `rm -rf "/etc"`, `rm -rf ~/*`,
+  `rm -rf $HOME/*` and `rm -rf ${HOME}`. `BRANCH_DELETE_RE` required the flag before the
+  name, so `git branch workspace -D` and `git push origin :workspace` passed. The
+  kit-boundary collector took absolute and `./` paths only, so
+  `sed -i s/a/b/ .claude/rules/architecture.md` was never examined. And an unreadable
+  `-F <path>` raised out of the hook entirely, exiting 1 — "the action proceeds" — before
+  the co-author and zone guards ran. All eight measured, each against the spelling that was
+  already refused. The suite missed them because it varies the VERB and fixes the SPELLING:
+  47 cases carrying `rm -rf /`, `/etc` and `/home` and no quoted or tilde form.
+  `tests/hooks/test_the_guard_matches_the_spelling_not_the_verb.py` now pairs each blocked
+  spelling with the one that reached the tool.
+
+- **Five gates reported a tree clean after measuring nothing in it** (#87)
+  `verify_ecosystem` printed `=== ALL CHECKS PASSED ===` and exited 0 when every check
+  returned `NOT_RUN` — `all_pass` is cleared only in the failure branch and the sentinel is
+  truthy by design. It also spawned `check_xrefs` without `--strict`, so every WARN class
+  arrived as exit 0 while `install.sh` and CI both passed the flag: the smoke test was
+  weaker than the installer depending on it. `check_emitted_verdicts` and
+  `check_prose_write_paths` printed `CLEAN` over a zero-file sweep against their own
+  exit-code tables, each already defining the `UNCHECKED` constant they did not reach.
+  `check_orphan_verdicts` reported every verdict reachable after sweeping zero cycle rules.
+  `check_phase_emitters` returned 0 with no `cycle-phases.txt` to read, and its
+  `SEARCH_GLOBS` still named `scripts/*.py` — zero files since the 2026-09-01 rename — so
+  `mechanisms/` was outside the sweep entirely. Each now separates "could not measure" from
+  "measured and found nothing", and
+  `tests/test_a_gate_that_swept_nothing_is_not_clean.py` asserts that no glob in the sweep
+  matches zero files.
+
 - **The documented dispatch prescribed the defect the code no longer had** (#86)
   `pipeline/SKILL.md` told an operator to pass the `queue` array while SELECT had grown
   two more keys carrying schedulable items, and the workflow's own input contract was a
@@ -2146,6 +5441,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 - **The lead threw away SELECT's reason and then went silent for nine hours.** Two defects, measured together on the runner on 2026-09-03 with three lanes idle for 10h33m: the lead's log read `SELECT exited 1: ` — the reason blank — and its last line was 9h11m old while the process was alive and sleeping. Neither is a stall; both are the watchdog unable to say what it saw. **(1)** `select_backlog_item.py` ends on `return 0 if verdict == "ITEM_SELECTED" else 1`, so a held backlog ALWAYS exits 1, with an empty stderr and the full verdict on stdout. The lead checked the returncode before parsing, which made the branch that reports `BACKLOG_BLOCKED` in the selector's own words **unreachable code** — the exit status is a verdict, not a failure, and reading it first turned `26 selectable item(s) remain and every one is held` into a blank. Stdout is now parsed first and the returncode consulted only when there is no usable answer, so a genuine crash stays legible. **(2)** After one stall report `reported_stall` silenced every later poll with the reason *"no menu is waiting"* — not even the true one; the menu was absent because the backlog was walled. Reporting once was right and reporting nothing ever again is the same defect as a lane holding unsent work: from outside, a live watch and a dead one are identical. A stall is now restated on a 30-minute heartbeat, with its real reason, and the clock restarts on each — quiet, not mute.
 
 ### Security
+- **The Slack release notifier and the decision-model client refuse any URL that is not `https://`.** `urlopen` also opens `file:` and custom schemes, so a webhook variable pointing at a local path would have been read instead of posted to. (#135)
 - **Layer 3 of provenance never ran in any consumer.** `rules/reference-provenance.md` names three layers and this is the only one that catches the RESULT of a paste rather than the act. The gate lives with the KIT and runs against the PROJECT — and those are different directories in two of the three layouts `squad.layout` defines: a `copy` install puts the kit at `<project>/.claude/`, a `plugin` install puts it outside the project entirely. The hook looked for the script under `project_dir`, so **only this repository, where the two coincide, ever ran it**. Reproduced in both layouts with a committed `study-material/ref.md` and an untracked literal copy: the hook exited 0 with no output while the same gate on the same tree printed `SUSPECTED COPY … shares 5 consecutive lines` and exited 1. And "not installed" returned the same `None` as "ran and found nothing", so a session ended looking clean on a check that had never happened — in a hook that already says out loud that the CHANGELOG gate cannot run, and that gained `STOP GATES DID NOT RUN` for git earlier the same day. The third branch was the one missing. Found by the kit's own self-audit, and it survived an independent attempt to refute it in both layouts.
 - **The end-of-session gates passed in silence whenever git could not be asked.** `stop-validation.py` collects the session's work with `git diff`, `git ls-files` and friends, and its `git()` helper returned the empty string for **every** failure: the binary missing, a timeout, a broken repository, a subcommand exiting non-zero. All four are indistinguishable from *"nothing changed"* — and "nothing changed" is precisely what makes every gate in that hook pass. The hook runs at the end of every session and two of its gates are blockers, one of them **for secrets**, so the silent form of this failure is a secret gate that did not run inside a session that ended clean. Failures are now recorded and reported as `STOP GATES DID NOT RUN … This is not a pass`, naming each command and its reason. Being outside a repository stays silent, because a scratch directory genuinely has nothing to validate and saying so at every prompt is noise; every other failure is a measurement that did not happen.
 - **`rules/retired-permissions.txt` — the half the recorded base cannot cover.** The base records what the kit shipped last time, which lets the installer retire a rule automatically. It cannot help the FIRST install under that scheme: with no record every entry is indistinguishable from a project's own, so that path removes nothing — deliberately, because deleting a project's rule across every consumer at once is the worse error. Measured the same hour both landed: the credential globs were rewritten, the base shipped, and the retired `Read(**/*secret*)` **stayed denied in the consumer anyway**. The fix arrived inert, which is precisely the shape it was written to prevent. So the kit now also declares its withdrawals explicitly, and the installer removes those on every run regardless of base. The two halves are different in kind and both are needed: the base is automatic and covers what nobody remembers to declare, while the list is auditable and covers what the base cannot know. Every entry carries a dated reason, so a consumer surprised by a removal finds the reasoning rather than just the deletion; tests refuse a rule that is both declared retired and still shipped, since which of the two won would depend on the order of two loops.
@@ -2671,7 +5967,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   - **`install_goal_hook.py`** stops assuming the root: it resolves the canonical path from the project's layout and writes `.claude/knowledge-base/acceptance` in a plugin install. The previous default pointed outside the real knowledge-base in every consumer.
   - **Autonomy became an executable guarantee.** A `--roadmap` or `--acceptance-dir` that resolves OUTSIDE the project root is refused: consumers are autonomous, and a gate pointing at the neighbouring repo makes one project's milestone depend on the other's state. This closes the path the `--acceptance-dir` flag had opened.
   - **`roadmap-review` emits `split_knowledge_base` (MAJOR)** when it finds a second knowledge-base holding `.md` files. The split becomes visible instead of silent.
-  - 9 testes novos (95 nas duas skills).
+  - 9 new tests (95 across the two skills).
 - **`/roadmap-review` cross-checks the roadmap against the evidence in the `knowledge-base`, and the 9-milestone ceiling stopped being a BLOCKER.** Found by watching real runs in three consumers:
   - **The ceiling was a false BLOCKER.** `/roadmap-init` limits the INITIAL roadmap to M0–M8 to keep the conception scope honest, but `/roadmap-feature` explicitly opens it ("M9, M10, M11… extend freely"). The reviewer failed mature 13- and 30-milestone roadmaps as `INVALID`, grown exactly the way the kit prescribes — the kind of false positive that trains a team to ignore the tool. It is now MINOR/heuristic, with the message explaining the difference between the two caps.
   - **New `--knowledge-base` check:** every `[x]` is cross-checked against `roadmap-runs/` and `acceptance/`. Reading the document alone would never catch the drift that matters most — a checkbox flipped by hand, or flipped by a `cycle-release` that ran before `cycle-acceptance`. Measured on the first run: `skills-pkg` with **24 of 27** `[x]` milestones with no run-file, `promptly` with 2 of 11, `workspace-app` with 3 of 8. `released_without_roadmap_run` is MAJOR; `released_without_acceptance` is MINOR, because milestones closed before this cycle existed are not a defect — but the count must not grow from here on.

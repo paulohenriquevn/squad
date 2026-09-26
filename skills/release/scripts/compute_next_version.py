@@ -25,27 +25,33 @@ import re
 import sys
 from pathlib import Path
 
-#: Captures the `-rc.N` counter instead of discarding it. The previous pattern ended
-#: `(?:[-+].*)?` — matching a pre-release and throwing it away — so `v0.3.0-rc.1`
-#: parsed as `(0, 3, 0)` and every rc looked like the final release of that version.
-#: Harmless while nothing produced an rc; wrong the moment something does.
-SEMVER_RE = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?(?:\+.*)?$")
+for _up in Path(__file__).resolve().parents:
+    if (_up / "squad" / "semver.py").is_file():
+        sys.path.insert(0, str(_up))
+        break
+# Below the bootstrap: `squad` is importable only after sys.path is extended.
+from squad.semver import (  # noqa: E402 — post-bootstrap import
+    RC,
+    Version,
+    parse,
+)
 
-#: The pre-release identifier. `-rc.N` is plain semver, sorts correctly, and the
-#: package managers already treat it as a pre-release rather than installing it by
-#: accident. `detect_current_version.py` has carried a test for exactly this shape
-#: since before anything emitted one.
-RC = "rc"
+# `RC` and `SEMVER_RE` are re-exported rather than redefined. This script used to own
+# both, and owning them is what let the three readers of a version in this slice drift
+# apart — see `tests/test_one_reading_of_a_version.py` for what the drift cost.
 
 
-def parse_semver(tag: str) -> tuple[int, int, int, int | None]:
-    """(major, minor, patch, rc) — `rc` is None for a final version."""
-    m = SEMVER_RE.match(tag.strip())
-    if not m:
+def parse_semver(tag: str) -> Version:
+    """(major, minor, patch, rc) — `rc` is None for a final version.
+
+    Returns a `Version`, which IS that 4-tuple, so every existing unpacking still works
+    and callers gain `.core` and an ordering that puts a final above its own rcs.
+    """
+    m = parse(tag)
+    if m is None:
         print(f"invalid semver tag: {tag}", file=sys.stderr)
         sys.exit(2)
-    rc = int(m.group(4)) if m.group(4) else None
-    return int(m.group(1)), int(m.group(2)), int(m.group(3)), rc
+    return m
 
 
 def extract_unreleased_subsections(changelog: Path) -> dict[str, list[str]]:

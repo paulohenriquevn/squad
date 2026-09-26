@@ -56,7 +56,15 @@ for _up in Path(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         sys.path.insert(0, str(_up))
         break
-from squad.paths import records_dir, write_records_dir  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import (  # noqa: E402 — post-bootstrap import
+    confined,
+    records_dir,
+    safe_segment,
+    write_records_dir,
+)
 
 CRITICS_LEAF = "critics"
 VERDICTS = ("accepted", "returned")
@@ -100,7 +108,13 @@ def load_phases(project: Path) -> dict[str, CriticPhase]:
 def record_path(project: Path, phase: str, slug: str, *, write: bool = False) -> Path:
     base = (write_records_dir(project, CRITICS_LEAF) if write
             else (records_dir(project, CRITICS_LEAF) or write_records_dir(project, CRITICS_LEAF)))
-    return base / f"{slug}-{phase}.json"
+    # `slug` and `phase` arrive from the CLI and become part of a filename that is
+    # `mkdir -p`'d. `../` in either escaped the write root and created the directories on
+    # the way. `safe_segment` refuses the spelling; `confined` refuses the result, so a
+    # caller composing the name some other way is still held. See `squad/paths.py`.
+    safe_segment(slug, what="--slug")
+    safe_segment(phase, what="--phase")
+    return confined(base / f"{slug}-{phase}.json", base, what="the critic record")
 
 
 def load_record(project: Path, phase: str, slug: str) -> dict:
@@ -144,19 +158,33 @@ Record with:
 """
 
 
+class CastRefused(RuntimeError):
+    """`cast()` will not record this vote, and says why.
+
+    An EXCEPTION, not `SystemExit`. Every refusal below used to raise `SystemExit`,
+    which `main` caught and turned into exit 2 — so the only caller that worked was the
+    one inside this file. Any importer got its PROCESS terminated instead of an error it
+    could handle, and the panel and critic skills call these mechanisms as modules.
+
+    `SystemExit` also flattened the three refusals into one code: an undeclared phase,
+    an unknown verdict and a finding too short are different problems for the caller,
+    and the message was the only thing telling them apart.
+    """
+
+
 def cast(project: Path, phase: str, slug: str, verdict: str, finding: str) -> dict:
     phases = load_phases(project)
     critic = phases.get(phase)
     if critic is None:
-        raise SystemExit(
+        raise CastRefused(
             f"no critic declared for `{phase}`. `rules/critic-phases.txt` is the "
             "population, and a phase absent from it has no critic ON PURPOSE — "
             f"declared: {', '.join(sorted(phases)) or '(none)'}")
 
     if verdict not in VERDICTS:
-        raise SystemExit(f"`{verdict}` is not one of {', '.join(VERDICTS)}")
+        raise CastRefused(f"`{verdict}` is not one of {', '.join(VERDICTS)}")
     if verdict == "returned" and len(finding.split()) < MIN_FINDING_WORDS:
-        raise SystemExit(
+        raise CastRefused(
             f"a `returned` carries {len(finding.split())} word(s); the floor is "
             f"{MIN_FINDING_WORDS}. Name what to change — returning work without saying "
             "what to change produces this round again, and the one after it")
@@ -218,7 +246,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         out = cast(project, args.phase, args.slug, args.verdict, args.finding)
-    except SystemExit as exc:
+    except CastRefused as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)
         return 2
 

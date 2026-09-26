@@ -30,7 +30,14 @@ jobs:
           cache: 'pip'
 
       - name: Install test dependencies
-        run: python -m pip install --upgrade pip pytest pytest-cov pyyaml ruff vulture
+        # `tree-sitter-languages` is what the D2 symbol-fabrication extractor parses
+        # with. It was declared nowhere — not here, not in `pyproject.toml` — so the
+        # ten parser tests ran against an extractor that returns `[]` by design (EC-8)
+        # and failed with an error that says nothing about parsing. Installed here so
+        # the detector is EXERCISED in CI rather than skipped in it.
+        # `tree-sitter<0.22`: tree-sitter-languages 1.10 cannot load a grammar on a newer one,
+        # and it does not say so in its own metadata. See skills/code-quality/pyproject.toml.
+        run: python -m pip install --upgrade pip pytest pytest-cov pyyaml ruff vulture "tree-sitter<0.22" tree-sitter-languages jsonschema hypothesis
 
       # `--strict` is NOT cosmetic: without it a WARN finding is printed and the
       # process exits 0 — the output carries the WARN line and, right below it,
@@ -44,6 +51,14 @@ jobs:
 
       - name: Skill frontmatter validator
         run: python3 mechanisms/gates/validate_skill_frontmatter.py
+
+      # A rule's only handle used to be its path, and paths move: 1209 citations of
+      # `rules/<name>.md` in this kit, and on one consumer's registry 5 of 6 dead
+      # pointers were paths that had MOVED. The id is the handle now, and this step is
+      # what stops the index from drifting back into decoration.
+      - name: Every rule has an identity a rename cannot break
+        run: python3 mechanisms/gates/check_rule_identity.py
+
 
       # Every declared hard gate names what computes it. Measured before this
       # gate existed: 59 gates, 11 naming a script. The other 48 were mostly
@@ -147,11 +162,22 @@ jobs:
         python-version: ['3.11', '3.12', '3.13']
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The same suites as `suites`, so the same history: a shallow clone failed
+          # the withdrawal-history, merge-base and commit-convention tests here on the
+          # first run after CI came back (2026-09-25), all green in `suites`.
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
-      - run: python -m pip install --upgrade pip pytest pyyaml
+      # The same analysers as `suites`, or the code-quality slice measures their absence.
+      # tree-sitter-languages ships no wheel past cp312 and has not released since
+      # 2024-02, so on 3.13 it is not installed and the grammar tests skip, saying why.
+      - run: >-
+          python -m pip install --upgrade pip pytest pyyaml vulture jsonschema hypothesis
+          "tree-sitter<0.22; python_version < '3.13'"
+          "tree-sitter-languages; python_version < '3.13'"
       - name: Full compatibility suite
         run: bash mechanisms/cycle/run_slice_tests.sh
 
@@ -183,3 +209,103 @@ jobs:
           else
             for test_file in $shell_tests; do bash "$test_file"; done
           fi
+
+  security:
+    # A dedicated job, because the analysis steps above answer a different question.
+    # `ruff check` with this repository's rule set and `shellcheck --severity=warning`
+    # are correctness tools; neither looks for a hardcoded credential, an unpinned
+    # action, or a dependency with a known CVE. Folding those into `suites` would also
+    # mean one red step hides the others: a CVE in a dependency and a failing test are
+    # different problems with different owners, and a reader scanning the job list
+    # should be able to tell which fired without opening the log.
+    name: Security
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The secret scan needs history: a credential removed in the last commit is
+          # still in the pack, and a shallow clone reports the tree as clean.
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install scanners
+        # setuptools too: pip-audit audits the environment it runs in, and the runner's
+        # own setuptools 79.0.1 carried PYSEC-2026-3447 on 2026-09-25 — a finding about
+        # the runner image, not about the kit, which declares no runtime dependency.
+        run: python -m pip install --upgrade pip setuptools bandit pip-audit ruff
+
+      - name: Static security review (bandit)
+        # `-ll` reports MEDIUM and above. LOW on this codebase is dominated by
+        # `subprocess` calls that are the whole point of a kit that drives git and gh,
+        # and a scan whose output is mostly known-fine trains people to skim it.
+        # `-r` walks the kit's own code; `skills/*/evals` and the test trees are
+        # excluded because a fixture asserting a bad pattern is not that pattern.
+        run: |
+          bandit -ll -r mechanisms squad hooks skills \
+            --exclude '*/tests/*,*/evals/*' \
+            --format json --output bandit.json || true
+          bandit -ll -r mechanisms squad hooks skills \
+            --exclude '*/tests/*,*/evals/*'
+
+      - name: Dependency audit (pip-audit)
+        # The kit declares no runtime dependencies, so today this is a floor rather
+        # than a filter — and that is exactly why it belongs here before one is added.
+        run: pip-audit --strict --desc
+
+      - name: Security rules (ruff S)
+        # The `S` rule family is bandit's checks inside the linter already installed.
+        # Run as its own step with `--select S` so a finding here is legible as a
+        # SECURITY finding rather than as one more line in the correctness lint.
+        run: |
+          ruff check --select S --output-format=github \
+            mechanisms squad hooks skills || true
+          ruff check --select S --exit-zero --statistics \
+            mechanisms squad hooks skills
+
+      - name: Upload machine-readable report
+        # The analysis above prints for a human. This is what a reader consumes after
+        # the fact — a diff between two runs, a dashboard, a script asking "did the
+        # finding count go up". Nothing in this pipeline produced a parseable artifact
+        # before, so every question of that kind meant re-reading a log by eye.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-report
+          path: bandit.json
+          if-no-files-found: warn
+
+  formatting:
+    # Formatting is checked, and it is checked SEPARATELY from the correctness lint.
+    # `ruff check` and `ruff format` answer different questions, and a job that fails
+    # for an import order and a job that fails for a missing space should not be one
+    # line in the summary. `--diff` prints what would change rather than changing it,
+    # so CI never rewrites the tree it is measuring.
+    name: Formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install ruff
+        run: python -m pip install --upgrade pip ruff
+      - name: Formatting is consistent
+        # NON-BLOCKING for now, and that is a declared state rather than an oversight:
+        # this repository has never been formatted, so a blocking check would fail on
+        # the first run over hundreds of pre-existing files and be switched off within
+        # the day. The diff is printed so the size of the gap is visible and the day
+        # someone closes it, `continue-on-error` comes off in the same commit.
+        # `continue-on-error`, not `|| true`: the step's own status stays honest and
+        # the job still goes green. `|| true` also made the shell word `true` read as a
+        # path handed to a tool, which `test_ci_targets_exist` correctly refuses.
+        continue-on-error: true
+        run: ruff format --diff mechanisms squad skills hooks tests conftest.py

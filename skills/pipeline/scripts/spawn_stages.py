@@ -70,7 +70,13 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _sys_bootstrap.path.insert(0, str(_up))
         break
-from squad.paths import data_root, write_records_dir  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import (  # noqa: E402 — post-bootstrap import
+    data_root,
+    write_records_dir,
+)
 
 #: The stages this script materialises. IMPLEMENT and beyond are not here yet —
 #: they write to the repository, and a writing stage needs its own review of what
@@ -266,9 +272,13 @@ def _default_output_dir(repo: Path, item: str) -> Path:
     """
     layout = resolve(repo)
     if layout is None:
-        raise SystemExit(
-            f"FATAL: no kit under {repo}, so there is no data root to write to. "
-            f"Pass --output-dir explicitly if that is deliberate.")
+        # 2, not 1, and the message goes to stderr by hand. `SystemExit("text")` prints
+        # the text and exits 1 — the same code this script's docstring gives to a
+        # missing template, so a caller telling bad input from no-data-root got 1 for
+        # both. Exit 2 is the kit's word for "could not measure"; this is that case.
+        print(f"FATAL: no kit under {repo}, so there is no data root to write to. "
+              f"Pass --output-dir explicitly if that is deliberate.", file=sys.stderr)
+        raise SystemExit(2)
     return write_records_dir(layout.project_dir, "pipeline-agents") / item.lower()
 
 

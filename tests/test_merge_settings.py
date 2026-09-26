@@ -82,7 +82,7 @@ def test_a_consumers_own_hook_survives_the_merge(tmp_path: Path) -> None:
 
     Step 3 of that report is `grep -c my-gate.sh .claude/settings.json` → 0.
     """
-    merged = ms.merge(_consumer_settings(), _kit_settings(), previous={})
+    merged, _report = ms.merge_with_report(_consumer_settings(), _kit_settings(), previous={})
 
     assert any("my-gate.sh" in c for c in _commands(merged, "PreToolUse"))
 
@@ -96,7 +96,7 @@ def test_the_kits_hook_is_refreshed_from_the_kit() -> None:
     consumer = _consumer_settings()
     consumer["hooks"]["PreToolUse"][0]["hooks"][0]["timeout"] = 99999
 
-    merged = ms.merge(consumer, _kit_settings(), previous={})
+    merged, _report = ms.merge_with_report(consumer, _kit_settings(), previous={})
 
     entries = [h for group in merged["hooks"]["PreToolUse"] for h in group["hooks"]
                if h["command"] == "python3 kit/validate-command.py"]
@@ -111,7 +111,7 @@ def test_a_renamed_kit_hook_is_removed_only_when_the_baseline_names_it() -> None
     consumer["hooks"]["PreToolUse"][0]["hooks"][0]["command"] = "python3 kit/OLD-NAME.py"
     baseline = {"PreToolUse": ["python3 kit/OLD-NAME.py"]}
 
-    merged = ms.merge(consumer, _kit_settings(), hook_previous=baseline)
+    merged, _report = ms.merge_with_report(consumer, _kit_settings(), hook_previous=baseline)
 
     commands = _commands(merged, "PreToolUse")
     assert "python3 kit/validate-command.py" in commands
@@ -120,7 +120,7 @@ def test_a_renamed_kit_hook_is_removed_only_when_the_baseline_names_it() -> None
 
 
 def test_a_kit_event_the_consumer_never_had_is_added(tmp_path: Path) -> None:
-    merged = ms.merge(_consumer_settings(), _kit_settings(), previous={})
+    merged, _report = ms.merge_with_report(_consumer_settings(), _kit_settings(), previous={})
 
     assert _commands(merged, "Stop") == ["python3 kit/stop-validation.py"]
 
@@ -129,7 +129,7 @@ def test_a_consumer_event_the_kit_does_not_ship_is_untouched() -> None:
     consumer = _consumer_settings()
     consumer["hooks"]["SessionEnd"] = [{"hooks": [_hook("bash ours/farewell.sh")]}]
 
-    merged = ms.merge(consumer, _kit_settings(), previous={})
+    merged, _report = ms.merge_with_report(consumer, _kit_settings(), previous={})
 
     assert _commands(merged, "SessionEnd") == ["bash ours/farewell.sh"]
 
@@ -142,7 +142,7 @@ def test_a_hook_the_kit_retired_is_removed_when_the_baseline_says_it_was_the_kit
     consumer["hooks"]["Stop"] = [{"hooks": [_hook("python3 kit/retired-gate.py")]}]
     baseline = {"Stop": ["python3 kit/retired-gate.py"]}
 
-    merged = ms.merge(consumer, _kit_settings(), hook_previous=baseline)
+    merged, _report = ms.merge_with_report(consumer, _kit_settings(), hook_previous=baseline)
 
     assert "python3 kit/retired-gate.py" not in _commands(merged, "Stop")
     assert "python3 kit/stop-validation.py" in _commands(merged, "Stop")
@@ -154,7 +154,7 @@ def test_with_no_baseline_nothing_is_removed() -> None:
     consumer = _consumer_settings()
     consumer["hooks"]["Stop"] = [{"hooks": [_hook("python3 kit/retired-gate.py")]}]
 
-    merged = ms.merge(consumer, _kit_settings(), previous={})
+    merged, _report = ms.merge_with_report(consumer, _kit_settings(), previous={})
 
     assert "python3 kit/retired-gate.py" in _commands(merged, "Stop")
 
@@ -174,11 +174,11 @@ def test_the_baseline_records_the_kits_commands_not_the_merged_result() -> None:
 
 def test_a_round_trip_is_stable() -> None:
     """Running the installer twice must not change the file the second time."""
-    once = ms.merge(_consumer_settings(), _kit_settings(), previous={})
+    once, _ = ms.merge_with_report(_consumer_settings(), _kit_settings(), previous={})
     baseline = ms.hook_baseline(_kit_settings())
 
-    twice = ms.merge(json.loads(json.dumps(once)), _kit_settings(),
-                     hook_previous=baseline)
+    twice, _ = ms.merge_with_report(json.loads(json.dumps(once)), _kit_settings(),
+                                    hook_previous=baseline)
 
     assert twice == once
 
@@ -209,7 +209,7 @@ def test_it_names_the_hooks_it_removed() -> None:
 # ── the other keys keep behaving exactly as they did ──────────────────────────
 
 def test_the_consumers_permissions_survive_and_the_kits_are_a_floor() -> None:
-    merged = ms.merge(_consumer_settings(), _kit_settings(), previous={})
+    merged, _report = ms.merge_with_report(_consumer_settings(), _kit_settings(), previous={})
 
     assert "Bash(pnpm test:*)" in merged["permissions"]["allow"]
     assert "Bash(git status)" in merged["permissions"]["allow"]
@@ -221,7 +221,7 @@ def test_deny_rules_are_inserted_before_the_consumers() -> None:
     consumer = _consumer_settings()
     consumer["permissions"]["deny"] = ["Read(ours/**)"]
 
-    merged = ms.merge(consumer, _kit_settings(), previous={})
+    merged, _report = ms.merge_with_report(consumer, _kit_settings(), previous={})
 
     assert merged["permissions"]["deny"][0] == "Read(**/.env)"
 
@@ -230,7 +230,7 @@ def test_a_retired_permission_is_removed_from_the_baseline() -> None:
     consumer = _consumer_settings()
     consumer["permissions"]["allow"].append("Bash(old-kit-rule)")
 
-    merged = ms.merge(consumer, _kit_settings(),
+    merged, _report = ms.merge_with_report(consumer, _kit_settings(),
                       previous={"allow": ["Bash(old-kit-rule)", "Bash(git status)"]})
 
     assert "Bash(old-kit-rule)" not in merged["permissions"]["allow"]
@@ -242,7 +242,7 @@ def test_a_declared_retired_permission_goes_even_with_no_baseline() -> None:
     consumer = _consumer_settings()
     consumer["permissions"]["allow"].append("Bash(withdrawn)")
 
-    merged = ms.merge(consumer, _kit_settings(), previous={},
+    merged, _report = ms.merge_with_report(consumer, _kit_settings(), previous={},
                       declared_retired={"Bash(withdrawn)"})
 
     assert "Bash(withdrawn)" not in merged["permissions"]["allow"]
@@ -254,7 +254,7 @@ def test_kit_owned_scalars_are_the_kits() -> None:
     consumer = _consumer_settings()
     consumer["permissions"]["defaultMode"] = "acceptEdits"
 
-    merged = ms.merge(consumer, kit, previous={})
+    merged, _report = ms.merge_with_report(consumer, kit, previous={})
 
     assert merged["permissions"]["defaultMode"] == "bypassPermissions"
 
@@ -263,7 +263,7 @@ def test_a_key_the_kit_does_not_know_is_the_consumers() -> None:
     consumer = _consumer_settings()
     consumer["theirOwnKey"] = {"anything": True}
 
-    merged = ms.merge(consumer, _kit_settings(), previous={})
+    merged, _report = ms.merge_with_report(consumer, _kit_settings(), previous={})
 
     assert merged["theirOwnKey"] == {"anything": True}
 
@@ -274,7 +274,7 @@ def test_the_kit_owns_its_wiring_keys() -> None:
     consumer = _consumer_settings()
     consumer["statusLine"] = {"type": "command", "command": "bash stale.sh"}
 
-    merged = ms.merge(consumer, kit, previous={})
+    merged, _report = ms.merge_with_report(consumer, kit, previous={})
 
     assert merged["statusLine"]["command"] == "bash kit/statusline.sh"
 
@@ -335,8 +335,53 @@ def test_the_real_kit_settings_merge_onto_a_consumer_that_wired_its_own_hook(
         },
     }
 
-    merged = ms.merge(consumer, kit, previous={})
+    merged, _report = ms.merge_with_report(consumer, kit, previous={})
 
     commands = _commands(merged, "PreToolUse")
     assert any("delivery-gate.sh" in c for c in commands), "the consumer's gate was dropped"
     assert any("validate-command.py" in c for c in commands), "the kit's gate is missing"
+
+
+def test_the_callers_settings_are_not_mutated_by_the_merge() -> None:
+    """`merged = dict(mine)` is shallow, so `permissions` stayed shared with the input.
+
+    `merge_permissions` then calls `mine.setdefault("permissions", {})` and mutates that
+    object in place, so the caller's dict was rewritten by a function whose name says it
+    RETURNS a merge. After the call, "what did the consumer have before" is unanswerable.
+    """
+    import copy as _copy
+
+    mine = {"permissions": {"allow": ["Bash(ls:*)"], "deny": []},
+            "hooks": {"Stop": [{"hooks": [{"command": "mine.sh"}]}]}}
+    before = _copy.deepcopy(mine)
+    kit = {"permissions": {"allow": ["Bash(git status:*)"], "deny": ["Bash(rm:*)"]}}
+
+    ms.merge_with_report(mine, kit)
+
+    assert mine == before, (
+        "the caller's settings were mutated by the merge:\n"
+        f"before: {before}\nafter:  {mine}")
+
+
+def test_the_consumer_settings_are_replaced_never_truncated(tmp_path) -> None:
+    """`open(target, "w")` truncates BEFORE anything is written.
+
+    An interruption, a full disk or a serialisation error between the truncate and the
+    flush left an empty or half-written settings.json — the file carrying the consumer's
+    own hooks and permission grants, and the one file whose loss cannot be recovered from
+    the kit. A `.bak` now sits beside it, and the replace is atomic.
+    """
+    target = tmp_path / "settings.json"
+    target.write_text(json.dumps({"permissions": {"allow": ["Bash(ls:*)"]}}), encoding="utf-8")
+    kit = tmp_path / "settings.plugin.json"
+    kit.write_text(json.dumps({"permissions": {"allow": ["Bash(git status:*)"]}}),
+                   encoding="utf-8")
+
+    ms.main([str(target), str(kit)])
+
+    assert json.loads(target.read_text(encoding="utf-8")), "the target is empty"
+    backup = target.with_suffix(".json.bak")
+    assert backup.is_file(), "the pre-merge file was not kept"
+    assert json.loads(backup.read_text(encoding="utf-8"))["permissions"]["allow"] \
+        == ["Bash(ls:*)"], "the backup is not the pre-merge content"
+    assert not list(tmp_path.glob(".*tmp")), "the temporary file survived the replace"

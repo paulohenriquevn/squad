@@ -1,4 +1,5 @@
 # Cycle: IMPLEMENT
+<!-- rule-id: SQ-CYC-09 -->
 
 Source of Truth for the implementation cycle.
 
@@ -8,8 +9,8 @@ Execute a confidence-approved plan into code, tests, and commits. TDD-discipline
 
 ## Pre-conditions
 
-- A plan exists at `records/plans/{slug}-plan.md` with verdict ≥ SHIPPABLE_WITH_CAVEATS.
-- The item the plan implements scored `ALIGNED` — `records/alignment/{slug}-alignment.md` exists and `score_alignment.py` exits 0 on it, which needs BOTH a machine score >= 90% and a tick in every `## Reviewer sign-off` box by a reviewer **who is not the author** — a person, or `alignment_judge.py` when none is coming. `AWAITING_REVIEW` is not a pass, and the agent that wrote the brief may never tick a box. This line said *a human's tick* until 2026-09-01, contradicting the very file it cites: [`alignment-threshold.md § Amended 2026-09-01`](../skills/_kit-rules/alignment-threshold.md) requires a reviewer who is not the author, which a judge can be, and `score_alignment.py` had already implemented it — the verdict turns on `reviewer_signed_off`, with `signed_by_is_human` reported beside it so a judge's `ALIGNED` reads as the weaker claim it is. Honoured literally, the stale wording re-froze every unattended run at `AWAITING_REVIEW`, which is the halt that amendment exists to end.
+- A plan exists at `.squad/records/plans/{slug}-plan.md` with verdict ≥ SHIPPABLE_WITH_CAVEATS.
+- The item the plan implements scored `ALIGNED` — `.squad/records/alignment/{slug}-alignment.md` exists and `score_alignment.py` exits 0 on it, which needs BOTH a machine score >= 90% and a tick in every `## Reviewer sign-off` box by a reviewer **who is not the author** — a person, or `alignment_judge.py` when none is coming. `AWAITING_REVIEW` is not a pass, and the agent that wrote the brief may never tick a box. This line said *a human's tick* until 2026-09-01, contradicting the very file it cites: [`alignment-threshold.md § Amended 2026-09-01`](../skills/_kit-rules/alignment-threshold.md) requires a reviewer who is not the author, which a judge can be, and `score_alignment.py` had already implemented it — the verdict turns on `reviewer_signed_off`, with `signed_by_is_human` reported beside it so a judge's `ALIGNED` reads as the weaker claim it is. Honoured literally, the stale wording re-froze every unattended run at `AWAITING_REVIEW`, which is the halt that amendment exists to end.
 - The repository is on `workspace` (per Unbreakable Rule 4 — work is born on `workspace` and promoted to `develop` via PR; see `git-safety.md` § 1).
 - The project bootstrapped its language toolchain (e.g., `go.mod`, `package.json`, `pyproject.toml`, `Cargo.toml`).
 
@@ -28,7 +29,7 @@ RED      — write the failing test that captures the task's acceptance criterio
 GREEN    — walk the parsimony ladder, then write the minimal code to pass the test
 REFACTOR — improve structure; tests stay green
 WIRING   — caller + integration test + runtime metric (the "wiring triad")
-COMMIT   — atomic commit referencing the plan slug and task ID
+COMMIT   — atomic commit whose body carries the task ID and a `Plan: <slug>` line
 ```
 
 ## The domain specialist — consulted, never generated
@@ -89,7 +90,7 @@ A task is **not** complete until all three are present:
 ## Hard gates (per iteration)
 
 - Parsimony ladder walked before GREEN-phase code is written (`rules/parsimony-ladder.md`) — guardrail items (tests/validation/error-handling/security/accessibility) never sacrificed. `userpromptsubmit-inject.py` re-injects the ladder every turn — _(not mechanized: debt since 2026-09-01 — injecting a deliberation prompt is not checking that the deliberation happened; nothing reads the resulting code and decides which rung it stopped at)_
-- Test suite green before commit — `suite_runners.py`, via `run_validation.py` after the halt-loop, and `ci.yml` on every push. _(not mechanized at the point of action: debt since 2026-08-27 — no hook runs the suite before a commit lands, so "before commit" is honoured by discipline and caught afterwards)_
+- Test suite green before commit — `suite_runners.py` (run by `run_validation.py`), via `run_validation.py` after the halt-loop, and `ci.yml` on every push. _(not mechanized at the point of action: debt since 2026-08-27 — no hook runs the suite before a commit lands, so "before commit" is honoured by discipline and caught afterwards)_
 - Linter clean (project-specific — see `rules/code-quality-languages.txt`) — `post-edit-check.py` on every edit, scoped to the edited file, and `run_code_quality.py` over the tree at Step 5.
 - No new symbols left dangling (every new function/class has a caller or a test exercising it) — `check_wiring.py`, whose pillar (a) is the non-negotiable one.
 - CHANGELOG `[Unreleased]` updated (Unbreakable Rule 6) — `stop-validation.py`.
@@ -112,10 +113,10 @@ Skipping mini review on phase boundary is a documented anti-pattern: design prob
 `scripts/run_validation.py` runs after the promise marker and BEFORE the handoff. It consolidates (per ADR 0002 — `cq-gate-in-validate`) every post-implementation gate into one report:
 
 - **Progress-checkpoint schema — validated fail-fast, before any gate that reads it.** `check_progress_schema.py` confirms `.progress-{slug}.json` matches the canonical shape (`skills/implement/templates/progress-schema.json`): a `tasks` array of objects keyed by `id` (not `task_id`), each with `phase`/`status` and, once committed, `commit_sha`/`files`. A malformed checkpoint FAILs loudly instead of letting phase-scoped gates degrade silently.
-- **Checkpoint-vs-git consistency.** `check_checkpoint_consistency.py` cross-checks the checkpoint against the real git history both ways: every `committed` task points at a SHA that exists, and every plan task referenced by a real commit (`T{N.M}` convention in the message) is recorded `committed`. Nothing forces the halt-loop to update `.progress` at write time, but a task finished + committed without a matching checkpoint entry FAILs here (and on each phase boundary), so the omission cannot reach handoff. Heuristic limit: relies on the commit-message task-id convention.
-- **Coverage gate — a number that was read, or an honest WARN.** `coverage_gate.py` parses the project's coverage report (istanbul `json-summary`, Cobertura XML, coverage.py JSON) and compares TOTAL line coverage against a floor resolved from `rules/code-quality-thresholds.txt:coverage.min_percent` (unset = 80), reporting which source the number came from. No parseable report means `WARN` — *the threshold was not verified* — never `PASS`. The per-changed-file and critical-path thresholds remain unenforced and are documented as such; claiming them from a total would be the laundering this gate was fixed to stop.
+- **Checkpoint-vs-git consistency.** `check_checkpoint_consistency.py` cross-checks the checkpoint against the real git history both ways: every `committed` task points at a SHA that exists, and every plan task referenced by a real commit of THIS item (the task id `T{N.M}` beside a `Plan: <slug>` line in the body — a bare task id is shared by every plan, which start at `T1.1`) is recorded `committed`. Nothing forces the halt-loop to update `.progress` at write time, but a task finished + committed without a matching checkpoint entry FAILs here (and on each phase boundary), so the omission cannot reach handoff. Heuristic limit: relies on the commit-message convention; a commit without the `Plan:` line is attributed to no item.
+- **Coverage gate — a number that was read, or an honest WARN.** `coverage_gate.py` (run by `run_validation.py`) parses the project's coverage report (istanbul `json-summary`, Cobertura XML, coverage.py JSON) and compares TOTAL line coverage against a floor resolved from `rules/code-quality-thresholds.txt:coverage.min_percent` (unset = 80), reporting which source the number came from. No parseable report means `WARN` — *the threshold was not verified* — never `PASS`. The per-changed-file and critical-path thresholds remain unenforced and are documented as such; claiming them from a total would be the laundering this gate was fixed to stop.
 
-- **Test-execution gate — a suite ran, in whatever language this repo speaks.** `suite_runners.py` detects every language manifest at the repo root and runs its suite: `npm test`, `pytest` (falling back to `unittest`), `go test ./...`, `cargo test`. The consolidating `test_execution` check **FAILs when a manifest is present and no suite executed** — including "pytest collected no tests" and "the toolchain is unavailable". Only a repo with no language manifest at all (genuine pre-code phase) may SKIP it. This closes the hole where a Python/Go/Rust repo skipped all four npm checks, landed on `PARTIAL`, and `PARTIAL` exits `0` — making `VALIDATION_GATE_PASSED` emittable with no test having run.
+- **Test-execution gate — a suite ran, in whatever language this repo speaks.** `suite_runners.py` (run by `run_validation.py`) detects every language manifest at the repo root and runs its suite: `npm test`, `pytest` (falling back to `unittest`), `go test ./...`, `cargo test`. The consolidating `test_execution` check **FAILs when a manifest is present and no suite executed** — including "pytest collected no tests" and "the toolchain is unavailable". Only a repo with no language manifest at all (genuine pre-code phase) may SKIP it. This closes the hole where a Python/Go/Rust repo skipped all four npm checks, landed on `PARTIAL`, and `PARTIAL` exits `0` — making `VALIDATION_GATE_PASSED` emittable with no test having run.
 - **Wiring summary — independently re-verified, never self-reported.** Symbols are derived from the committed diffs and `check_wiring.py` is re-run per symbol; a progress file claiming pillar (a) pass over an actually-uncalled symbol is caught as fabricated evidence (FAIL). Trusting the self-reported `wiring` field is the bypass this closes.
 - **TDD-shape gate — the Step 2 pre-loop gate, re-asserted.** `check_tdd_shape.py` runs again after the loop. It was invoked from `SKILL.md` prose only and no downstream gate asked whether it had run, so a halt-loop driven from a prose-only plan was indistinguishable from one driven from an executable plan. A task without an executable RED-test shape FAILs the validation.
 
@@ -124,6 +125,26 @@ Skipping mini review on phase boundary is a documented anti-pattern: design prob
 - **Acceptance-criteria gate** — `check_acceptance_criteria.py` enforces the plan's mechanizable AC/DoD that the command gates miss (file-size budget per changed file, CHANGELOG-updated) and surfaces non-mechanizable criteria (backward-compat) for human evidence instead of accepting a self-ticked box.
 - **Test-obligation gate** — `check_test_obligations.py`. Declared concurrency tests / failure scenarios must have at least one matching test in the tree; total absence when the plan promised them is a FAIL (a generic green suite never exercised them).
 - **`/code-quality` verdict ∉ {FAIL_HARD, INVALID}** — `cq_invoke.py`, called internally by `run_validation.py`. FAIL_SOFT and PASS_WITH_CAVEATS surface as WARN in the report but do not block. Override only with `--no-code-quality` (pre-code phase or CQ not installed).
+
+**A SKIP declares which kind it is.** `not_applicable` — the check has no subject here,
+`npm test` in a Go repository — is honest and counts as a skip. `precondition_missing` —
+the check has a subject and the thing it reads is absent — is a fact about the WORK and
+is counted with the failures. Measured 2026-09-21: a repository holding a plan and no
+checkpoint produced 16 SKIPs, `PARTIAL`, exit 0 — *proceed* — while four of those SKIPs
+said in their own words that `/implement` may not have run. The two checks this was
+already fixed for, one at a time, were `tdd_shape` and `test_execution`; this is the
+general form, and a missing checkpoint counts only when a plan for the slug exists,
+because without one `/implement` was never supposed to run.
+
+The same distinction reaches `test_execution`, which used to SKIP whenever it found no
+language manifest at the repo root. Measured 2026-09-21: a tree with committed Python
+sources and no manifest skipped every suite and exited 0, and adding a two-line manifest
+without touching a line of code turned the same tree into FAIL. What it reports now is
+what it looked for and did not find — a manifest, with committed sources beside it — and
+that pair is a missing precondition rather than a repository with nothing to test. The
+kit describes itself as shipping *"loose scripts"*, so sources with no manifest is a
+shape it produces on purpose; a suite that could not run over them is still a suite that
+did not run.
 
 Exit codes: `0` = `PASS` or `PARTIAL` (proceed); `1` = `FAIL` (trigger validation halt-loop — see below); `2` = invocation error — the check itself could not run, which is a broken contract rather than a failing slice: register it as its own item and return this one to the registry.
 
@@ -174,9 +195,9 @@ The promise `VALIDATION_GATE_PASSED` is emitted EXCLUSIVELY when `run_validation
 ## Output
 
 - Commits on the working branch.
-- `records/implementations/.progress-{slug}.json` — the runtime checkpoint (gitignored) the halt-loop writes each iteration and every gate reads. Schema: `skills/implement/templates/progress-schema.json`.
-- `records/implementations/{slug}/` — per-iteration logs.
-- `records/implementations/{slug}-implementation.md` — final summary with wiring triad checklist per task.
+- `.squad/records/implementations/.progress-{slug}.json` — the runtime checkpoint (gitignored) the halt-loop writes each iteration and every gate reads. Schema: `skills/implement/templates/progress-schema.json`.
+- `.squad/records/implementations/{slug}/` — per-iteration logs.
+- `.squad/records/implementations/{slug}-implementation.md` — final summary with wiring triad checklist per task.
 
 ## Cross-references
 
@@ -193,5 +214,5 @@ The promise `VALIDATION_GATE_PASSED` is emitted EXCLUSIVELY when `run_validation
   - Orchestrator: `skills/implement/scripts/mini_review.py`
   - Phase completeness: `skills/implement/scripts/check_phase_completeness.py`
   - Diff cohesion: `skills/implement/scripts/check_diff_cohesion.py`
-  - Reports persisted at: `records/mini-reviews/{slug}-phase{N}-review-{date}.md`
+  - Reports persisted at: `.squad/records/mini-reviews/{slug}-phase{N}-review-{date}.md`
   - Companion to `cycle-review.md` (final review): mini review runs per-phase; cycle-review runs once at the end. Both must pass for handoff.

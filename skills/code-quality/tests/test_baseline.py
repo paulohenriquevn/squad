@@ -135,18 +135,44 @@ def test_a_run_of_only_tooling_findings_baselines_nothing(tmp_path: Path) -> Non
 def test_writing_a_baseline_forces_the_network_off() -> None:
     """With the network on the Go symbol detector reported 4777 fabrications; without
     it, one. Two consecutive runs disagreed — 4818, then 4777. A baseline of that is
-    ~4800 network failures frozen in as if they were debt."""
+    ~4800 network failures frozen in as if they were debt.
+
+    Against the PRODUCTION rule. This used to build its own parser, re-declare the two
+    flags, re-run the conditional in its own body and assert that its own two lines did
+    what its own two lines say — an assertion that stayed green with the rule deleted.
+    """
     import argparse
 
-    from run_code_quality import main as cq_main  # noqa: F401  (import proves the path)
+    from run_code_quality import settle_network_mode
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--no-network", action="store_true")
-    parser.add_argument("--write-baseline", action="store_true")
-    args = parser.parse_args(["--write-baseline"])
-    if getattr(args, "write_baseline", False):
-        args.no_network = True
+    args = argparse.Namespace(write_baseline=True, network=True, no_network=False)
+    settle_network_mode(args)
+
     assert args.no_network is True
+
+
+def test_offline_is_the_default_without_any_flag() -> None:
+    """A verdict typed by hand gets the deterministic path, not the networked one."""
+    import argparse
+
+    from run_code_quality import settle_network_mode
+
+    args = argparse.Namespace(write_baseline=False, network=False, no_network=False)
+    settle_network_mode(args)
+
+    assert args.no_network is True
+
+
+def test_the_explicit_opt_in_reaches_the_network() -> None:
+    """`--network` is the knowing choice, and it must survive the rule."""
+    import argparse
+
+    from run_code_quality import settle_network_mode
+
+    args = argparse.Namespace(write_baseline=False, network=True, no_network=False)
+    settle_network_mode(args)
+
+    assert args.no_network is False
 
 
 # ── the Go detector defects that kept a language off for a year ───────────────

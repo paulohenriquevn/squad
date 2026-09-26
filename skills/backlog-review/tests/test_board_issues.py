@@ -157,7 +157,12 @@ def test_a_re_read_of_an_unchanged_tracker_is_not_a_change(tmp_path, monkeypatch
     _gh(monkeypatch, stdout=json.dumps([_issue(5, "OPEN", ["bug"])]))
     first = fetch(tmp_path)
     second = fetch(tmp_path)
-    assert first["fetched_at"] != second["fetched_at"] or True
+    # The premise, asserted as a premise. `!= ... or True` was written because two
+    # reads can land in one clock tick, and `or True` makes the whole line
+    # unconditionally true — it asserted nothing at all, in either direction.
+    # What matters here is that the field is PRESENT on both, so the digest below
+    # is demonstrably ignoring something the reads carry.
+    assert first["fetched_at"] and second["fetched_at"]
     assert digest(first) == digest(second)
 
 

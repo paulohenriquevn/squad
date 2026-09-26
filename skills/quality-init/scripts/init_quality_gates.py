@@ -4,10 +4,16 @@
 Analyzes a target project, calibrates thresholds from actual code metrics,
 and emits PostToolUse hook scripts + settings.json patch.
 
-This module is a thin orchestrator. The work is split across lib submodules:
-  - lib.detect    — environment detection (languages, frameworks, linters, dirs)
-  - lib.calibrate — metric calibration (percentiles, thresholds)
-  - lib.emit      — emission (hook scripts, settings.json patch)
+This module is a thin orchestrator. The work is split across `gate_authoring/`:
+  - gate_authoring.detect      — environment detection (languages, frameworks, dirs)
+  - gate_authoring.calibrate   — metric calibration (percentiles, thresholds)
+  - gate_authoring.emit        — emission (hook scripts, settings.json patch)
+  - gate_authoring.path_safety — containment for the caller-supplied `--out`
+
+The package was called `lib/` when this paragraph was written and has not been since.
+A reader following it looked for three modules that do not exist, under a name that
+does not either — and missed `path_safety`, which is the one that decides where the
+generated hooks are allowed to land.
 
 Exit codes:
   0 — success
@@ -44,8 +50,8 @@ from gate_authoring.calibrate import (
     # from here. They stayed OUT of `__all__` — a private name in a public surface
     # is the contradiction D3 flagged in this file — but remain importable, which is
     # what the test needs. Without the noqa, `ruff --fix` deletes them as unused.
-    _measure_python_metrics,  # noqa: F401
-    _percentile,  # noqa: F401
+    _measure_python_metrics,  # noqa: F401 — deliberate re-export, see the note above
+    _percentile,  # noqa: F401 — deliberate re-export, see the note above
     calibrate_thresholds,
     measure_blocking_rate,
 )
@@ -59,6 +65,7 @@ from gate_authoring.detect import (
     validate_target,
 )
 from gate_authoring.emit import generate_hook_scripts, patch_settings_json
+from gate_authoring.path_safety import confine
 
 # Re-exports above keep the public import surface stable for tests, which
 # import these symbols directly from init_quality_gates.
@@ -127,10 +134,10 @@ def smoke_test_tools(
     # Lizard is optional (multi-language support)
     lizard_available = False
     try:
-        result = subprocess.run(  # noqa: PLW1510
+        result = subprocess.run(
             ["python3", "-c", "import lizard; print(lizard.version)"],
             capture_output=True, text=True, timeout=10,
-        )
+         check=False)
         lizard_available = result.returncode == 0
     except (FileNotFoundError, subprocess.TimeoutExpired):
         pass
@@ -165,13 +172,13 @@ def validate_round_trip(hooks_dir: str, verbose: bool = False) -> bool:
     })
 
     try:
-        result = subprocess.run(  # noqa: PLW1510
+        result = subprocess.run(
             ["python3", str(hook_script)],
             input=synthetic_event,
             capture_output=True,
             text=True,
             timeout=15,
-        )
+         check=False)
     except subprocess.TimeoutExpired:
         print(f"Hook script timed out during validation: {hook_script}", file=sys.stderr)
         raise SystemExit(4)
@@ -382,7 +389,14 @@ def main() -> None:
 
     # Stage 8
     _log("Stage 8/10: generate_hook_scripts", args.verbose)
-    hooks_dir = args.out or str(Path(result.target) / ".claude" / "hooks")
+    # `--out` is caller-supplied and `generate_hook_scripts` WRITES executable hook
+    # scripts under it. `path_safety.confine` was written for exactly this, declares
+    # itself "prevent path traversal outside project root", and was imported by
+    # nothing — so `--out ../../../etc` wrote outside the target and the run reported
+    # success. A guard that exists and is not wired is worse than no guard: the reader
+    # who finds the module concludes the case is handled.
+    hooks_dir = (confine(result.target, args.out) if args.out
+                 else str(Path(result.target) / ".claude" / "hooks"))
     result.hooks_dir = generate_hook_scripts(
         hooks_dir,
         result.thresholds,

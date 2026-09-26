@@ -68,7 +68,7 @@ class _Recorder:
     def __call__(self, cmd: list[str], **kwargs: object) -> il.Ran:
         self.calls.append(cmd)
         if cmd and cmd[0] != "gh":
-            return self._real(cmd, **kwargs)  # type: ignore[arg-type]
+            return self._real(cmd, **kwargs)  # type: ignore[arg-type] — the spy widens kwargs to object to accept any caller
         if self.fail_on and self.fail_on in " ".join(cmd):
             return il.Ran(False, "", "gh: could not resolve to a Repository")
         return il.Ran(True, "", "")
@@ -261,3 +261,52 @@ def test_fleet_supervisor_calls_issue_lifecycle_after_the_lander() -> None:
 
     assert "issue_lifecycle" in content
     assert content.index("fleet_lander") < content.index("issue_lifecycle")
+
+
+def test_the_tracker_mutations_name_the_repository_they_act_on(tmp_path) -> None:
+    """Eight git calls carried `git -C <repo>` and the two `gh` MUTATIONS carried nothing.
+
+    `gh issue edit` and `gh issue close` resolve the repository from the process's working
+    directory, so `--repo` moved the reads and left the writes pointing wherever the tool
+    happened to run — an issue labelled or closed in the wrong tracker, silently.
+    """
+    import inspect
+
+    import issue_lifecycle as il
+
+    for name in ("label_issues", "close_shipped"):
+        fn = getattr(il, name, None)
+        if fn is None:
+            continue
+        source = inspect.getsource(fn)
+        if '"gh"' in source:
+            assert "_scoped(" in source, (
+                f"{name} still issues an unscoped gh mutation")
+
+
+def test_the_slug_is_read_from_the_remote_not_from_gh(tmp_path) -> None:
+    """`gh` cannot resolve an SSH host alias, and the alias is the case this exists for."""
+    import subprocess as sp
+
+    import issue_lifecycle as il
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    sp.run(["git", "-C", str(repo), "init", "-q"], check=True)
+    sp.run(["git", "-C", str(repo), "remote", "add", "origin",
+            "git@my-alias:owner/name.git"], check=True)
+
+    assert il.tracker_slug(repo) == "owner/name"
+
+
+def test_a_repository_with_no_remote_leaves_the_call_unscoped(tmp_path) -> None:
+    """None keeps the previous behaviour rather than inventing a repository."""
+    import subprocess as sp
+
+    import issue_lifecycle as il
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    sp.run(["git", "-C", str(repo), "init", "-q"], check=True)
+
+    assert il.tracker_slug(repo) is None

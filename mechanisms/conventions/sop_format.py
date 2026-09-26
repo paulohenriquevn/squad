@@ -35,23 +35,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from squad.paths import (
     DURABLE_LEAVES,
-    LEGACY_RECORDS_ROOTS,
-    LEGACY_WIKI_ROOTS,
     records_dir,
+    resolve_knowledge_dir as _resolve_knowledge_dir,
+    wiki_dir as _wiki_dir,
 )
-from squad.paths import resolve_knowledge_dir as _resolve_knowledge_dir
-from squad.paths import wiki_dir as _wiki_dir
 
-__all__ = ["DURABLE_LEAVES", "KB_DIRS", "WIKI_DIRS", "knowledge_base_dir",
-           "resolve_knowledge_dir", "wiki_dir", "split_frontmatter"]
-
-#: Every data-root literal now lives in `squad/paths.py`, and this module re-exports
-#: what its consumers already import. Six modules each held their own copy of this
-#: list, in four different orders, and a reader resolving one order found a directory a
-#: writer using another had never filled. `check_write_containment.py` fails any kit
-#: file outside the owner that names a root, so the copies cannot come back.
-KB_DIRS = LEGACY_RECORDS_ROOTS
-WIKI_DIRS = LEGACY_WIKI_ROOTS
+# `__all__` now names what this module IS. It used to declare `KB_DIRS` and `WIKI_DIRS`
+# — re-exports of two `squad.paths` tuples that no Python file anywhere imports — while
+# omitting `section`, `bullets`, `has_content` and `excerpt`, which are the one
+# implementation of the SOP shape and the reason the module exists. An `__all__` that
+# advertises the wrong half tells a reader looking for the parser that it is not here.
+__all__ = ["DURABLE_LEAVES", "bullets", "excerpt", "has_content", "knowledge_base_dir",
+           "resolve_knowledge_dir", "section", "split_frontmatter", "wiki_dir"]
 
 
 def knowledge_base_dir(project_root: Path, leaf: str) -> Path | None:

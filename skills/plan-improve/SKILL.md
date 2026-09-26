@@ -108,7 +108,7 @@ The promise `<promise>PLAN_IMPROVED</promise>` is emitted EXCLUSIVELY when the s
 | TDD template in bug-fix tasks | A — deterministic | template injection before #### Acceptance Criteria | Low |
 | ADR alternatives | B — LLM | Claude reads ADR context, proposes plausible alternative, adds to Rationale; if not credible, leaves a TODO | Medium |
 
-**Phase A (apply_fixes.py)** is invoked first via Bash. **Phase B (LLM)** runs only if Phase A doesn't reach target.
+**Phase A (apply_plan_fixes.py)** is invoked first via Bash. **Phase B (LLM)** runs only if Phase A doesn't reach target.
 
 ## Anti-patterns
 
@@ -120,7 +120,7 @@ The promise `<promise>PLAN_IMPROVED</promise>` is emitted EXCLUSIVELY when the s
 
 ## Hard limits
 
-- `apply_fixes.py` is DETERMINISTIC — same input always produces same output. Idempotent: running twice = no second change.
+- `apply_plan_fixes.py` is DETERMINISTIC — same input always produces same output. Idempotent: running twice = no second change.
 - Phase B LLM iterations use the main model.
 - The loop has no iteration cap; it runs until the target verdict is reached on disk OR a stop condition fires. If many iterations pass without convergence and no-progress is detected, the no-improvement stop condition (see § Stop conditions) HALTS the loop honestly without emitting the promise.
 
@@ -152,7 +152,7 @@ Diff: <git diff against working tree>
 
 - Scorer: `.claude/skills/plan-confidence/SKILL.md`
 - Loop engine: `ralph-loop` plugin (must be enabled in `~/.claude/settings.json`)
-- Fix script: `.claude/skills/plan-improve/scripts/apply_fixes.py`
+- Fix script: `.claude/skills/plan-improve/scripts/apply_plan_fixes.py`
 - Prompt template: `.claude/skills/plan-improve/prompts/improvement-prompt.md`
 
 ## Limitations (honest)

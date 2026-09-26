@@ -1,4 +1,5 @@
 # Cycle Rule Schema
+<!-- rule-id: SQ-CYC-16 -->
 
 Canonical schema for every `rules/cycle-*.md` file. Defines required vs optional sections, the canonical vocabulary for verdicts and completion promises, and the rationale for why each cycle has a vocabulary of its own.
 
@@ -78,7 +79,7 @@ summed into one number:
 
 | Class | Claims | Dated? |
 |---|---|---|
-| `judgement` | automating it would grade LANGUAGE, not the work. Permanent by decision, and pressure-tested across model tiers ([judgement-gates-are-insurance](../.squad/wiki/references/judgement-gates-are-insurance.md)) | no |
+| `judgement` | automating it would grade LANGUAGE, not the work. Permanent by decision, and pressure-tested across model tiers ([judgement-gates-are-insurance](https://github.com/paulohenriquevn/squad/blob/main/docs/wiki/references/judgement-gates-are-insurance.md)) | no |
 | `debt` | it is missing, and the line says what | **yes** — `since YYYY-MM-DD` |
 | `regression` | a mechanism **existed and was withdrawn**. Lost coverage, not debt never paid | **yes** |
 | `external` | a third-party plugin enforces it; this kit states the wiring and cannot verify it | no |
@@ -170,13 +171,13 @@ keeps only its own deviations.
 A golden rule is LOCKED. Changing it requires ALL of:
 
 1. An ADR in `docs/ADR/` proposing the change — **versioned, because the record has to
-   reach whoever clones**. This step named `records/adrs/` until 2026-09-07, and
+   reach whoever clones**. This step named `.squad/records/adrs/` until 2026-09-07, and
    `.gitignore` excludes `records/` wholesale, so the justification for changing the
    kit's most locked contracts went to a directory that travels nowhere. The
    contradiction was already load-bearing: `plan-confidence-golden-rule.md` extended a
    gate on 2026-08-26 and had to write its reasoning into the golden rule instead,
    saying so in the file — somebody following the protocol had to break it to be
-   useful. A **consumer's** run-local ADRs stay under `records/adrs/`; that is their
+   useful. A **consumer's** run-local ADRs stay under `.squad/records/adrs/`; that is their
    repository and their trail, and it is what `code-quality-allowlist.txt` and
    `deps-audit-allowlist.txt` mean when they require one for an exemption.
 2. A CHANGELOG entry under `[Unreleased] § Changed`.

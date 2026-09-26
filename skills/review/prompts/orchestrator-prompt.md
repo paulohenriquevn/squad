@@ -14,11 +14,12 @@ Run:
 
 ```bash
 python3 .claude/skills/review/scripts/detect_domain.py \
-  --plan .claude/records/plans/{SLUG}-plan.md \
-  --diff-base main
+  --plan .claude/records/plans/{SLUG}-plan.md
 ```
 
-Read the output. Note the primary domain + 0-3 secondary domains + keywords.
+Read the output. Note the primary domain + 0-3 secondary domains + keywords, and the
+`diff_base` it resolved — pass that same ref to every later step. Exit 2 means the
+base did not resolve; stop there, never carry on with an empty domain list.
 
 ### Step 3 — Spawn specialized agents
 
@@ -31,6 +32,7 @@ python3 .claude/skills/review/scripts/spawn_reviewers.py \
   --date $(date -u +%Y-%m-%d) \
   --primary-domain {PRIMARY_DOMAIN} \
   --secondary-domains "{SECONDARY_DOMAINS}" \
+  --diff-base "{DIFF_BASE}" \
   --output-dir .claude/agents/review-{SLUG}-$(date -u +%Y-%m-%d)/
 ```
 

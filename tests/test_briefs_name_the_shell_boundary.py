@@ -32,7 +32,10 @@ _FLEET = REPO / "mechanisms" / "fleet"
 if str(_FLEET) not in sys.path:
     sys.path.insert(0, str(_FLEET))
 
-import fleet_router  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+import fleet_router  # noqa: E402 — post-bootstrap import
 
 _REPO = "/srv/example/kit"
 

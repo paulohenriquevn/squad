@@ -29,6 +29,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "mechanisms" / "gates"))
 from check_merge_autonomy import (
     PremiseResult,
     check_merge_autonomy,
+    check_merge_autonomy_detail,
 )
 
 
@@ -167,3 +168,92 @@ def test_the_permanent_causes_are_named() -> None:
     for phrase in ("NEVER resolve", "Upgrade to GitHub Pro", "SSH host alias",
                    "ORIGIN guarantee"):
         assert phrase in source, f"the UNCHECKED message does not name: {phrase}"
+
+
+def test_a_repository_gh_cannot_resolve_is_not_read_as_an_unprotected_trunk() -> None:
+    """The third marker was the bare string "not found", which matches far more than 404.
+
+    Measured by injecting a runner: `GraphQL: Could not resolve to a Repository with the
+    name (repository not found)` contains it, so a repository `gh` cannot see at all was
+    classified as a trunk with no protection — HOLDS, exit 0, the premise the whole
+    envelope rests on satisfied by an error message.
+    """
+    unresolvable = _gh(
+        "", returncode=1,
+        stderr="GraphQL: Could not resolve to a Repository with the name "
+               "'acme/private' (repository not found)")
+
+    assert check_merge_autonomy(trunk="main", gh=unresolvable) is PremiseResult.UNCHECKED
+
+
+def test_a_trunk_with_no_protection_still_satisfies_the_premise() -> None:
+    """The narrowing must not cost the case the markers exist for."""
+    unprotected = _gh("", returncode=1, stderr="Branch not protected (HTTP 404)")
+
+    assert check_merge_autonomy(trunk="main", gh=unprotected) is PremiseResult.HOLDS
+
+
+def test_a_permanent_cause_reaches_the_reader_instead_of_a_bare_unchecked() -> None:
+    """The loop over `_PERMANENT_MARKERS` returned what the fall-through returned.
+
+    Both arms answered UNCHECKED, so the loop could not change any observable behaviour,
+    and the comment beside it named a `permanent_cause` field that existed nowhere in the
+    repository. The two causes the constant was added for — a private repo whose plan
+    does not expose branch protection, and an SSH host alias — were indistinguishable
+    from "gh is not installed", whose stated remediation is to install it.
+    """
+    private = _gh("", returncode=1,
+                  stderr="HTTP 403: Upgrade to GitHub Pro or make this repository public")
+
+    result, cause = check_merge_autonomy_detail(trunk="main", gh=private)
+
+    assert result is PremiseResult.UNCHECKED
+    assert cause and "plan does not expose branch protection" in cause
+
+
+def test_an_ordinary_unchecked_carries_no_cause() -> None:
+    absent = _gh_absent()
+
+    result, cause = check_merge_autonomy_detail(trunk="main", gh=absent)
+
+    assert result is PremiseResult.UNCHECKED
+    assert cause is None
+
+
+def _gh_absent():
+    def run(_args: list[str]) -> tuple[int, str, str]:
+        raise FileNotFoundError("gh")
+    return run
+
+
+def test_an_ssh_host_alias_still_resolves_the_repository() -> None:
+    """A remote `gh` cannot resolve is not a repository whose protection is unreadable.
+
+    Measured across a consumer ecosystem on 2026-09-18: 16 of 17 repositories reach GitHub
+    through an SSH host alias (`git@git-alias:owner/name.git`), so every unaided
+    `gh api repos/{owner}/{repo}/...` fails with "none of the git remotes configured for
+    this repository point to a known GitHub host" and this gate returned UNCHECKED on all
+    of them, permanently. The premise floor 2 rests on was therefore never once verified.
+
+    The slug is in the remote URL in plain text. Reading it there costs one `git` call and
+    turns a permanent UNCHECKED into the answer the gate was written to produce.
+    """
+    calls: list[list[str]] = []
+
+    def run(args: list[str]) -> tuple[int, str, str]:
+        calls.append(args)
+        if args[:3] == ["git", "remote", "get-url"]:
+            return 0, "git@git-alias:acme/widget.git\n", ""
+        if "{owner}" in " ".join(args):
+            return 1, "", (
+                "unable to expand placeholder in path: none of the git remotes configured "
+                "for this repository point to a known GitHub host."
+            )
+        return 0, json.dumps(
+            {"required_pull_request_reviews": {"required_approving_review_count": 0}}
+        ), ""
+
+    assert check_merge_autonomy(trunk="main", gh=run) is PremiseResult.HOLDS
+    assert any("acme/widget" in " ".join(c) for c in calls), (
+        "the gate never asked about the repository the remote names"
+    )

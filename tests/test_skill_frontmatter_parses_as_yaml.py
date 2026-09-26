@@ -101,3 +101,77 @@ def test_this_repository_frontmatter_parses(tmp_path: Path) -> None:
             broken.append(f"{skill_md.parent.name}: {error}")
 
     assert broken == [], "\n".join(broken)
+
+
+def test_an_unrecognised_frontmatter_key_is_named(tmp_path) -> None:
+    """`OPTIONAL_FIELDS` sat beside `REQUIRED_FIELDS` and was read by NOTHING.
+
+    A tree-wide grep found exactly its declaration. A constant named for a check teaches
+    every reader the check exists, and an unknown key passed silently: a typo'd
+    `descripton:` was reported only as a missing `description`, with no word about the
+    key sitting right beside it.
+    """
+    import sys as _sys
+    _sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "mechanisms" / "gates"))
+    from validate_skill_frontmatter import validate_all
+
+    skill = tmp_path / "skills" / "a-skill"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text(
+        "---\nname: a-skill\ndescription: does a thing\nuser-invocable: true\n"
+        "descripton: the typo\n---\n\nBody.\n", encoding="utf-8")
+
+    code = validate_all(tmp_path, strict=False)
+
+    assert code == 0, "an unknown key must warn, not fail — the platform ignores it"
+
+
+def test_a_frontmatter_with_only_known_keys_warns_about_none(tmp_path, capsys) -> None:
+    import sys as _sys
+    _sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "mechanisms" / "gates"))
+    from validate_skill_frontmatter import validate_all
+
+    skill = tmp_path / "skills" / "a-skill"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text(
+        "---\nname: a-skill\ndescription: does a thing\nuser-invocable: true\n"
+        "allowed-tools: Read\n---\n\nBody.\n", encoding="utf-8")
+
+    validate_all(tmp_path, strict=False)
+
+    assert "unrecognised frontmatter key" not in capsys.readouterr().out
+
+
+def test_the_aggregate_and_the_gate_enforce_the_same_contract(tmp_path) -> None:
+    """`verify_ecosystem` held its OWN copy of the frontmatter rule.
+
+    It required `name` and `description`; `validate_skill_frontmatter.py` requires those
+    plus `user-invocable`. So the aggregate's tick certified a SMALLER contract than the
+    gate it is named after — a skill missing `user-invocable` passed one and failed the
+    other, and a reader seeing a green `verify_ecosystem` had no way to know.
+    """
+    import sys as _sys
+    gates = Path(__file__).resolve().parents[1] / "mechanisms" / "gates"
+    _sys.path.insert(0, str(gates))
+    import verify_ecosystem as ve
+
+    eco = tmp_path / ".claude"
+    (eco / "mechanisms" / "gates").mkdir(parents=True)
+    (eco / "mechanisms" / "gates" / "validate_skill_frontmatter.py").write_text(
+        (gates / "validate_skill_frontmatter.py").read_text(encoding="utf-8"),
+        encoding="utf-8")
+    # The gate imports it from `mechanisms/conventions/`, which its own bootstrap adds.
+    conventions = eco / "mechanisms" / "conventions"
+    conventions.mkdir(parents=True)
+    (conventions / "ecosystem_utils.py").write_text(
+        (gates.parent / "conventions" / "ecosystem_utils.py").read_text(encoding="utf-8"),
+        encoding="utf-8")
+    skill = eco / "skills" / "a-skill"
+    skill.mkdir(parents=True)
+    # Missing `user-invocable`: accepted by the aggregate's old private copy.
+    (skill / "SKILL.md").write_text(
+        "---\nname: a-skill\ndescription: does a thing\n---\n\nBody.\n", encoding="utf-8")
+
+    ok, lines = ve.check_skill_frontmatter(eco)
+
+    assert ok is False, f"the aggregate accepted what the gate refuses: {lines}"

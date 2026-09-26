@@ -8,16 +8,19 @@ from pathlib import Path
 
 SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
 
-from run_structural import (  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+# Unconditional. The try/except bound this to None on ImportError and five regression
+# tests below opened with `if _merge_code_quality_verdict is None: return`, so a rename
+# would have emptied all five in silence instead of failing collection. The helper has
+# existed since the extraction the comment anticipated; the guard outlived it.
+from run_structural import (  # noqa: E402 — post-bootstrap import
     M2_ACTIVE_DIMENSIONS,
+    _merge_code_quality_verdict,  # noqa: E402 — post-bootstrap import
     renormalize_weights,
     run_structural,
 )
-
-try:
-    from run_structural import _merge_code_quality_verdict  # noqa: E402
-except ImportError:
-    _merge_code_quality_verdict = None  # type: ignore[assignment]
 
 SKILL_ROOT = Path(__file__).parent.parent
 FIXTURES = SKILL_ROOT / "fixtures"
@@ -209,8 +212,6 @@ def test_runtime_metric_proof_missing_coverage_triggers_cap() -> None:
 
 def test_merge_cq_pass_does_not_change_verdict() -> None:
     """PASS verdict (no caps) leaves plan-confidence verdict untouched."""
-    if _merge_code_quality_verdict is None:
-        return  # function not yet extracted — test will run after GREEN
     out: dict = {"verdict": "SHIPPABLE", "final_score_after_caps": 95, "hard_caps_triggered": []}
     cq = {"verdict": "PASS", "score_cap": 100, "hard_caps_triggered": [], "soft_caps_triggered": []}
     _merge_code_quality_verdict(out, cq)
@@ -222,8 +223,6 @@ def test_merge_cq_pass_with_caveats_caps_at_89_no_invalid() -> None:
     """Regression test for 2026-05-23 bug: PASS_WITH_CAVEATS (allowlist-downgraded) MUST cap at 89,
     NOT force INVALID. Symbol fab findings allowlisted via sunset are downgraded to SOFT_FLOOR
     severity by /code-quality; plan-confidence MUST respect that downgrade."""
-    if _merge_code_quality_verdict is None:
-        return  # function not yet extracted — test will run after GREEN
     out: dict = {"verdict": "SHIPPABLE", "final_score_after_caps": 95, "hard_caps_triggered": []}
     cq = {
         "verdict": "PASS_WITH_CAVEATS",
@@ -243,8 +242,6 @@ def test_merge_cq_pass_with_caveats_caps_at_89_no_invalid() -> None:
 
 def test_merge_cq_fail_soft_caps_at_70_non_shippable() -> None:
     """FAIL_SOFT (real SOFT_CAP findings, not allowlisted) caps plan at 70 → NON_SHIPPABLE band."""
-    if _merge_code_quality_verdict is None:
-        return
     out: dict = {"verdict": "SHIPPABLE", "final_score_after_caps": 95, "hard_caps_triggered": []}
     cq = {
         "verdict": "FAIL_SOFT",
@@ -259,8 +256,6 @@ def test_merge_cq_fail_soft_caps_at_70_non_shippable() -> None:
 
 def test_merge_cq_fail_hard_forces_invalid() -> None:
     """FAIL_HARD (real HARD findings, no allowlist) forces INVALID (49 cap)."""
-    if _merge_code_quality_verdict is None:
-        return
     out: dict = {"verdict": "SHIPPABLE", "final_score_after_caps": 95, "hard_caps_triggered": []}
     cq = {
         "verdict": "FAIL_HARD",
@@ -275,8 +270,6 @@ def test_merge_cq_fail_hard_forces_invalid() -> None:
 
 def test_merge_cq_smallest_cap_wins() -> None:
     """If plan already capped lower than code-quality cap, plan's cap stays."""
-    if _merge_code_quality_verdict is None:
-        return
     out: dict = {"verdict": "INVALID", "final_score_after_caps": 49, "hard_caps_triggered": ["coverage_lt_100"]}
     cq = {
         "verdict": "PASS_WITH_CAVEATS",
@@ -294,7 +287,7 @@ def test_merge_cq_smallest_cap_wins() -> None:
 
 # T1.2 — patterns-skill consumption hard cap (patterns-consumption-gate-plan)
 
-import tempfile  # noqa: E402
+import tempfile  # noqa: E402 — post-bootstrap import
 
 
 def _eco_with_pgvector_patterns(plan_body: str) -> Path:

@@ -56,8 +56,11 @@ So severity is EXTRACTED, carried, and labelled a signal. This kit's governing
 sentence cuts both ways: an inability to measure must not become a passing
 measurement, and it must not become a failing one either.
 
-What still has teeth is fully decidable: a required audit that left no report, and a
-report the plugin's OWN checker rejects.
+What still has teeth is fully decidable: a required audit that left no report, a
+report the plugin's OWN checker rejects, and a report that says its own run stopped
+before the report phase (`Status: INCOMPLETE`, written by the plugins' shared
+termination guard). The last one is well-formed by design, which is exactly why
+structural validity alone recorded an audit stopped on its iteration cap as covered.
 
 ## What this gate does NOT judge
 
@@ -68,10 +71,17 @@ gate says plainly that it did not assess it. A gate that examined nothing must n
 print a verdict about everything.
 
 Exit codes:
-  0  every required audit produced a well-formed report, and none reports Critical
-  1  a required report is missing, malformed, or carries Critical findings
+  0  every required audit produced a well-formed report
+  1  a required report is missing, malformed, or says its run stopped INCOMPLETE
   2  the assignment or a checker could not be read; nothing was verified, not a pass
   3  a required plugin is not installed HERE — an `access` impediment
+
+Severity is CARRIED, never gated. Rows 0 and 1 said "and none reports Critical" and
+"or carries Critical findings" until 2026-09-17, describing a gate the section above
+argues against and the code never had: `severity_counts()` becomes `severity_signal`
+in the result and `main` prints it as "(not a gate)", and nothing appends to `failing`
+because of it. A reader who trusted the table believed a Critical finding would stop
+a review here; it does not, and the row that says so is the only thing that changed.
 """
 from __future__ import annotations
 
@@ -84,15 +94,28 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "cycle"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "conventions"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from installed_plugins import load as load_plugins
 from select_auditors import assignment_path, parse_registry, registry_path
 
+from squad.paths import rules_dir
+
 COVERED, NOT_COVERED, UNCHECKED, NOT_INSTALLED = 0, 1, 2, 3
 
-#: The contract's sentinel for a subsection that found nothing. Matched as a prefix
-#: because plugins append a reason ("_(none — no findings above Low)_").
-_NONE_SENTINEL = "_(none"
+#: The contract's sentinels for a subsection that holds no finding. Matched as a prefix
+#: because plugins append a reason ("_(none — no findings above Low)_"). The second is
+#: the termination guard's: a run stopped on its cap writes "_(not enumerated — run did
+#: not reach the report phase)_" under every severity, and reading that as a finding
+#: labelled a report that enumerated nothing with all five severities.
+_EMPTY_SENTINELS = ("_(none", "_(not enumerated")
+
+#: How the plugins' shared termination guard (`terminal_report.py`, `render_fallback`)
+#: marks a run that stopped before its report phase: `- **Status:** INCOMPLETE` in the
+#: metadata, and a `## Verdict` that opens with the token. Either is enough.
+_STATUS_INCOMPLETE = re.compile(r"^\s*-\s*\*\*Status:\*\*\s*`?INCOMPLETE\b", re.MULTILINE)
+_VERDICT_INCOMPLETE = re.compile(r"^`?INCOMPLETE\b")
+_STOP_CONDITION = re.compile(r"on condition\s+`([^`]+)`")
 
 _H2 = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
 _H3 = re.compile(r"^###\s+(.+?)\s*$", re.MULTILINE)
@@ -122,8 +145,25 @@ def severity_counts(text: str) -> dict[str, bool]:
     out: dict[str, bool] = {}
     for sev in SEVERITIES:
         sub = section(body, sev, _H3)
-        out[sev] = bool(sub) and not sub.lstrip().startswith(_NONE_SENTINEL)
+        out[sev] = bool(sub) and not sub.lstrip().startswith(_EMPTY_SENTINELS)
     return out
+
+
+def stopped_before_its_report(text: str) -> str | None:
+    """The stop condition when this report says its run did not finish, else None.
+
+    This is the one reading of another tool's markdown this gate makes a decision on,
+    and it is narrow on purpose: the marker is written by ONE shared function, copied
+    bit-for-bit into every plugin and drift-checked there, and it is the report saying
+    about itself that no verdict was computed. Structural validity cannot see it — the
+    fallback is well-formed by design, so an honest "I did not finish" passed as a
+    finished audit. Returns "unknown" when the run says it stopped and not why.
+    """
+    verdict = section(text, "Verdict") or ""
+    if not (_STATUS_INCOMPLETE.search(text) or _VERDICT_INCOMPLETE.match(verdict.lstrip())):
+        return None
+    found = _STOP_CONDITION.search(verdict)
+    return found.group(1) if found else "unknown"
 
 
 def validate_with_plugin(install_path: Path, report: Path) -> tuple[bool, str]:
@@ -147,7 +187,108 @@ def validate_with_plugin(install_path: Path, report: Path) -> tuple[bool, str]:
     return False, f"the plugin's own checker rejected the report: {detail[:400]}"
 
 
-def find_report(project: Path, output_dir: str, glob: str) -> Path | None:
+#: The contract the plugin side emits, negotiated 2026-09-22. Version bumps when the
+#: SHAPE changes; a reader that meets an unknown one refuses rather than taking the
+#: fields it recognises, because reading part of an unknown shape is guessing at the rest.
+VERDICT_FILE = "verdict.json"
+VERDICT_SCHEMA = 1
+
+
+def read_verdict(output_dir: Path) -> dict:
+    """What the plugin says its verdict is, and whether this gate may act on it.
+
+    THE DISTINCTION THIS EXISTS FOR. The plugins session measured all seventeen: five
+    compute the verdict in a script, twelve derive it in the agent from a declared query
+    over persisted findings. **None asserts one freehand** — that correction came from
+    the measurement and neither of us had assumed it. What differs is who runs the
+    derivation, and the two carry different guarantees:
+
+        source: computed          a script produced it. Gateable.
+        source: derived-by-agent  a model produced it, following the rule in its `.md`.
+                                  Carried and reported, never gated on — the treatment
+                                  `severity_signal` already has, for the same reason.
+
+    `computed` WITHOUT `by` IS DEMOTED. The plugin's `emit_verdict.py` requires `--by`
+    with `--source computed` and refuses the emit without it, so a file carrying
+    `computed` and no `by` was not written by that emitter; it is indistinguishable
+    from one typed by a model that read the contract, which is the confusion `source`
+    exists to end.
+
+    AN ABSENT FILE IS `verdict_not_exposed`, never "no findings". Sixteen of seventeen
+    plugins are in that state today. That is the same distinction this gate already
+    draws between `not_installed` and `no_report`: did not happen, versus happened and
+    passed.
+
+    WHAT THIS DOES NOT CLAIM. `computed` proves a script produced the token. It does not
+    prove the script is right — correctness stays with the plugin, where
+    `verify_report_format.py` says it stays. Written down because a gate of this kit was
+    overread exactly that way on the same day.
+    """
+    path = Path(output_dir) / VERDICT_FILE
+    if not path.is_file():
+        return {"state": "verdict_not_exposed", "gateable": False, "verdict": None,
+                "detail": f"no {VERDICT_FILE} beside the report; this plugin exposes no "
+                          f"decidable verdict, which is not the same as reporting none"}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        return {"state": "verdict_not_exposed", "gateable": False, "verdict": None,
+                "detail": f"{VERDICT_FILE} could not be read: {error}"}
+    if not isinstance(payload, dict):
+        return {"state": "verdict_not_exposed", "gateable": False, "verdict": None,
+                "detail": f"{VERDICT_FILE} is not an object"}
+    if payload.get("schema") != VERDICT_SCHEMA:
+        return {"state": "verdict_not_exposed", "gateable": False, "verdict": None,
+                "detail": f"{VERDICT_FILE} declares schema {payload.get('schema')!r} and "
+                          f"this gate reads {VERDICT_SCHEMA}; reading the fields it "
+                          f"recognises would be guessing at the rest"}
+
+    source = payload.get("source")
+    verdict = payload.get("verdict")
+    if not verdict or source not in ("computed", "derived-by-agent"):
+        return {"state": "verdict_not_exposed", "gateable": False, "verdict": None,
+                "detail": f"{VERDICT_FILE} names source {source!r} and verdict "
+                          f"{verdict!r}; both are required"}
+
+    by = payload.get("by")
+    if source == "computed" and not by:
+        return {"state": "derived-by-agent", "gateable": False, "verdict": verdict,
+                "blocking_count": payload.get("blocking_count"),
+                "detail": "declares `computed` and names no `by`, so the stronger "
+                          "guarantee is not demonstrated and this reads as the weaker one"}
+
+    return {"state": source, "gateable": source == "computed", "verdict": verdict,
+            "by": by, "blocking_count": payload.get("blocking_count"),
+            "detail": f"{source}" + (f" by {by}" if by else "")}
+
+
+def find_report(project: Path, output_dir: str, glob: str,
+                *, commissioned_at: float | None = None) -> Path | None:
+    """The audit report for this run, or None.
+
+    `commissioned_at` is when the ASSIGNMENT was written — when somebody asked for the
+    audit. A report older than that cannot be the audit that was asked for: it existed
+    before the request. That is an ordering fact this gate already holds both sides of.
+
+    It was globbing a directory and taking a hit, with no mtime, no commit and no diff
+    base. Measured on a consumer 2026-09-18: the gate reported COVERED with "2 blocking
+    findings" by reading a report written **2h45 earlier** by a different run, while the
+    audit for the change under review sat in a sibling directory with 4.
+
+    `cycle-review.md` names the neighbouring risk exactly — "an independent report about
+    the wrong thing is worse than no report, because it reads as coverage". This is that
+    sentence with the axis swapped: right report, wrong change.
+
+    WHAT THIS DOES NOT CLAIM. A report newer than the assignment may still be about the
+    wrong change, and proving otherwise needs a `diff_base` the plugin would have to
+    declare — and the report contract is the plugin's, which `cycle-review.md` protects
+    on purpose. The gate verifies the half it can and reports that half, rather than the
+    stronger claim it cannot support.
+
+    `commissioned_at=None` keeps the old behaviour for callers that have no assignment
+    time. A gate that started refusing every report it could not date would be routed
+    around, and routed-around is worse than narrow.
+    """
     # The assignment carries an absolute path derived from the write root; a relative
     # one is still accepted so an older assignment on disk keeps resolving.
     base = Path(output_dir)
@@ -156,7 +297,17 @@ def find_report(project: Path, output_dir: str, glob: str) -> Path | None:
     if not base.is_dir():
         return None
     hits = sorted(base.glob(glob))
-    return hits[-1] if hits else None
+    if not hits:
+        return None
+    report = hits[-1]
+    if commissioned_at is None:
+        return report
+    try:
+        written = report.stat().st_mtime
+    except OSError:
+        # Cannot date it, so cannot refuse it on age. Same reasoning as the None case.
+        return report
+    return report if written >= commissioned_at else None
 
 
 def check(slug: str, *, project: Path, config_dir: Path | None = None) -> tuple[int, dict]:
@@ -168,8 +319,38 @@ def check(slug: str, *, project: Path, config_dir: Path | None = None) -> tuple[
     reg = registry_path(project)
     try:
         declared = parse_registry(reg.read_text(encoding="utf-8"))
-    except OSError:
+    except FileNotFoundError:
+        # The one OSError that means what the branch below says: the project never
+        # wrote a registry. Every OTHER OSError used to land here too — a permission
+        # bit, a directory in the file's place, an I/O error — and an empty list two
+        # lines down became COVERED with the detail "Stated, never inferred from an
+        # empty result". It was inferred from an empty result, and the gate that exists
+        # to prove an audit happened answered "none required" when it could not read
+        # which audits are required.
+        #
+        # That argument was made for every OSError EXCEPT this one, and the exception
+        # had a hole: an absent file usually means the project declined to declare
+        # auditors, and sometimes means the gate was handed a root that is not a
+        # project. WHERE it was absent from separates the two. A tree carrying no
+        # `rules/` at all is not a project that declined — it is a root nobody should
+        # be asking, and answering "none required" for it is the same false clearance
+        # one level up.
+        #
+        # Measured on a consumer 2026-09-18: `_project_root_for` returned
+        # `<project>/.squad`, the registry was looked for under `.squad/rules/`, and
+        # `/review` emitted READY_TO_MERGE_WITH_FOLLOWUPS on a change whose two
+        # required audits had never run — with no mention of them in the report.
+        if not _looks_like_a_project(project):
+            return UNCHECKED, {
+                "status": "unchecked", "slug": slug,
+                "detail": f"{project} carries no `rules/` directory, so this is not a "
+                          f"project root and {reg} being absent proves nothing. The "
+                          f"gate was pointed at the wrong tree — it has NOT established "
+                          f"that no audit is required"}
         declared = []
+    except OSError as exc:
+        return UNCHECKED, {"status": "unchecked", "slug": slug,
+                           "detail": f"cannot read {reg}: {type(exc).__name__}: {exc}"}
     except ValueError as exc:
         return UNCHECKED, {"status": "unchecked", "slug": slug,
                            "detail": f"cannot read {reg}: {exc}"}
@@ -190,6 +371,12 @@ def check(slug: str, *, project: Path, config_dir: Path | None = None) -> tuple[
         }
     try:
         assignment = json.loads(path.read_text(encoding="utf-8"))
+        # When the audit was COMMISSIONED. A report older than this existed before
+        # anyone asked for it, so it cannot be the audit the assignment describes.
+        try:
+            commissioned_at = path.stat().st_mtime
+        except OSError:
+            commissioned_at = None
     except (OSError, ValueError) as exc:
         return UNCHECKED, {"status": "unchecked", "slug": slug,
                            "detail": f"cannot read {path}: {exc}"}
@@ -214,12 +401,15 @@ def check(slug: str, *, project: Path, config_dir: Path | None = None) -> tuple[
             results.append(entry)
             continue
 
-        report = find_report(project, req["output_dir"], req.get("report_glob", "final_report.md"))
+        report = find_report(project, req["output_dir"],
+                             req.get("report_glob", "final_report.md"),
+                             commissioned_at=commissioned_at)
         if report is None:
             entry.update(state="no_report",
                          expected=str(project / req["output_dir"] / req.get("report_glob", "final_report.md")),
-                         detail="the audit was required and left no report. It did not "
-                                "pass — it did not run")
+                         detail="the audit was required and left no report from this "
+                                "run. It did not pass — it did not run, or what is "
+                                "there predates the assignment that asked for it")
             failing.append(name)
             results.append(entry)
             continue
@@ -238,10 +428,42 @@ def check(slug: str, *, project: Path, config_dir: Path | None = None) -> tuple[
             # reader acts on it, never used to pass or fail this gate.
             severity_signal=[s for s, has in sev.items() if has],
         )
-        if not ok:
+        # The decidable verdict, when the plugin exposes one. Read from a file beside
+        # the report rather than parsed out of it: this gate has never parsed another
+        # project's markdown for a decision, and the contract exists so it never has to.
+        entry["verdict_record"] = read_verdict(project / req["output_dir"])
+        # A script that COUNTED blocking findings is a decision this gate may act on;
+        # a model's derivation, or a plugin with no notion of blocking (`null`), is
+        # not. Kept beside `state` rather than folded into it: the audit ran and
+        # reported either way, and what it found is a separate fact from that.
+        record = entry["verdict_record"]
+        count = record.get("blocking_count")
+        entry["blocking_verdict"] = bool(
+            record.get("gateable") and isinstance(count, int) and count > 0)
+        stopped_on = stopped_before_its_report(text)
+        if stopped_on is not None:
+            # Checked BEFORE `ok`. A run that stopped on its cap did not happen in the
+            # sense that matters, whatever the checker says about its shape: three
+            # plugins reject the fallback today over an unrelated Scoring Card defect,
+            # and the finding then blamed a malformed report. Fixing that plugin-side
+            # must not turn them into `covered`.
+            entry["state"] = "incomplete"
+            entry["stopped_on"] = stopped_on
+            failing.append(name)
+        elif not ok:
             entry["state"] = "malformed"
             failing.append(name)
         else:
+            # `covered` answers "the audit ran and its report is well-formed", and that
+            # stays true whether or not a decidable verdict came with it. The verdict is
+            # a SEPARATE fact and lives in `verdict_record`.
+            #
+            # An earlier draft of this overwrote `state` with `verdict_not_exposed` and
+            # a sibling test refused it within the minute — correctly. Sixteen of the
+            # seventeen plugins expose no verdict today and every one of them covers its
+            # audit; folding the two would have turned a real coverage report into a
+            # failure, which is the same collapse of two facts into one field that this
+            # gate's own `not_installed` / `no_report` split exists to avoid.
             entry["state"] = "covered"
         results.append(entry)
 
@@ -287,6 +509,20 @@ def _finding(title: str, evidence: str, remediation: str) -> dict:
     }
 
 
+def _looks_like_a_project(project: Path) -> bool:
+    """Does this tree carry the marker every squad project has?
+
+    `rules/` — the directory the installer creates and the consumer tunes. Checked
+    through `rules_dir`, which owns the order and knows the `.claude/` layout, so a
+    plugin install answers yes on the same evidence a standalone one does.
+
+    Deliberately ONE marker and a cheap one. The question is not "is this a healthy
+    project" — it is "could this plausibly be the root somebody meant", and a richer
+    check would start refusing real projects for unrelated reasons.
+    """
+    return rules_dir(project) is not None
+
+
 def auditor_coverage_findings(project: Path, slug: str,
                               config_dir: Path | None = None) -> list[dict]:
     """The coverage gap as BLOCKER findings, for `consolidate_findings.py`.
@@ -317,6 +553,17 @@ def auditor_coverage_findings(project: Path, slug: str,
     for a in result.get("auditors", []):
         state = a.get("state")
         if state == "covered":
+            if a.get("blocking_verdict"):
+                record = a["verdict_record"]
+                out.append(_finding(
+                    f"Audit `{a['plugin']}` computed a blocking verdict",
+                    f"{a.get('report')}: verdict `{record.get('verdict')}` with "
+                    f"{record.get('blocking_count')} blocking finding(s), computed by "
+                    f"`{record.get('by')}` (verdict.json, source: computed).",
+                    f"Resolve the blocking findings in `{a['plugin']}`'s report and "
+                    "re-run the audit. A verdict a script computed is the plugin's own "
+                    "decision; this review cannot pass over it.",
+                ))
             continue
         if state == "not_installed":
             out.append(_finding(
@@ -336,6 +583,17 @@ def auditor_coverage_findings(project: Path, slug: str,
                 f"Run the command the assignment prints for `{a['plugin']}`. A "
                 "required audit with no report did not pass — it did not run.",
             ))
+        elif state == "incomplete":
+            out.append(_finding(
+                f"Required audit `{a['plugin']}` stopped before it finished",
+                f"{a.get('report')}: the run stopped on `{a.get('stopped_on')}` and "
+                "its report says INCOMPLETE — no verdict was computed. A well-formed "
+                "report of an unfinished run is not coverage of the change.",
+                "Read that report's `## What Was NOT Analyzed` for what never ran, "
+                "address the stop condition (an iteration cap: re-run with a higher "
+                "`max_iterations`, or narrow the scope), and re-run the audit to "
+                "completion.",
+            ))
         elif state == "malformed":
             out.append(_finding(
                 f"Report from `{a['plugin']}` fails that plugin's own contract",
@@ -349,12 +607,13 @@ def auditor_coverage_findings(project: Path, slug: str,
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--slug", required=True)
-    ap.add_argument("--project", type=Path, default=Path.cwd())
+    ap.add_argument(
+        "--root", "--project", dest="root", type=Path, default=Path.cwd())
     ap.add_argument("--config-dir", type=Path, default=None)
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
 
-    code, result = check(args.slug, project=args.project, config_dir=args.config_dir)
+    code, result = check(args.slug, project=args.root, config_dir=args.config_dir)
     if args.json:
         print(json.dumps(result, indent=2))
         return code
@@ -367,11 +626,15 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"auditor coverage: {status.upper()} — {result['detail']}")
     for a in result["auditors"]:
-        mark = {"covered": "✓", "malformed": "✗",
+        mark = {"covered": "✓", "malformed": "✗", "incomplete": "✗",
                 "no_report": "✗", "not_installed": "⊘"}.get(a["state"], "?")
         print(f"  {mark} {a['plugin']:<24} {a['state']}")
         if a.get("verdict"):
             print(f"      verdict: {a['verdict'].splitlines()[0][:100]}")
+        if a.get("blocking_verdict"):
+            rec = a["verdict_record"]
+            print(f"      computed verdict BLOCKS: {rec.get('verdict')} "
+                  f"({rec.get('blocking_count')} blocking, by {rec.get('by')})")
         if a.get("severity_signal"):
             print(f"      severity signal (not a gate): {', '.join(a['severity_signal'])}")
         if a.get("not_analyzed"):

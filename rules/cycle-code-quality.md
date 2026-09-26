@@ -1,4 +1,5 @@
 # Cycle: CODE-QUALITY
+<!-- rule-id: SQ-CYC-05 -->
 
 Source of Truth for the post-implementation code-quality audit. Wired between `/implement` and `/review`.
 
@@ -39,7 +40,7 @@ Do NOT trigger when:
 |---|---|---|---|
 | detect | repo tree | list of enabled languages | at least one manifest present (else NOOP) |
 | analyze | per-language detector run | structured findings (file:line, severity, kind) | detector toolchain available for enabled language |
-| consolidate | per-language findings | unified report at `records/audits/{slug-or-date}-code-quality.md` | report references real file:line — no fabricated citations |
+| consolidate | per-language findings | unified report at `.squad/records/audits/{slug-or-date}-code-quality.md` | report references real file:line — no fabricated citations |
 | verdict | report | PASS / PASS_WITH_CAVEATS / FAIL_SOFT / FAIL_HARD / INVALID | severity rubric (`code-quality-golden-rule.md` § 1–2) |
 
 ## Severity rubric
@@ -118,7 +119,7 @@ dismissibility is the whole difference between the tiers.
 
 ## Output
 
-- `records/audits/{slug-or-date}-code-quality.md` — consolidated report with severity matrix, file:line evidence, and remediation suggestions.
+- `.squad/records/audits/{slug-or-date}-code-quality.md` — consolidated report with severity matrix, file:line evidence, and remediation suggestions.
 - The verdict is emitted in the report and in the structured JSON (`verdict` field). The process exits non-zero on blocking verdicts (`FAIL_HARD` / `INVALID`).
 
 ## Cross-references

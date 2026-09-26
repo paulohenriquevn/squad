@@ -35,11 +35,18 @@ class TestBuckets:
         summary — counted nowhere, listed nowhere. The registry would under-report itself."""
         assert set(BUCKETS) == LEGAL_STATUS
 
-    def test_triaged_counts_as_open_not_in_flight(self) -> None:
-        """Measurement has run, but no plan exists. `in-flight` answers "what is someone building
-        right now?", and folding `triaged` into it makes that number answer a different question."""
+    def test_triaged_counts_as_open_not_committed(self) -> None:
+        """Measurement has run and nobody has committed, so folding `triaged` in with the
+        commitments makes that number answer a different question.
+
+        The bucket was called `in-flight` until 2026-09-24, and this test's own docstring
+        said it answered *what is someone building right now?* — which a status cannot
+        answer. It reads zero events. The rename is in
+        `tests/test_in_flight_is_not_derived_from_status.py`, with the measurement.
+        """
         assert BUCKETS["triaged"] == "open"
-        assert BUCKETS["planned"] == "in-flight"
+        assert BUCKETS["planned"] == "committed"
+        assert BUCKETS["approved"] == "committed"
 
     def test_killed_counts_as_closed(self) -> None:
         """Killing an item is a successful ending, not a pending one — `cycle-discover.md`."""
@@ -77,7 +84,7 @@ class TestStaleness:
     def test_regenerating_twice_is_idempotent(self, tmp_path: Path) -> None:
         """A generator that keeps producing a new answer for unchanged input makes every run a
         diff, and a diff on every run is how people stop reading them."""
-        _, once = _indexed(tmp_path, item_block("B-001"), item_block("B-002", "Outro"))
+        _, once = _indexed(tmp_path, item_block("B-001"), item_block("B-002", "Other"))
         twice = apply_index(once, render_index(once, _parse_items(once)))
         assert twice == once
 
@@ -165,7 +172,13 @@ class TestUnknownStatus:
 #
 # Only one direction is stored. `blocks` is derived, so the two halves cannot drift.
 
-from backlog_index import impediment_graph, lineage_chains  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from backlog_index import (  # noqa: E402 — post-bootstrap import
+    impediment_graph,
+    lineage_chains,
+)
 
 
 def _items(*blocks: str) -> list:

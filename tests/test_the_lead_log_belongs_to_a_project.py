@@ -24,7 +24,10 @@ from pathlib import Path
 _ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_ROOT))
 
-from squad.paths import lead_log_path  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import lead_log_path  # noqa: E402 — post-bootstrap import
 
 _FLEET = _ROOT / "mechanisms" / "fleet"
 
@@ -57,6 +60,6 @@ def test_the_derivation_runs(tmp_path: Path) -> None:
     assert match, "the derivation is not where the reader expects it"
     result = subprocess.run(["bash", "-c", f'_here="{_FLEET}"; PROJECT="{tmp_path}"; '
                                            f'echo "${{LOG:-$({match.group(1)})}}"'],
-                            capture_output=True, text=True, timeout=180)
+                            capture_output=True, text=True, timeout=180, check=False)
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == str(lead_log_path(tmp_path)), result.stdout

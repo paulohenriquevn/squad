@@ -20,10 +20,24 @@ Stable identifier for the unresolved-questions soft cap:
 from __future__ import annotations
 
 import re
+import sys as _sys
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, Path as _P
 
-FENCED_CODE_RE = re.compile(r"^(```|~~~)[^\n]*\n.*?^\1", re.MULTILINE | re.DOTALL)
+for _up in _P(__file__).resolve().parents:
+    if (_up / "squad" / "markdown.py").is_file():
+        _sys.path.insert(0, str(_up))
+        break
+from squad.markdown import (  # noqa: E402 — post-bootstrap import
+    FENCED_CODE_RE as _FENCED_CODE_OWNER,  # noqa: E402 — post-bootstrap import
+)
+
+#: The ONE fenced-code regex, from `squad.markdown`. Eleven scripts each defined
+#: their own, in two forms that do not mask the same input: five saw only backtick
+#: fences, six also saw `~~~`. A plan whose example block used tildes was masked by
+#: six readers and read as prose by the other five, so the same document scored
+#: differently depending on which checker asked.
+FENCED_CODE_RE = _FENCED_CODE_OWNER
 
 PLACEHOLDER_FRAGMENTS = (
     "Migration window leaves users on old schema",
@@ -93,8 +107,18 @@ def _count_table_data_rows(section: str) -> int:
 
 
 def _count_question_bullets(section: str) -> int:
-    """Count `- Q\\d` style bullets OR `- ...` non-empty bullets in Unresolved Questions."""
-    return len(re.findall(r"^\s*[-*]\s+(Q\d+|[A-Z])", section, re.MULTILINE))
+    """Count `- Q\\d` style bullets OR `- ...` non-empty bullets in Unresolved Questions.
+
+    `\\**` before the capital: a bullet opening in bold was not counted, and bold is the form
+    the rest of `plan-template.md` uses. Reported 2026-09-23 with the literal line —
+    `- **Does \\`scripts/lib/\\` want a barrel?** No, and not until a second module lands there.`
+    — which produced `unresolved_entries: 0` beside two bullets plainly present.
+
+    It loosens nothing. What the pattern requires is that a bullet CARRY something, not that it
+    start with a particular character: `- *emphasis* then text` and a bullet of only spaces are
+    still not counted, because the capital or `Q\\d` is still required after the markers.
+    """
+    return len(re.findall(r"^\s*[-*]\s+\**(Q\d+|[A-Z])", section, re.MULTILINE))
 
 
 def _count_placeholder_hits(text: str) -> int:

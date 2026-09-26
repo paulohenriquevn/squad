@@ -64,10 +64,20 @@ for _up in Path(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         sys.path.insert(0, str(_up))
         break
-from check_objective_coverage import OBJECTIVES_REL  # noqa: E402
-from check_objective_coverage import measure as measure_coverage  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from check_objective_coverage import (  # noqa: E402 — post-bootstrap import
+    OBJECTIVES_REL,
+    measure as measure_coverage,
+)
 
-from squad.paths import DATA_DIRNAME, WIKI, write_records_dir  # noqa: E402
+from squad import backlog as _shared_backlog  # noqa: E402 — post-bootstrap import
+from squad.paths import (  # noqa: E402 — post-bootstrap import
+    DATA_DIRNAME,
+    WIKI,
+    write_records_dir,
+)
 
 #: File extensions an evidence pointer may plausibly name. The allowlist is the guard
 #: against the false-positive class described in the module docstring: `10.0.0.0` parses
@@ -84,8 +94,10 @@ CODE_EXT = frozenset({
 CANDIDATE_RE = re.compile(
     r"(?<![\w.-])((?:\.?[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+\.([A-Za-z0-9]{1,5})"
     r"|[A-Za-z0-9_][A-Za-z0-9_.-]*\.([A-Za-z0-9]{1,5}))(?![\w-])")
-ITEM_SPLIT_RE = re.compile(r"\n(?=## B-\d+)")
-ITEM_HEAD_RE = re.compile(r"^## (B-\d+)\s*[—-]\s*(.*?)\s*(?:\[[ x]\])?\s*$", re.M)
+ITEM_SPLIT_RE = _shared_backlog.BLOCK_SPLIT_RE
+#: Imported, not compiled — `squad/backlog.py` owns what an item header is.
+#: Six readers each carried one and they disagreed about the separator.
+ITEM_HEAD_RE = _shared_backlog.BLOCK_RE
 
 
 @dataclass

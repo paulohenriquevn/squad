@@ -45,7 +45,7 @@ def test_the_documented_hook_snippet_actually_refuses(tmp_path: Path) -> None:
     bad.write_text("this subject has no conventional header whatsoever\n", encoding="utf-8")
     result = subprocess.run(
         [sys.executable, str(_GATE), "--repo", str(_ROOT), "--message-file", str(bad)],
-        capture_output=True, text=True, timeout=180)
+        capture_output=True, text=True, timeout=180, check=False)
     assert result.returncode == 1, "a malformed message was accepted"
     assert "header_shape" in result.stdout
 
@@ -57,7 +57,7 @@ def test_the_documented_hook_snippet_accepts_a_good_message(tmp_path: Path) -> N
                     encoding="utf-8")
     result = subprocess.run(
         [sys.executable, str(_GATE), "--repo", str(_ROOT), "--message-file", str(good)],
-        capture_output=True, text=True, timeout=180)
+        capture_output=True, text=True, timeout=180, check=False)
     assert result.returncode == 0, result.stdout
 
 

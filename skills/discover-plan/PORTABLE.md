@@ -74,7 +74,7 @@ Evidence / Constraint Relation / Blast Radius / Verification are tuned for maint
 
 1. `SKILL.md § Step 3`
 2. `templates/measurement-plan-template.md`
-3. `skills/discover-plan-confidence/scripts/check_corner_coverage.py` (`CORNERS`) **and** its sibling in `skills/discover-confidence/`
+3. `skills/discover-plan-confidence/scripts/check_corners_questioned.py` (`CORNERS`) **and** its sibling in `skills/discover-confidence/`
 
 Blast Radius is the corner most worth keeping. It earns its place wherever repos form a dependency graph: a change is dangerous in proportion to how far up that graph it sits.
 

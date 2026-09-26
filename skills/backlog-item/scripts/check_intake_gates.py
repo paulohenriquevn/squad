@@ -4,10 +4,17 @@
 WHY THIS SCRIPT EXISTS
 ----------------------
 `rules/cycle-backlog.md` declares SEVEN hard gates and the skill shipped not a
-single script. Four of them are mechanizable and are mechanized: G1 and G2 here,
-G6 and G7 (impediment edges) in `check_backlog_structure.py`. G3 (single domain),
-G4 (verifiable DoD) and G5 (no prior-art justification) are judgement and stay
-conversational — that is the right design.
+single script. Five of them are mechanized: G1 and G2 here, G6 and G7 (impediment edges) in
+`check_backlog_structure.py`, and G5 for the items the SYSTEM creates — `g5_route`
+below answers "can this be decided without a person" and routes only the ones that can.
+
+G3 (single domain) and G4 (verifiable DoD) are judgement and stay conversational —
+that is the right design.
+
+This paragraph said G5 was conversational too, and kept saying it after `g5_route`
+shipped. `evals/evals.json` repeated it. A gate described as unmechanized is a gate
+nobody looks for in the code, so the mechanism that exists went unused by any reader
+who trusted the description.
 
 **What covers them, precisely.** `evals/evals.json` carries one case per judgement
 gate, and `tests/test_check_intake_gates.py` checks mechanically that no gate claimed
@@ -76,12 +83,18 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _sys_bootstrap.path.insert(0, str(_up))
         break
-import subprocess  # noqa: E402
-import sys  # noqa: E402
-from pathlib import Path  # noqa: E402
-from typing import Any  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+import subprocess  # noqa: E402 — post-bootstrap import
+import sys  # noqa: E402 — post-bootstrap import
+from pathlib import Path  # noqa: E402 — post-bootstrap import
+from typing import Any  # noqa: E402 — post-bootstrap import
 
-from squad.paths import DATA_DIRNAME, LEGACY_RECORDS_ROOTS  # noqa: E402
+from squad.paths import (  # noqa: E402 — post-bootstrap import
+    DATA_DIRNAME,
+    LEGACY_RECORDS_ROOTS,
+)
 
 
 #: One definition of the block format, imported from whoever already maintains it.
@@ -186,17 +199,18 @@ def _route(repo: str, project_root: Path) -> dict[str, Any]:
     else:
         # The tool is absent, so routing was never assessed. Not a refusal.
         return {"routed": False, "outcome": "inconclusive", "reason": "route_domain_missing",
-                "error": "route_domain.py not found under scripts/ or .claude/scripts/"}
+                "error": "route_domain.py not found under mechanisms/cycle/ or "
+                          ".claude/mechanisms/cycle/ — the two paths searched above"}
 
     # The project is NAMED, never inferred. This used to rely on `route_domain.py`
     # deducing its root from `Path(__file__)` — which only worked because the copy
     # install puts the mechanism inside the project being judged, and silently read
     # the wrong table anywhere else (#37).
-    result = subprocess.run(  # noqa: PLW1510
+    result = subprocess.run(
         [sys.executable, str(script), repo, "--json",
          "--project-root", str(project_root)],
         capture_output=True, text=True,
-    )
+     check=False)
     outcome, reason = _ROUTE_OUTCOME.get(
         result.returncode, ("inconclusive", f"route_domain_exit_{result.returncode}")
     )
@@ -215,6 +229,39 @@ def _route(repo: str, project_root: Path) -> dict[str, Any]:
         if detail:
             payload["error"] = detail
     return payload
+
+
+def _dedup_reach(backlog: Path) -> dict[str, Any]:
+    """How far the G2 search could see, so `no candidates` is not read as `no duplicate`.
+
+    `_dedup` searches the registry FILE and nothing else. An id whose block was removed from
+    it is invisible here however loudly the rest of the project cites it — measured on a
+    consumer 2026-09-20: 64 blocks in `BACKLOG.md` against 187 distinct `B-NNN` cited across
+    `.squad/`, `docs/`, `CHANGELOG.md` and the packages, leaving **138** ids the search cannot
+    reach. The gap is a contiguous run, so those items existed and were deleted rather than
+    closed in place.
+
+    Reported rather than closed, and the distinction is the point: scanning the whole project
+    for citations would make intake pay for a graph walk on every filed item, and the ids it
+    found would be mentions rather than blocks — there is nothing to compare a new item
+    against. What a filer can act on is knowing the search had a horizon. An empty result that
+    does not say where it looked reads as "no duplicate exists", which is the silence
+    `check_reference_leakage.py` refuses when it reports PARTIAL coverage instead of a clean
+    run.
+    """
+    try:
+        text = backlog.read_text(encoding="utf-8-sig")
+    except OSError:
+        return {"searched_blocks": 0, "not_searched": ["the registry file could not be read"]}
+    blocks = len(_load_block_re().findall(text))
+    return {
+        "searched_blocks": blocks,
+        "not_searched": [
+            f"only the {blocks} block(s) in {backlog.name}. An id cited elsewhere in the "
+            "project but no longer carrying a block here is not reachable by this gate, so "
+            "`candidates: []` means none was found IN THE FILE — not that none exists.",
+        ],
+    }
 
 
 def _dedup(backlog_text: str, terms: list[str]) -> list[dict[str, Any]]:
@@ -365,7 +412,7 @@ def main(argv: list[str] | None = None) -> int:
     payload: dict[str, Any] = {
         "verdict": verdict,
         "g1": g1,
-        "g2": {"searched": True, "terms": terms, "candidates": candidates},
+        "g2": {"searched": True, "terms": terms, "candidates": candidates, **_dedup_reach(args.backlog)},
         "g5": g5,
     }
     if g5["outcome"] == "human":

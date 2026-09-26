@@ -1,4 +1,5 @@
 # Architecture
+<!-- rule-id: SQ-ARC-01 -->
 
 Source of Truth for boundaries, dependency direction, and module layout. Stack-agnostic.
 

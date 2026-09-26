@@ -8,25 +8,29 @@ for _up in _P(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _s.path.insert(0, str(_up))
         break
-import json  # noqa: E402
-import subprocess  # noqa: E402
-import sys  # noqa: E402
-from pathlib import Path  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+import inspect  # noqa: E402 — post-bootstrap import
+import json  # noqa: E402 — post-bootstrap import
+import subprocess  # noqa: E402 — post-bootstrap import
+import sys  # noqa: E402 — post-bootstrap import
+from pathlib import Path  # noqa: E402 — post-bootstrap import
 
-import pytest  # noqa: E402
+import pytest  # noqa: E402 — post-bootstrap import
 
-from squad.paths import write_records_dir  # noqa: E402
+from squad.paths import write_records_dir  # noqa: E402 — post-bootstrap import
 
 SCRIPT = Path(__file__).parent.parent / "scripts" / "run_opportunity_score.py"
 
 
 def _run(opportunity_path: Path, project_root: Path) -> tuple[int, dict]:
-    result = subprocess.run(  # noqa: PLW1510
+    result = subprocess.run(
         [sys.executable, str(SCRIPT), str(opportunity_path), "--no-warn"],
         capture_output=True,
         text=True,
         cwd=str(project_root),
-    )
+     check=False)
     try:
         data = json.loads(result.stdout)
     except json.JSONDecodeError:
@@ -64,14 +68,17 @@ def _mirror_repo(real_root: Path, tmp_path: Path) -> Path:
     # A real `.git` would make the mirror look like the same repository to anything that
     # walks up looking for one; an empty marker directory is enough for root detection.
     (mirror / ".git").mkdir()
-    real_data = real_root / ".squad"
-    if real_data.is_dir():
-        for entry in real_data.iterdir():
-            target = mirror / ".squad" / entry.name
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.symlink_to(entry)
-    else:
-        (mirror / ".squad").mkdir()
+    # The write root is a REAL directory in the mirror, never symlinks into the
+    # checkout's own `.squad/`. It used to mirror each entry, and that quietly undid
+    # the isolation this fixture exists for: `_find_project_root` calls `resolve()`,
+    # which follows symlinks, so the script walked out of the mirror and into the
+    # repository — and the panel record this test writes landed in the real tree.
+    #
+    # It went unnoticed while the kit had a `.squad/` of its own. The kit stopped
+    # having one on 2026-09-21 (the bundle moved to `docs/wiki/`), the `else` branch
+    # started running for the first time, and this test failed — reporting the
+    # fixture's dependency on the checkout rather than any defect in the gate.
+    (mirror / ".squad").mkdir()
     return mirror
 
 
@@ -137,7 +144,13 @@ def test_a_structurally_perfect_opportunity_is_held_until_the_panel_sits(
     assert data["hard_caps_triggered"] == []
     assert data["verdict"] == "AWAITING_REVIEW"
     assert data["panel"]["status"] == "no_record"
-    assert rc == 0, f"held is not a failure of the run: {rc}"
+    # 5, not 0. The old assertion read "held is not a failure of the run", which
+    # conflates two things: the SCORER ran fine, and the ITEM may proceed. A caller
+    # reads the exit code for the second question — and AWAITING_REVIEW answering 0
+    # meant an opportunity nobody had reviewed reached the chain looking like one that
+    # passed. `SKILL.md § Exit Codes` publishes a verdict-to-code map; three verdicts
+    # were missing from it and all three fell through to 0.
+    assert rc == 5, f"AWAITING_REVIEW exited {rc}; a chain reading that proceeds"
 
 
 def test_the_panel_carries_a_good_opportunity_to_shippable(
@@ -145,10 +158,16 @@ def test_the_panel_carries_a_good_opportunity_to_shippable(
 ) -> None:
     """The other side: convened, approved, and the structural verdict stands."""
     slug = good_opportunity.stem.replace("-opportunity", "")
-    # `records_root`, not the kit root: the panel MACHINERY is the kit's and the panel
-    # RECORD is the project's. The same directory when developing, two directories when
-    # installed — and writing to the kit's side reports `no_record` forever.
-    base = write_records_dir(records_root)
+    # A MIRROR, not the live checkout. This wrote two JSON files into the real records
+    # directory and removed them in a `finally` — and `_mirror_repo` above exists
+    # because that exact pattern left a fixture in the checkout when a run was killed
+    # (#87). Teardown is not a guarantee; a test that cannot corrupt its repository is.
+    #
+    # `records_root` still decides WHERE under the mirror: the panel MACHINERY is the
+    # kit's and the panel RECORD is the project's. The same directory when developing,
+    # two when installed — and writing to the kit's side reports `no_record` forever.
+    mirror = _mirror_repo(project_root, tmp_path)
+    base = write_records_dir(mirror if records_root == project_root else records_root)
     panels = base / "panels"
     panels.mkdir(parents=True, exist_ok=True)
     assignment = panels / f"{slug}-discover.assignment.json"
@@ -174,7 +193,17 @@ def test_the_panel_carries_a_good_opportunity_to_shippable(
                  "verdict": "approve", "reason": why},
             ]}), encoding="utf-8")
 
-        rc, data = _run(good_opportunity, project_root)
+        # The artifact must live INSIDE the mirror. `_find_project_root` resolves from
+        # the artifact's own path, so passing the checkout's fixture made the script
+        # look for the panel record in the KIT's `.squad/records/panels/` — which is
+        # where the old symlinking mirror happened to put it, and why this passed while
+        # writing into the repository it was written to stay out of.
+        staged_artifact = base.parent / "discoveries" / "opportunities" / good_opportunity.name
+        staged_artifact.parent.mkdir(parents=True, exist_ok=True)
+        staged_artifact.write_text(good_opportunity.read_text(encoding="utf-8"),
+                                   encoding="utf-8")
+
+        rc, data = _run(staged_artifact, mirror)
 
         assert data["panel"]["status"] == "approved"
         assert data["verdict"] == "SHIPPABLE"
@@ -297,3 +326,18 @@ def test_the_mirror_keeps_repo_relative_pointers_resolvable(project_root: Path,
     for cited in ("rules/cycle-discover.md",
                   "skills/discover-confidence/scripts/check_evidence_pointers.py"):
         assert (root / cited).is_file(), f"{cited} does not resolve through the mirror"
+
+
+def test_every_verdict_the_scorer_can_reach_has_its_own_exit_code() -> None:
+    """The three panel verdicts fell through to 0, the code for SHIPPABLE.
+
+    `SKILL.md § Exit Codes` is this scorer's published contract, and a caller that reads
+    the code — which is what a chain does — could not tell "nobody reviewed it" from
+    "it passed". The verdict was in the JSON the whole time.
+    """
+    import run_opportunity_score as ros
+
+    source = inspect.getsource(ros.main)
+
+    for verdict in ("NEEDS_REVISION", "AWAITING_REVIEW", "ITEM_IN_FLIGHT"):
+        assert verdict in source, f"{verdict} reaches no exit code at all"

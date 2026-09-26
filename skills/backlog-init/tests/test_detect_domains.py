@@ -133,17 +133,20 @@ def test_render_names_the_specialist_files_that_must_exist(tmp_path: Path) -> No
 # domains the topology alone would never have produced.
 # ---------------------------------------------------------------------------
 
-from detect_domains import domains_from_backlog  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from detect_domains import domains_from_backlog  # noqa: E402 — post-bootstrap import
 
 _BACKLOG = """# Backlog
 
-## B-001 — um   [ ]
+## B-001 — one   [ ]
 
 domain: sdk-core
 repo: packages/sdk
 status: triaged
 
-## B-002 — dois   [ ]
+## B-002 — two   [ ]
 
 domain: repo-platform
 repo: adopter-sdk
@@ -155,7 +158,7 @@ domain: sdk-satellites
 repo: packages/sdk-pty
 status: raw
 
-## B-004 — quatro   [ ]
+## B-004 — four   [ ]
 
 domain: sdk-core
 repo: packages/sdk
@@ -216,10 +219,10 @@ status: raw
 # which in an autonomous project means creating the BACKLOG at the umbrella root,
 # OUTSIDE the project. The principle ("one place to look") does not require an
 # umbrella: it requires
-# um registro por escopo governado.
+# one registry per governed scope.
 # ---------------------------------------------------------------------------
 
-from detect_domains import detect_scope  # noqa: E402
+from detect_domains import detect_scope  # noqa: E402 — post-bootstrap import
 
 
 def test_umbrella_scope_when_more_than_one_repo_lives_below(tmp_path: Path) -> None:
@@ -245,7 +248,7 @@ def test_a_project_with_a_vendored_clone_is_still_single_repo(tmp_path: Path) ->
     project with a vendored clone inside passed as an umbrella and its registry
     went to the directory above.
     """
-    root = _repo(tmp_path, "projeto")
+    root = _repo(tmp_path, "a-project")
     _repo(root, "vendored-thing")
     assert detect_scope(root) == "single-repo"
 
@@ -264,56 +267,33 @@ def test_umbrella_is_a_directory_that_is_not_itself_a_repo(tmp_path: Path) -> No
 # from what was MEASURED, and declares of itself that it was not reviewed.
 # ---------------------------------------------------------------------------
 
-from detect_domains import UNREVIEWED_MARKER, render_specialist  # noqa: E402
-
-
-def test_the_skeleton_declares_that_nobody_reviewed_it(tmp_path: Path) -> None:
-    root = _repo(tmp_path, "meu-projeto")
-    domain = detect_domains(root)[0]
-    body = render_specialist(domain, root)
-    assert "derived: true" in body
-    assert "reviewed_by_human: false" in body
-    assert UNREVIEWED_MARKER in body, "the debt must stay visible, not silent"
-
-
-def test_the_skeleton_carries_only_measured_facts(tmp_path: Path) -> None:
-    """Name, repos and detected languages. No invented invariants."""
-    root = _repo(tmp_path, "meu-projeto")
-    (root / "pyproject.toml").write_text("[project]\nname='x'\n", encoding="utf-8")
-    body = render_specialist(detect_domains(root)[0], root)
-    assert "`meu-projeto`" in body
-    assert "python" in body
-
-
-def test_the_judgement_sections_exist_and_are_empty(tmp_path: Path) -> None:
-    """The sections requiring human judgement stay present and empty: a specialist
-    without them looks complete, and that is where it misleads."""
-    root = _repo(tmp_path, "meu-projeto")
-    body = render_specialist(detect_domains(root)[0], root)
-    for section in ("Invariants", "What a real finding looks like here", "False positives"):
-        assert section in body, section
-    assert body.count(UNREVIEWED_MARKER) >= 3, "one marker per judgement section"
+# `scaffold_specialists.render` is the live renderer of `agents/<domain>.md`.
+# `detect_domains.render_specialist` was a second template for the same artefact,
+# reachable only from tests; the file it produced is the one below.
+from scaffold_specialists import (  # noqa: E402 — post-bootstrap import
+    render as scaffold_render,
+)
 
 
 def test_a_skeleton_is_routable(tmp_path: Path) -> None:
-    """O ponto de existir: a rota deixa de ser BROKEN."""
+    """The point of existing: the route stops reading BROKEN."""
     import subprocess
     import sys
-    root = _repo(tmp_path, "meu-projeto")
+    root = _repo(tmp_path, "my-project")
     (root / ".claude" / "rules").mkdir(parents=True)
     (root / ".claude" / "agents").mkdir(parents=True)
     rule = root / ".claude" / "rules" / "cycle-backlog.md"
     rule.write_text("# x\n\n## Domain routing\n\n| D | R | S |\n|---|---|---|\n| `stale-domain` | `outro` | `agents/stale-domain.md` |\n", encoding="utf-8")
     domains = detect_domains(root)
     rewrite_routing_section(rule, domains)
-    (root / ".claude" / "agents" / "meu-projeto.md").write_text(
-        render_specialist(domains[0], root), encoding="utf-8")
+    (root / ".claude" / "agents" / "my-project.md").write_text(
+        scaffold_render(domains[0].name, {}, "2026-09-17"), encoding="utf-8")
 
-    out = subprocess.run(  # noqa: PLW1510
+    out = subprocess.run(
         [sys.executable, str(Path(__file__).resolve().parents[3] / "mechanisms" / "cycle" / "route_domain.py"),
-         "meu-projeto", "--rule", str(rule)],
+         "my-project", "--rule", str(rule)],
         capture_output=True, text=True,
-    )
+     check=False)
     assert out.returncode == 0, out.stdout + out.stderr
 
 

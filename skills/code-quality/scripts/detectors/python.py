@@ -19,9 +19,9 @@ from scripts._detector_contract import (
     sanitize_symbol,
     to_rel_path,
 )
-from scripts.check_symbol_fab import extract_imports_and_calls
+from scripts.check_symbol_fab import extract_checked
 
-from . import BaseDetector, _arch, _mutation, _wiring
+from . import BaseDetector, _arch
 
 _ARCH_TIMEOUT_SEC = 240
 #: import-linter reads the first of these it finds.
@@ -100,17 +100,37 @@ class PythonDetector(BaseDetector):
         except (subprocess.SubprocessError, OSError) as e:
             return [self._auditor_unavailable(f"vulture invocation failed: {e}")]
 
+        # The exit code, read BEFORE the output is parsed — the same guard `go.py` has
+        # carried since it was written. `result.stdout` used to go straight to the parser
+        # and `result.returncode` was never inspected, so any failure that writes to
+        # stderr and leaves stdout empty — a bad argument, an internal traceback, an
+        # unreadable file — parsed as ZERO dead symbols and D1 reported the language
+        # clean. An auditor that did not run is not an auditor that found nothing.
+        if not result.stdout.strip() and result.returncode != 0:
+            return [self._auditor_unavailable(
+                f"vulture exit {result.returncode}: {result.stderr.strip()[:200]}")]
+
         return self._parse_vulture_output(result.stdout, manifest_dir)
 
     def detect_symbol_fabrication(self, changed_files: list[Path]) -> list[Finding]:
         """T2.2 — Validate imports against PyPI. Skip stdlib + relative imports (EC-17)."""
         findings: list[Finding] = []
+        # Vacuity guard, the same one `rust.py` carries and for the same measured reason:
+        # `extract_checked` reports whether the parser RAN, and an empty symbol list from
+        # a parse that never happened reads to D2 as "this file imports nothing" — a
+        # silent false-green over an audit that did not run. Reported as unavailable,
+        # never as clean.
+        parsed_any = False
+        unparsed = 0
         stdlib_modules = set(sys.stdlib_module_names)
         for src_file in changed_files:
             if not src_file.exists():
                 continue
             rel = to_rel_path(src_file)
-            for sym in extract_imports_and_calls(src_file, "python"):
+            symbols, parsed = extract_checked(src_file, "python")
+            parsed_any = parsed_any or parsed
+            unparsed += 0 if parsed else 1
+            for sym in symbols:
                 if sym.kind != "import":
                     continue
                 module = sym.module
@@ -149,22 +169,25 @@ class PythonDetector(BaseDetector):
                             allowlist_key=f"python|{rel}|symbol_fab|symbol_fab_unverifiable_{sanitized}",
                         )
                     )
+        if unparsed and not parsed_any:
+            return [
+                Finding(
+                    detector="d2_symbol_fab",
+                    language="python",
+                    severity="SOFT_CAP",
+                    file_path=".",
+                    symbol_or_line="tree-sitter",
+                    message=(
+                        f"D2 parsed none of the {unparsed} Python source(s) it was "
+                        f"given — the tree-sitter grammar is unavailable or failed to "
+                        f"load. The audit did not run; this is NOT evidence that no "
+                        f"symbol is fabricated."
+                    ),
+                    allowlist_key="python|.|symbol_fab|auditor_unavailable_tree-sitter",
+                )
+            ]
+
         return findings
-
-    def detect_orphan_exports(self, repo_root: Path) -> list[Finding]:
-        return _wiring.detect_orphan_exports(self.language, repo_root, repo_root)
-
-    def detect_mutation_score(self, manifest_dir: Path) -> list[Finding]:
-        return _mutation.detect_mutation_score(
-            self.language,
-            manifest_dir,
-            floor_low=self.threshold("mutation.score_floor_low", _mutation.DEFAULT_FLOOR_LOW),
-            floor_high=self.threshold("mutation.score_floor_high", _mutation.DEFAULT_FLOOR_HIGH),
-            timeout_minutes=self.threshold(
-                "mutation.timeout_minutes", _mutation.DEFAULT_TIMEOUT_MINUTES),
-            max_report_age_minutes=self.threshold(
-                "mutation.max_report_age_minutes", _mutation.DEFAULT_MAX_REPORT_AGE_MINUTES),
-        )
 
     # ------------------------------------------------------------------
     # internal helpers

@@ -1,3 +1,4 @@
+# rule-id: SQ-ALW-02
 # Deps-audit allowlist — explicit CVE/version exemptions with mandatory sunset.
 #
 # Authoritative source: rules/deps-audit-golden-rule.md § 4 (Allowlist mechanism).

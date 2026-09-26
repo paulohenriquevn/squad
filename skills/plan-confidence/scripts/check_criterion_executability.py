@@ -36,13 +36,39 @@ gate in skills/implement/scripts/check_tdd_shape.py.
 from __future__ import annotations
 
 import re
+import sys
+from pathlib import Path as _Path
+
+sys.path.insert(0, str(_Path(__file__).resolve().parents[3]))
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from squad.measurability import (  # noqa: E402 — post-bootstrap import
+    PATTERNS as _SHARED_PATTERNS,
+)
+
 # Section headers we scan for criteria. Plans use either "Acceptance Criteria"
 # or "Definition of Done" or both; we treat their bullets equivalently.
+#: `DoD` is accepted as well as the spelled-out form, and the level runs `##`..`####`.
+#:
+#: Measured 2026-09-23. `plan-template.md` prescribes `#### DoD (Definition of Done)` (:269) and
+#: `## Global Definition of Done` (:339), and the pattern matched NEITHER — so every DoD bullet
+#: in a plan written from the kit's own template was invisible to the kit's own checker. Worse,
+#: `Global DoD` — an alternative this pattern itself lists — could only match as
+#: `### Global DoD`, because `####?` is three or four `#` while a document section is `##`. No
+#: author writes a top-level section at `###`, so the listed alternative was unreachable.
+#:
+#: A consumer measured the consequence: `total_criteria 0` with the hard cap
+#: `vague_acceptance_criteria`, which sent the author to rewrite criteria that were precise.
+#: Widening here rather than rewriting the template's headings, because it is kinder to the
+#: plans that already exist.
+#:
+#: A trailing parenthetical is allowed — `#### DoD (Definition of Done)` is one heading, not a
+#: heading plus a mistake.
 SECTION_HEADER_RE = re.compile(
-    r"^####?\s+(Acceptance\s+Criteria|Definition\s+of\s+Done|Global\s+DoD)\s*$",
+    r"^#{2,4}\s+(?:Global\s+)?"
+    r"(Acceptance\s+Criteria|DoD|Definition\s+of\s+Done)"
+    r"(?:\s*\([^)\n]*\))?\s*$",
     re.MULTILINE | re.IGNORECASE,
 )
 NEXT_HEADER_RE = re.compile(r"^#{1,4}\s+\S", re.MULTILINE)
@@ -74,16 +100,31 @@ VAGUE_VERB_PATTERNS = (
 
 # Tokens that indicate a MEASURABLE objective.
 # Numbers, comparison operators, units, boolean shapes, file/command refs.
-MEASURABLE_PATTERNS = (
-    r"\b\d+(?:\.\d+)?\s*(?:ms|s|µs|us|ns|MB|GB|KB|%|req/s|rps|qps|fps|px)\b",  # number + unit
-    r"\b(?:P50|P95|P99|p50|p95|p99)\b",                                         # percentile names
-    r"[<>]=?\s*\d",                                                             # comparison operators
-    r"\bexit\s+(?:code\s+)?[01]\b",                                             # exit code semantics
+#: Moved to `squad.measurability`, which `plan-alignment` reads too. This list and that
+#: file's regex both answered "is there something here somebody can fail", were written
+#: apart, and had drifted: `the command exits 0` was measurable here and not there. The
+#: kit's rule for its roster applies to this question as well — one parser, because two
+#: readers of one table drift apart silently.
+#: Shapes that make a CRITERION measurable and do not make a REQUIREMENT measurable.
+#:
+#: An acceptance criterion is written to be executed, so `equals <x>`, `contains <x>`,
+#: `returns true` and a backticked command each name something a runner can compare. A
+#: requirement in a plan's NFR section is written to be met, and a backtick around any
+#: word would make every requirement mentioning code measurable — which is why these
+#: did NOT move into `squad.measurability` with the numeric core.
+#:
+#: Kept explicit rather than merged: the two readers ask questions that overlap and are
+#: not the same, and forcing one definition over both would have widened this file's
+#: sibling by accident. The shared half is shared BECAUSE it drifted; this half never
+#: existed in the sibling at all.
+_CRITERION_ASSERTIONS = (
     r"\breturn(?:s)?\s+(?:true|false|0|1|null|None|nil)\b",                     # boolean/sentinel return
     r"\bequals?\s+\S",                                                          # equality assertion
     r"\bcontains?\s+\S",                                                        # containment assertion
     r"`[^`]+`",                                                                 # backtick-quoted code/command
 )
+
+MEASURABLE_PATTERNS = _SHARED_PATTERNS + _CRITERION_ASSERTIONS
 
 # Tokens that indicate an ORACLE — how to know the criterion passed.
 ORACLE_PATTERNS = (
@@ -128,9 +169,20 @@ class ExecutabilityReport:
 
     @property
     def soft_cap_triggered(self) -> bool:
-        """Heuristic-grade gate: >10% vague OR <80% reach acceptable."""
+        """Heuristic-grade gate: >10% vague OR <80% reach acceptable — or NO criteria.
+
+        Zero criteria used to return False, and the report was built with
+        `acceptable_ratio=1.0` "vacuously acceptable". Together those made a plan with
+        no Acceptance Criteria and no DoD section at all the ONE shape this check could
+        never charge for: worse than a plan full of vague criteria, and scored better.
+
+        A plan that states no acceptance criteria has not written executable ones. The
+        cap is the same soft 70 either way, so this cannot block a legitimate plan that
+        simply has none — it makes the absence visible in `hard_caps_triggered`, which
+        is where the author looks.
+        """
         if self.total_criteria == 0:
-            return False
+            return True
         return self.vague_ratio > 0.10 or self.acceptable_ratio < 0.80
 
 
@@ -148,7 +200,7 @@ def _has_observable_verb(text: str) -> bool:
 
 
 def _has_measurable_object(text: str) -> bool:
-    return any(re.search(pattern, text, re.IGNORECASE) for pattern in MEASURABLE_PATTERNS)
+    return any(re.search(p, text, re.IGNORECASE) for p in MEASURABLE_PATTERNS)
 
 
 def _has_oracle(text: str) -> bool:
@@ -158,9 +210,18 @@ def _has_oracle(text: str) -> bool:
 def _extract_criteria(content: str) -> list[str]:
     """Pull bullets out of every Acceptance Criteria / DoD section.
 
-    A criterion is one bullet line under one of the target headers. Sections
-    end at the next header of any level. We accept H3 / H4 to handle both
-    plan-level and task-level criteria.
+    A criterion is one bullet line under one of the target headers. Sections end at the next
+    header of any level, and H2..H4 are accepted so both plan-level and task-level criteria are
+    seen. DoD bullets ARE graded, and `test_dod_section_also_scanned` defends that: a vague DoD
+    bullet is as harmful as a vague acceptance criterion, and *"Improve testing"* is exactly what
+    this gate exists to catch.
+
+    Recorded because it was nearly changed. Widening `SECTION_HEADER_RE` on 2026-09-23 so a
+    plan's `#### DoD` was finally seen made the kit's own `good-plan.md` fixture fire
+    `vague_acceptance_criteria`, and the first response was to stop grading DoD bullets.
+    Measuring the fixture settled it the other way: its Global DoD carried *"All phases done"*
+    and *"Tests passing"*, which are vague by any reading. The gate was right and the fixture was
+    not — it had only ever passed because `####?` could not match `## Global Definition of Done`.
     """
     criteria: list[str] = []
     for section_match in SECTION_HEADER_RE.finditer(content):
@@ -198,8 +259,11 @@ def check_criterion_executability(plan_path: Path) -> ExecutabilityReport:
             acceptable_count=0,
             executable_count=0,
             vague_ratio=0.0,
-            acceptable_ratio=1.0,  # vacuously acceptable (no criteria to grade)
-            executable_ratio=1.0,
+            # 0.0, not 1.0. "Vacuously acceptable" was the phrase, and it put a plan
+            # with no criteria at the top of the scale for criterion quality. There is
+            # nothing acceptable about criteria nobody wrote; there is nothing at all.
+            acceptable_ratio=0.0,
+            executable_ratio=0.0,
             criteria=(),
         )
 

@@ -146,7 +146,11 @@ mechanisms/gates/verify_ecosystem.py
 CHANGELOG.md
 
 # === Squad domain routing (the mechanism; specialists are derived per project) ===
-agents/README.md
+# `agents/README.md` is deliberately NOT here. `install.sh:650-652` keeps a consumer's
+# copy ("Once someone adapts it, this README lists the PROJECT's agents"), and the
+# header above promises this script does not touch agents/. Listing it made the
+# surgical installer overwrite the one file the wholesale installer protects, while
+# its own closing line told the operator agents/ was untouched.
 mechanisms/cycle/route_domain.py
 
 # === Rules (cycle definitions) ===

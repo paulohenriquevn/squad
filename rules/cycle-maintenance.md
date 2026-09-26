@@ -1,4 +1,5 @@
 # Cycle: MAINTENANCE (macro super-loop)
+<!-- rule-id: SQ-CYC-11 -->
 
 Source of Truth for the macro super-loop that runs from a `BACKLOG.md` item all the way back to the same `BACKLOG.md` with the item's status advanced. Sits **above** `cycle-idea-to-release`: where `cycle-idea-to-release` orchestrates one item end-to-end, `cycle-maintenance` orchestrates the ongoing work — item by item — for as long as the ecosystem is maintained.
 
@@ -56,14 +57,14 @@ ROUTE:
      ↓ unroutable → ITEM_UNROUTABLE, surface to the human (gate G1)
      ↓
 LOCK item:
-     ↓ record records/maintenance-runs/{B-NNN}-{date}.md (status: in_progress)
+     ↓ record .squad/records/maintenance-runs/{B-NNN}-{date}.md (status: in_progress)
      ↓
 DELEGATE:
      ↓ status raw      → /discover-plan B-NNN --mode {suggested_mode}, then the chain
      ↓                   ├── opportunity → status triaged → continue below
      ↓                   └── ITEM_KILLED → status killed → LOOP BACK to SELECT
      ↓ status triaged  → the DECISION to do the work, recorded:
-     ↓                   backlog_status.py {backlog} B-NNN --to approved --because "…"
+     ↓                   backlog_status.py {backlog} B-NNN --to approved --approved-by human/<who> --because "…"
      ↓                   └── not approved → status unchanged, LOOP BACK to SELECT
      ↓ status approved → /idea-to-release B-NNN
      ↓                   (cycle-plan → implement → code-quality → review → release)
@@ -125,7 +126,7 @@ LOOP BACK to SELECT
 |---|---|---|---|
 | select | `BACKLOG.md` | one `B-NNN`, or `BACKLOG_EMPTY` | exactly one item in flight |
 | route | the item's `repo` | domain + specialist | the repo resolves (G1) |
-| lock | `B-NNN` | run record under `records/maintenance-runs/` | no other run `in_progress` |
+| lock | `B-NNN` | run record under `.squad/records/maintenance-runs/` | no other run `in_progress` |
 | delegate | `B-NNN` + status | opportunity, killed item, or release | the sub-cycle's own gates |
 | advance | sub-cycle verdict | updated `B-NNN` block | status transition is legal |
 
@@ -135,11 +136,12 @@ LOOP BACK to SELECT
 |---|---|---|
 | `ITEM_SHIPPED` | The item reached `RELEASED` — the FINAL cut — and its block says `shipped` | Loop back to SELECT. Written by `mechanisms/cycle/advance_items.py`, which reads `RELEASED` and never `PRE_RELEASED`: a pre-release must not close work it did not finish |
 | `ITEM_KILLED` | Measurement refuted the hypothesis | Loop back to SELECT. **A successful outcome** |
-| `ITEM_VERIFIED_LOCAL` | The fix is implemented and verified, and every file it changed is untracked, so no release can carry it. Decided by `all_changes_are_untracked()` in `mechanisms/cycle/advance_items.py`, which runs the `git check-ignore` test defined below | Loop back to SELECT. **A terminal state, not a failure** |
+| `ITEM_VERIFIED_LOCAL` | The fix is implemented and verified, and every file it changed is untracked, so no release can carry it. Decided by `all_changes_are_untracked()` in `mechanisms/cycle/advance_items.py`, which runs the `git check-ignore` test defined below over the file list the runner passes as `--verified-local B-NNN=path[,path...]`. The list is supplied, never inferred — deriving it from the working tree would guess which change belongs to which item, and this test is mechanical | Loop back to SELECT. **A terminal state, not a failure** |
 | `ITEM_IN_FLIGHT` | Held on a **material impediment** — a machine, a credential, elapsed time, a system not standing (`halt_disposition.py`, `decision-delegation.txt § retained_classes`). Branch protection requiring a reviewer is no longer one of these: it is a violated premise caught at intake | Resume when the impediment is cleared. **The queue does not wait on it** — it takes the next item |
 | `ITEM_BLOCKED` | A sub-cycle blocked, recoverably | Surface, then loop back to SELECT — other items still move | _(emitted externally: the maintenance runner that owns ADVANCE does not exist yet — SELECT is mechanized by `select_backlog_item.py`, the phases after it are not, and this row is the declared debt rather than a silent gap)_
 | `ITEM_UNROUTABLE` | `repo` is in no domain | Surface. The item cannot proceed until the repo is cloned or the routing table names it. _(emitted externally: the CONDITION is detected by `route_domain.py`, which prints `UNROUTED` and exits 3; the token is written by the runner that surfaces it. The skill that named it was retired 2026-08-31, and the detector was not)_ |
 | `BACKLOG_EMPTY` | Nothing `raw` or `triaged` | **Run `/discover-execute --sweep {domain}`.** Not a finish line |
+| `BACKLOG_INVALID` | An id does not name exactly one item — `duplicate_id` or `renumbered` | **Fix the registry's ids, then select.** Every id the selector could return is ambiguous, so it returns none. Only these two findings reach here: a blocker about an item's CONTENT leaves the id intact and the item still selectable, because improving content is what the chain below is for |
 | `ITEM_SELECTED` | SELECT picked an item; nothing blocks it | ROUTE |
 | `BACKLOG_BLOCKED` | Selectable items remain and **every one is blocked** | Surface the wall. **Not `BACKLOG_EMPTY`** — a sweep would add items beside a wall instead of clearing it |
 | `ITEM_HALTED` | A phase stopped on this item and wrote `{slug}-BLOCKED.md` | Read the report. SELECT holds the item out of the queue until the file is gone — handing it out again reruns exactly what halted |
@@ -271,13 +273,17 @@ the item that wrote it ended up in the very state it invented.
 ## Output
 
 - `BACKLOG.md` — status transitions on `B-NNN` blocks
-- `records/maintenance-runs/{B-NNN}-{date}.md` — one record per run: what was selected, why, which specialist, what the sub-cycles returned
+- `.squad/records/maintenance-runs/{B-NNN}-{date}.md` — one record per run: what was selected, why, which specialist, what the sub-cycles returned
 
 The run record is what makes the loop auditable after the fact: which items were picked, in what order, and what happened. Without it, a backlog whose items all say `shipped` cannot be distinguished from one somebody edited.
 
 ## Rollback
 
 An item advanced in error is moved back with a note recording the advance and why it was withdrawn — never silently reset. An item whose `shipped` was withdrawn carries information a fresh-looking `triaged` item does not.
+
+`backlog_status.py --withdraw-reason` is what enforces this, and it held neither half until 2026-09-18: the two backward moves the transition table allowed were accepted with no note at all, leaving exactly the fresh-looking item this clause names, and `triaged -> raw` — the same move one step down — was refused outright. A move to an earlier entry of the open chain now requires the reason, holds it to the bar `--kill-reason` holds a committed item to (who withdrew it and what changed, not what the evidence showed), and writes `withdrawn_from` beside it, because after the move the status line cannot say what the item used to be.
+
+`shipped` remains terminal. The sentence above is the argument for why the note matters and not a licence to reopen a shipped item: doing so changes what `shipped` means to every reader that counts delivery, which is a decision for a person.
 
 ## Cross-references
 

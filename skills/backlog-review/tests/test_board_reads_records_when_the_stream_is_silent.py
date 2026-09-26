@@ -25,7 +25,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from board_state import build_state, stage_on_disk  # noqa: E402
+from board_state import build_state, stage_on_disk
 
 
 def _registry(tmp_path: Path, *records: tuple[str, str]) -> Path:

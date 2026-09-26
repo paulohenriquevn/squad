@@ -94,10 +94,21 @@ class SymbolNamingReport:
     distinct: tuple[str, ...] = ()
     reasons: tuple[str, ...] = field(default_factory=tuple)
 
+    #: Why nothing was measured, when nothing was. An unreadable plan returned the
+    #: DEFAULT report — every field empty, `soft_floor` False — and `run_structural`
+    #: applied no cap, so a plan nobody could open scored as a plan with no bad names in
+    #: it. Populated here, the caller can tell the two apart and say which it is.
+    unmeasured_because: str = ""
+
     @property
     def soft_floor(self) -> bool:
-        """A demand the project's rule forbids caps the plan until it is rewritten."""
-        return bool(self.findings)
+        """A demand the project's rule forbids caps the plan until it is rewritten.
+
+        An UNMEASURED plan caps too. The check cannot vouch for a file it could not read,
+        and "no finding" from a check that did not run is the silent pass this whole
+        rubric exists to refuse.
+        """
+        return bool(self.findings) or bool(self.unmeasured_because)
 
     #: Findings of the second kind, kept apart so the cap names what fired.
     collisions: tuple[NamingFinding, ...] = ()
@@ -109,6 +120,8 @@ class SymbolNamingReport:
         having been capped for a test name."""
         if self.distinct and self.collisions:
             return "soft_floor_symbol_named_by_ticket_and_shared_evidence_path"
+        if self.unmeasured_because:
+            return "soft_floor_symbol_naming_unmeasured"
         if self.collisions:
             return "soft_floor_evidence_at_shared_path"
         return "soft_floor_symbol_named_by_ticket"
@@ -117,8 +130,9 @@ class SymbolNamingReport:
 def check_symbol_naming(plan_path: Path) -> SymbolNamingReport:
     try:
         body = plan_path.read_text(encoding="utf-8-sig")
-    except OSError:
-        return SymbolNamingReport()
+    except OSError as exc:
+        return SymbolNamingReport(
+            unmeasured_because=f"{plan_path} could not be read: {exc}")
 
     findings: list[NamingFinding] = []
     for number, line in enumerate(body.splitlines(), 1):
@@ -160,13 +174,21 @@ def check_symbol_naming(plan_path: Path) -> SymbolNamingReport:
             f"criterion over them printed 0 and PASSED while proving nothing. Use "
             f"`mktemp` or a path inside the lane's own worktree.",
         )
-    return SymbolNamingReport(tuple(findings) + tuple(collisions), len(findings),
-                              distinct, reasons, tuple(collisions))
+    # BY KEYWORD. The positional form bound `collisions` to whichever field sat fifth,
+    # so inserting a field above it silently moved the argument — which is how a tuple of
+    # collisions landed in `unmeasured_because` and made every readable plan report as
+    # unmeasured. A five-argument positional constructor is a rename waiting to happen.
+    return SymbolNamingReport(
+        findings=tuple(findings) + tuple(collisions),
+        occurrences=len(findings),
+        distinct=distinct,
+        reasons=reasons,
+        collisions=tuple(collisions),
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
     import argparse
-    import sys
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("plan", type=Path)

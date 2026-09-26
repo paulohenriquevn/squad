@@ -8,7 +8,7 @@ allowed-tools: Read Glob Grep Bash Write Skill
 argument-hint: "{topic-slug}"
 ---
 
-This skill takes the current conversation context, any pre-existing grill output at `.squad/records/grills/{slug}-grill.md`, and codebase understanding, then produces a detailed implementation plan. Do NOT interview the user during `/plan-write` itself — if requirements are unclear, halt and recommend `/plan-grill {topic-slug}` first. When a grill output exists, the plan's `## Context` section MUST cite specific decisions resolved during grilling.
+This skill takes the current conversation context, any pre-existing grill output at `.squad/records/grills/{slug}-grill.md`, and codebase understanding, then produces a detailed implementation plan. Do NOT interview the user during `/plan-write` itself — if requirements are unclear, halt and say which decision is missing. The kit ships no grilling skill, so naming one sent the reader at a command that does not resolve; what unblocks the plan is the answer, not a slash command. When a grill output exists, the plan's `## Context` section MUST cite specific decisions resolved during grilling.
 
 ## Process
 
@@ -126,7 +126,7 @@ If no such skill is installed (the default), the `## Baseline Context` table fro
 
 You will need to build or modify. Actively look for opportunities to extract deep modules (lots of functionality behind a simple, testable interface that rarely changes). Check with the user that these modules match their expectations and which modules need tests.
 
-**Compliance discipline:** for each module decision, justify against the rules read in Step 0. Example: "We split `foo.ts` into 3 files because it would exceed 500 LoC per `architecture.md`" or "We use interface `Foo` over concrete `FooImpl` per DIP (per `architecture.md`)".
+**Compliance discipline:** for each module decision, justify against the rules read in Step 0. Example: "We split `foo.ts` into 3 files because it would exceed the 500-line budget in `skills/plan-confidence/defaults/loc-limits.md`" or "We use interface `Foo` over concrete `FooImpl` per DIP (per `architecture.md`)".
 
 ### Step 4 — Write the plan
 
@@ -139,10 +139,27 @@ The plan MUST include:
 - Global DoD with quality-gate entries (lint, complexity, size).
 - File size budget mention (default 500 LoC; see `rules/architecture.md` for project-specific budgets, or `skills/plan-confidence/defaults/loc-limits.md` as fallback).
 
+Emit the START of this phase before doing the work:
+
+```bash
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" start \
+    --cycle plan --slug {B-NNN}
+```
+
+Without it the board can only draw what FINISHED. Measured on 2026-08-31: seventeen
+`phase:end` events and one `phase:start`, so an item under active work showed the
+verdict of a phase already over and nothing on the page said anything was running.
+A `start` with no matching `end` is exactly the fact "this is happening now".
+
+**This block sits before the end, and that is the fix.** It used to come after it — the
+document told the reader to close the phase on line 145 and to open it "before doing the
+work" on line 161, by which point the work was done. A sweep of every SKILL.md found this
+was the only one with the two in that order.
+
 Once the plan file exists, record the transition in the stream:
 
 ```bash
-python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" end \
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" end \
     --cycle plan --slug {slug} --verdict AWAITING_REVIEW
 ```
 
@@ -155,17 +172,6 @@ different emitter, and folding them together would make a plan that scored `INVA
 indistinguishable from a plan phase that never happened.
 
 
-Emit the START of this phase before doing the work:
-
-```bash
-python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" start \
-    --cycle plan --slug {B-NNN}
-```
-
-Without it the board can only draw what FINISHED. Measured on 2026-08-31: seventeen
-`phase:end` events and one `phase:start`, so an item under active work showed the
-verdict of a phase already over and nothing on the page said anything was running.
-A `start` with no matching `end` is exactly the fact "this is happening now".
 
 ## Plan Template
 

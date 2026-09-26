@@ -1,3 +1,4 @@
+# rule-id: SQ-PNL-02
 # The review panel — who judges a DISCOVER opportunity and a PLAN plan
 #
 # WHY THIS FILE EXISTS
@@ -106,20 +107,153 @@
 # is the right check for a seat that IS a binary; it is a weaker one for a seat that is a
 # plugin reached through a binary, so prefer naming the agent.
 
+# A SEAT YOU HOST YOURSELF COSTS MORE THAN A ROW
+# ----------------------------------------------
+# The diversity rule above needs a family outside the kit's own, and when a hosted one
+# is unreachable — credits out, network down, provider blocked — the reachable answer is
+# a model served locally. `ollama` is the usual one. Changing this table to name it is
+# one line; what that line implies is a LISTENING SERVER on the machine for as long as
+# the panel runs, and that is not confined to the panel.
+#
+# Measured 2026-09-20 in a consumer, by causing it. The three outside seats were pointed
+# at a local `llama3.2` and `ollama serve` was started on 11434. A unit test in that
+# project mounts an `ollama/...` provider and documents, in its own comment, that nothing
+# is listening in CI so the call fails fast and the SDK reports it. With something
+# listening the call CONNECTED and hung, and the test timed out at 30 s: 1 failed of
+# 8107 with the port open, 3 of 3 passing with it closed. Proved both ways, not argued.
+#
+# The cost landed somewhere nobody would look for it — that run's `/implement` validation
+# reported `coverage` FAIL, and the failure was the panel's server, not the codebase.
+#
+# So, before pointing a seat at something you host:
+#
+#   * the port is part of the change. Anything in the project that probes that port,
+#     and every test that relies on it being CLOSED, now behaves differently.
+#   * start it for the panel and stop it after. A server left listening makes the next
+#     suite run mean something other than what it meant yesterday.
+#   * a suite that fails only while the panel's server is up is not a flaky suite. It is
+#     this, and the fastest way to tell is to re-run it with the port closed.
+#
+# None of this makes a local seat wrong. It makes it a change to the machine rather than
+# a change to a table, and the difference is invisible from this file alone.
+
+# Why the three judge-codex seats say `codex` and not `builtin`
+#
+# They said `builtin` until 2026-09-24, and that made the outside-family seat of every
+# gated phase a Claude sub-agent. Measured that day against the version the plugin
+# manifest resolves to, `judge-codex` 0.3.3:
+#
+#   roster                          gpt-5.5            (openai)
+#   agents/plan-judge.md            model: sonnet      (anthropic)
+#   all 8 judge agents              model: sonnet
+#
+# `builtin` means this session SPAWNS the agent, and a spawned sub-agent runs the model
+# its own frontmatter names. So `gpt-5.5` described nothing that would run, and the
+# family rule — one seat outside this kit's own, because correlated models are fooled
+# together — was satisfied by a string nobody read back. Version 0.1.0 of the plugin
+# declared `model: gpt-5-codex`; 0.2.0 changed it to `sonnet` and this file never heard.
+#
+# The Codex route is real and is the one the plugin documents: its agent files say the
+# companion script hands them the artifact, and `scripts/codex-companion-judge.mjs` runs
+# `codex exec`. Nothing in this kit executes a seat — `invocation` is compared to
+# `builtin`, passed to `shutil.which`, and printed in the brief — so this field tells
+# the CONVENING session which route to take. For these seats that is `/judge-codex:<stage>`,
+# which runs the companion script.
+#
+# Two things the route does not promise, both deliberate:
+#   - The companion script falls back to `claude --model sonnet` when Codex is
+#     unavailable (credits, login, rate limit). A run that fell back produced no
+#     outside-family vote, and nothing here can know that in advance. `check_panel_
+#     capability` says the same about the binary it probes: present is not reachable.
+#   - `cast_vote --model` is supplied by the caller. A model's self-report is not
+#     evidence of which model answered, and validating it would only move the fiction.
+#
+# `convene_panel.seat_family` reads the frontmatter for `builtin` seats and lets the
+# roster stand for routed ones, because a routed seat is decided at run time. Changing
+# a seat back to `builtin` re-opens the hole, and the gate will say so.
+
 reviewer = discover | nemesis-claim-auditor      | claude-opus-5   | builtin
 reviewer = discover | leonardo-researcher        | claude-sonnet-5 | builtin
-reviewer = discover | judge-codex:discover-judge | gpt-5-codex     | codex
+reviewer = discover | judge-codex:discover-judge | gpt-5.5         | codex
 
 reviewer = plan     | vera-technical-arbiter     | claude-opus-5   | builtin
 reviewer = plan     | nemesis-claim-auditor      | claude-sonnet-5 | builtin
-reviewer = plan     | judge-codex:plan-judge     | gpt-5-codex     | codex
+reviewer = plan     | judge-codex:plan-judge     | gpt-5.5         | codex
 
 # The phases a panel gates. A phase not listed here advances on its own verdict.
 # CODE-QUALITY and RELEASE are deliberately absent: both already derive their
 # verdict from a script, and a panel voting on a decision already made
 # deterministically adds cost and no information.
+# The alignment sign-off is ONE reviewer, not a panel: four checkboxes ticked by somebody
+# who is not the author. `nemesis-claim-auditor` is seated because its job is the one the
+# contract names — it takes a claim and confronts it with the evidence, and can refuse.
+reviewer = alignment | nemesis-claim-auditor | claude-opus-5 | builtin
+
 reviewer = design   | vera-technical-arbiter     | claude-opus-5   | builtin
 reviewer = design   | nemesis-claim-auditor      | claude-sonnet-5 | builtin
-reviewer = design   | judge-codex:judge-codex-jury | gpt-5-codex   | codex
+reviewer = design   | judge-codex:design-judge   | gpt-5.5         | codex
 
-panel_phases = discover, plan, design
+# THE WAIVER WAS REMOVED, AND THIS IS WHAT REPLACED IT
+#
+# This file waived the cross-family requirement until 2026-09-21, with a reason that
+# named the CLI version as the obstacle: codex 0.120.0 was on PATH, authenticated, and
+# refused every model the account exposed (400: "The 'gpt-5.5' model requires a newer
+# version of Codex"). The block prescribed four steps to remove the waiver.
+#
+# MEASURED 2026-09-21, the reason had expired — the obstacle it named is gone:
+#
+#   $ codex --version
+#   codex-cli 0.154.0                     # step 1 of the old block, already satisfied
+#
+#   $ codex exec --skip-git-repo-check "Reply with exactly: SEAT_OK"
+#   model: gpt-5.5
+#   SEAT_OK                               # step 2: PRINTED, not a 400
+#
+#   $ python3 mechanisms/conventions/installed_plugins.py --agents judge-codex
+#   discover-judge  final-judge  implementation-judge  plan-judge  …
+#
+# So steps 3 and 4 were taken: one `argus-pattern-analyst` row per phase now names the
+# judge-codex seat, and both waiver keys are gone. The model is spelled `gpt-5.5` —
+# the one step 2 actually answered on — because `review_panel` derives the family from
+# that string by prefix, and a stale spelling would buy the family label without the
+# reviewer behind it.
+#
+# VERIFIED BEFORE BEING WRITTEN, against the real gates rather than by reading:
+#
+#   check_panel_capability.py --panel rules/review-panel.txt   -> HOLDS,
+#       "9 seats across anthropic, openai" — two families, and the single-family
+#       warning block no longer printed
+#   convene_panel.py --phase {discover,plan,design}            -> assigned,
+#       the judge-codex seat resolving to family `openai` in all three
+#
+# THE DESIGN SEAT IS NO LONGER AN APPROXIMATION
+# ---------------------------------------------
+# It was `judge-codex:plan-judge` until 2026-09-22, and this block admitted why: the
+# plugin supplied discover-judge, plan-judge, implementation-judge and final-judge and
+# NO design-judge, so the nearest available lens audited a planning artifact where a
+# drawing set was meant to be audited. Orthogonal by FAMILY, which the rule asks for,
+# and generic in LENS, which it does not.
+#
+# `judge-codex` 0.3.0 supplies `design-judge`, and the seat names it. What the plugin
+# built is the lens that was missing: it reads the five drawings in `.squad/wiki/design/`
+# AS A SET — a contradiction between two of them is invisible to a reader holding one —
+# and audits against the three questions in `design-golden-rule.md`. Its output schema
+# carries `scope`: which drawings were read, and whether there was code on disk to check
+# them against. That field matters because the golden rule makes the scope DERIVED, so a
+# reader has to know which audit is being held.
+#
+# THE APPROXIMATION IS RECORDED RATHER THAN DELETED. A seat that was generic in lens for
+# some weeks produced panel records in that period, and a reader meeting one of them
+# needs this paragraph to know what it was worth.
+#
+# WHAT THIS STILL DOES NOT PROVE. `check_panel_capability` probes the binary, never the
+# model behind it. The `codex exec` above is what closes that gap, and it was run by
+# hand on this date — it is not re-run per item. A 400 returning on a future account or
+# CLI change would read as reachable here and terminate on dispatch, which is the
+# failure the gate's own output describes. Re-run step 2 when a panel seat dies.
+
+# `alignment` gates the brief's sign-off, and is the one phase whose panel is a single
+# seat: four checkboxes ticked by somebody who is not the author, where a majority has no
+# meaning. Added 2026-09-23 — until then nothing convened that reviewer, so an author
+# either signed their own form or waited for a peer session to be alive.
+panel_phases = discover, plan, design, alignment

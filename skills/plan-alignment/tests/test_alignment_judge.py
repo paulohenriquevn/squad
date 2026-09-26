@@ -30,7 +30,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from alignment_judge import DEFAULT_JUDGE, main, refuse, sign
+import alignment_judge
+from alignment_judge import DEFAULT_JUDGE, NotReady, main, refuse, sign
 
 _REASON = ("Checked the three judgement boxes against the opportunity's evidence "
            "corner and the plan targets it names, all of which resolve on disk.")
@@ -89,15 +90,33 @@ def test_a_named_judge_overrides_the_default(tmp_path: Path) -> None:
 def test_it_will_not_re_sign_an_already_signed_brief(tmp_path: Path) -> None:
     """A second pass over a signed brief would let a refusal be overwritten by an
     approval with nothing recording that it happened."""
-    with pytest.raises(SystemExit):
+    with pytest.raises(NotReady):
         sign(_brief(tmp_path / "b.md", ticked=True), DEFAULT_JUDGE, _REASON)
 
 
 def test_a_brief_with_no_signoff_section_is_not_signable(tmp_path: Path) -> None:
     """An absent gate is not a passed one — `alignment-threshold.md` says so, and
     inventing the section here would be the judge writing its own form."""
-    with pytest.raises(SystemExit):
+    with pytest.raises(NotReady):
         sign(_brief(tmp_path / "b.md", section=False), DEFAULT_JUDGE, _REASON)
+
+
+@pytest.mark.parametrize("kwargs", [{"ticked": True}, {"section": False}])
+def test_a_brief_that_is_not_ready_exits_2_not_1(tmp_path: Path, kwargs, capsys) -> None:
+    """The module docstring reserves 1 for a REFUSAL and 2 for "not ready to be judged".
+
+    Both not-ready paths used `raise SystemExit("FATAL: ...")`, which exits 1. The
+    contract for exit 1 says "Do not retry a refusal" — so the chain halted the item over
+    a structural problem nobody had judged, and told the author their brief was refused.
+    """
+    brief = _brief(tmp_path / "b.md", **kwargs)
+
+    code = alignment_judge.main([str(brief), "--judge", DEFAULT_JUDGE,
+                                 "--model", "a-model",
+                                 "--verdict", "signed", "--reason", _REASON])
+
+    assert code == 2, f"a brief that could not be judged exited {code}, the refusal code"
+    assert "FATAL" in capsys.readouterr().err
 
 
 def test_the_cli_refuses_a_verdict_that_does_not_name_its_model() -> None:

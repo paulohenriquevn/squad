@@ -76,8 +76,8 @@ def test_cache_directories_are_not_traversed(tmp_path):
 
 def test_the_script_still_passes_end_to_end():
     """Integration regression: the real smoke stays green in this repository."""
-    proc = subprocess.run(  # noqa: PLW1510
+    proc = subprocess.run(
         [sys.executable, str(SCRIPT)],
         cwd=REPO_ROOT, capture_output=True, text=True, timeout=120,
-    )
+     check=False)
     assert proc.returncode == 0, proc.stdout + proc.stderr

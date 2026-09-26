@@ -43,6 +43,17 @@ import re
 import sys
 from pathlib import Path
 
+for _up in Path(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        sys.path.insert(0, str(_up))
+        break
+
+# Post-bootstrap, like the loop above requires: the kit ships as loose scripts.
+from squad import (  # noqa: E402 — post-bootstrap import
+    backlog as _shared_backlog,
+    shared_file,
+)
+
 LEGAL_STATUS = ("raw", "triaged", "approved", "planned", "shipped", "killed")
 
 #: Where each status may go.
@@ -59,7 +70,7 @@ LEGAL_STATUS = ("raw", "triaged", "approved", "planned", "shipped", "killed")
 #: plans rather than at the stage that decides.
 ALLOWED: dict[str, set[str]] = {
     "raw": {"triaged", "killed"},
-    "triaged": {"approved", "killed"},
+    "triaged": {"approved", "raw", "killed"},
     "approved": {"planned", "triaged", "killed"},
     "planned": {"approved", "shipped", "killed"},
     "shipped": set(),
@@ -67,6 +78,28 @@ ALLOWED: dict[str, set[str]] = {
 }
 
 OPEN_STATUS = {"raw", "triaged", "approved", "planned"}
+
+#: The open chain in order. A move to an EARLIER entry is a withdrawal, which
+#: `cycle-maintenance.md § Rollback` says is never silent: "An item advanced in error
+#: is moved back with a note recording the advance and why it was withdrawn."
+#:
+#: The rule was unimplemented on the two backward moves the table already allowed.
+#: Measured 2026-09-18: `approved -> triaged` was accepted and left the block reading
+#: `status: triaged` and nothing else — a fresh-looking item, the exact outcome the
+#: rule names as the thing to avoid. An item could be walked back through the whole
+#: chain leaving no trace, while `triaged -> raw`, the same move one step down, was
+#: refused outright.
+#:
+#: Ordered rather than enumerated as pairs: a list of legal rollbacks is a list
+#: somebody extends the table without updating, which is how this half arrived.
+OPEN_CHAIN = ("raw", "triaged", "approved", "planned")
+
+
+def is_withdrawal(current: str, to: str) -> bool:
+    """Does this move walk an item BACK down the open chain?"""
+    if current not in OPEN_CHAIN or to not in OPEN_CHAIN:
+        return False
+    return OPEN_CHAIN.index(to) < OPEN_CHAIN.index(current)
 
 #: Past this line an item stopped being a hypothesis. `killed` from here is a decision
 #: being reversed rather than a measurement coming back negative, and `--kill-reason`
@@ -90,12 +123,16 @@ def _names_a_reversal(reason: str) -> bool:
     return any(verb in lowered for verb in _REVERSAL_VERBS)
 
 
-ITEM_ID_RE = re.compile(r"\AB-\d{3,}\Z")
-BLOCK_HEADER_RE = re.compile(r"^##\s+(B-\d+)\s+—\s+.*$", re.MULTILINE)
+#: Imported, not compiled. This module and the structure check each carried one
+#: and disagreed about the separator, so an item could be approved in the brief
+#: and invisible to the only thing allowed to write its status.
+ITEM_ID_RE = _shared_backlog.ITEM_ID_RE
+BLOCK_HEADER_RE = _shared_backlog.BLOCK_RE
 STATUS_LINE_RE = re.compile(r"^status:[ \t]*(\S*)[ \t]*$", re.MULTILINE)
 BLOCKED_BY_LINE_RE = re.compile(r"^blocked_by:[ \t]*(.*)$", re.MULTILINE)
 KILL_REASON_RE = re.compile(r"^kill_reason:[ \t]*(.+)$", re.MULTILINE)
-_ID_IN_TEXT_RE = re.compile(r"\bB-\d{3,}\b")
+WITHDRAW_REASON_RE = re.compile(r"^withdraw_reason:[ \t]*(.+)$", re.MULTILINE)
+_ID_IN_TEXT_RE = _shared_backlog.ID_IN_TEXT_RE
 
 
 class Refused(Exception):
@@ -110,6 +147,24 @@ def _blocks(content: str) -> dict[str, tuple[int, int]]:
         end = matches[i + 1].start() if i + 1 < len(matches) else len(content)
         spans[match.group(1)] = (match.end(), end)
     return spans
+
+
+def _absent_reason(content: str, item_id: str) -> str:
+    """Why is `item_id` not among the blocks — and is that even the true reason?
+
+    `REFUSED: B-14 is not in this backlog` was printed about a block sitting in the
+    file, whose header this parser did not recognise. The reader goes looking for a
+    missing item and it is right there. Since 2026-09-20 one parser serves every
+    reader, so the mismatch that produced that message is gone — and the message
+    stays honest about which of the two it is, because a header can still be
+    malformed in a way no pattern should silently accept.
+    """
+    if re.search(rf"^##.*{re.escape(item_id)}\b", content, re.MULTILINE):
+        return (f"{item_id} has a heading in this backlog that does not parse as an "
+                f"item block. The shape is `## {item_id} — Title`; the separator may "
+                f"be an em dash, an en dash or a hyphen, and the id needs "
+                f"{_shared_backlog.MIN_ID_DIGITS} digits")
+    return f"{item_id} is not in this backlog"
 
 
 def _status_of(body: str) -> str | None:
@@ -141,10 +196,19 @@ def parse_blocked_by(raw: str) -> list[str]:
     So the value is prose that MAY contain ids. The ids become verifiable edges; the
     prose stays an impediment that no graph can resolve, which is honest — nothing
     in this repository can tell you whether a sponsor has decided.
+
+    ONE ENTRY PER DISTINCT ID, not per occurrence. This returned `findall` directly, so an
+    author who named the same id three times while explaining it produced three
+    impediments: a consumer's board printed `blocks B-229, B-229, B-229` and the selector
+    printed `B-229 <- B-270, B-270, B-270`, one edge counted three times from both ends.
+    Any count derived from the list was wrong by however many times the id was repeated,
+    which happens most in the items that explain themselves best.
     """
     if not declares_impediment(raw):
         return []
-    return _ID_IN_TEXT_RE.findall(raw)
+    # Distinct, in the order written: `dict.fromkeys` keeps first-seen order, which a `set`
+    # would destroy and which the reader relies on to see the impediment named first.
+    return list(dict.fromkeys(_ID_IN_TEXT_RE.findall(raw)))
 
 
 def blocked_by_of(body: str) -> list[str]:
@@ -279,7 +343,7 @@ def _drop_field(body: str, key: str) -> str:
 
 
 def advance(content: str, item_id: str, to: str, kill_reason: str = "",
-            approved_by: str = "") -> str:
+            approved_by: str = "", withdraw_reason: str = "") -> str:
     """Move one item to `to`, refusing anything the contract forbids.
 
     `approved_by` is written when the move is to `approved`, and it is the only way to
@@ -296,7 +360,7 @@ def advance(content: str, item_id: str, to: str, kill_reason: str = "",
         raise Refused(f"{to!r} is not a status; the set is {', '.join(LEGAL_STATUS)}")
     spans = _blocks(content)
     if item_id not in spans:
-        raise Refused(f"{item_id} is not in this backlog")
+        raise Refused(_absent_reason(content, item_id))
 
     start, end = spans[item_id]
     body = content[start:end]
@@ -308,6 +372,31 @@ def advance(content: str, item_id: str, to: str, kill_reason: str = "",
     if to not in ALLOWED.get(current, set()):
         allowed = ", ".join(sorted(ALLOWED.get(current, set()))) or "nothing — it is terminal"
         raise Refused(f"{item_id}: {current} -> {to} is not a legal transition; from {current} it may go to {allowed}")
+
+    if is_withdrawal(current, to):
+        # `cycle-maintenance.md § Rollback` requires the note, and held the same bar
+        # `--kill-reason` holds a committed item to — for the same reason, stated there:
+        # "a reason that only restates the evidence is what a hypothesis gets; a
+        # commitment gets a person and a change of mind." Somebody decided this item
+        # would advance; walking it back reverses that decision, and what the next reader
+        # cannot reconstruct is WHO changed their mind, never what the evidence said.
+        reason = withdraw_reason or (WITHDRAW_REASON_RE.search(body).group(1)
+                                     if WITHDRAW_REASON_RE.search(body) else "")
+        if not reason:
+            raise Refused(
+                f"{item_id}: {current} -> {to} walks the item back, which requires "
+                f"--withdraw-reason. A rollback with no note leaves a fresh-looking "
+                f"`{to}` item, and an item whose `{current}` was withdrawn carries "
+                f"information a fresh-looking one does not.")
+        if not _names_a_reversal(reason):
+            raise Refused(
+                f"{item_id}: --withdraw-reason must name WHO withdrew the `{current}` "
+                f"call and WHAT changed — not only what the evidence showed. Write it "
+                f"as e.g. 'reversed by <who> <when>: <what changed>'.")
+        # `withdrawn_from` records the advance itself, which the status line cannot:
+        # after the move the block says `{to}` and nothing says it was ever `{current}`.
+        body = _write_field(body, "withdrawn_from", current, after="status")
+        body = _write_field(body, "withdraw_reason", reason, after="status")
 
     if to == "killed":
         if not kill_reason and not KILL_REASON_RE.search(body):
@@ -336,7 +425,29 @@ def advance(content: str, item_id: str, to: str, kill_reason: str = "",
         if kill_reason:
             body = _write_field(body, "kill_reason", kill_reason, after="status")
 
-    if to == "approved" and approved_by:
+    if to == "approved":
+        # Demanded on the move that MAKES the decision, and only there.
+        #
+        # `triaged -> approved` is somebody committing to the work, and
+        # `cycle-backlog.md` requires the attribution from that point on — it calls a
+        # bare `approved` "not evidence that a person decided", which is exactly what
+        # this function accepted until 2026-09-20 while `cycle-maintenance.md`
+        # prescribed the command without the flag.
+        #
+        # `planned -> approved` is the send-back, and demanding it there would be
+        # wrong: `test_planned_is_sent_back_to_approved_not_to_triaged` states the
+        # reason — "a plan that failed review did not un-decide the work… someone
+        # would have to approve the same item twice for one bad draft." The first
+        # cut of this refusal did exactly that and four tests said so. An item that
+        # reaches the send-back carrying no attribution is inherited debt, and
+        # `check_backlog_structure.approval_unattributed` is what reports it.
+        if current == "triaged" and not approved_by.strip():
+            raise Refused(
+                "--approved-by is required to approve. `human/<name>` if a person read "
+                "the item and committed to it, `system/autonomous-sweep` if the loop "
+                "filed it under a standing authorisation. The two are not worth the "
+                "same, and a reader must be able to tell them apart without opening "
+                "another file")
         body = _write_field(body, "approved_by", approved_by, after="status")
 
     # An item cannot ship while something still blocks it. `live_blockers`
@@ -365,7 +476,7 @@ def block(content: str, item_id: str, blockers: list[str], note: str = "") -> st
         raise Refused("an impediment needs either an item id or a stated reason")
     spans = _blocks(content)
     if item_id not in spans:
-        raise Refused(f"{item_id} is not in this backlog")
+        raise Refused(_absent_reason(content, item_id))
     for b in blockers:
         if not ITEM_ID_RE.match(b):
             raise Refused(f"{b!r} is not an item id (expected B-NNN)")
@@ -397,7 +508,7 @@ def unblock(content: str, item_id: str, blockers: list[str] | None = None) -> st
     """Drop some (or every) impediment edge from `item_id`."""
     spans = _blocks(content)
     if item_id not in spans:
-        raise Refused(f"{item_id} is not in this backlog")
+        raise Refused(_absent_reason(content, item_id))
     start, end = spans[item_id]
     body = content[start:end]
     current = blocked_by_of(body)
@@ -450,6 +561,46 @@ def _find_cycle(edges: dict[str, list[str]], start: str) -> list[str] | None:
     return None
 
 
+
+def _unpushed_commits(backlog: Path) -> int | None:
+    """How many commits the working branch holds that its upstream does not.
+
+    `None` when the question cannot be answered here — no git, no repository, no upstream
+    configured — because an unanswerable question must not be reported as a zero.
+
+    ## Why this exists, measured 2026-09-23
+
+    A session marked an item `shipped` while the commit closing its last Definition-of-done
+    bullet was still on local disk: not on the remote, not on the integration branch, not on
+    the trunk. The same session had spent the day enforcing exactly that distinction on other
+    items — holding one out of `shipped` for the four minutes between its tag being cut and the
+    package registering on npm — and had written in three places that integration is not
+    availability.
+
+    So this is not a rule nobody knew. It is a rule its own author had written that morning, and
+    `rules/testing.md § 4.1` records why that makes it MORE likely to be broken rather than less:
+    for someone else's work a rule is a lens you raise; for your own it is something you already
+    believe you satisfy, and having just thought about it reads as having already handled it.
+
+    Which is why this is code and not a reminder. The check costs one `git rev-list` and answers
+    in the one place where the claim is made.
+    """
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(backlog.parent), "rev-list", "--count", "@{u}..HEAD"],
+            capture_output=True, text=True, timeout=10, check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    try:
+        return int(result.stdout.strip())
+    except ValueError:
+        return None
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Move a BACKLOG.md item, or record an impediment.")
     parser.add_argument("backlog", type=Path)
@@ -460,6 +611,9 @@ def main() -> int:
     group.add_argument("--unblock", nargs="*", metavar="B-NNN", help="clear some, or with no ids every, impediment")
     parser.add_argument("--because", default="", help="state a non-item impediment (a decision, an external action)")
     parser.add_argument("--kill-reason", default="", help="required when --to killed")
+    parser.add_argument("--withdraw-reason", default="",
+                        help="required when --to walks the item BACK down the open "
+                             "chain; must name who withdrew the advance and what changed")
     parser.add_argument("--approved-by", default="", metavar="WHO",
                         help="who made the commitment, written when --to approved: "
                              "`human/<name>` or `system/autonomous-sweep`. A bare "
@@ -470,12 +624,33 @@ def main() -> int:
     if not args.backlog.is_file():
         print(f"REFUSED: {args.backlog} does not exist", file=sys.stderr)
         return 1
+
+    # The read and the write below are ONE transaction. They were not: the file was read
+    # at the top, transformed, and `write_text` put the whole thing back — no lock across
+    # the span and no atomic replace at the end. Three modules in `mechanisms/cycle` and
+    # one in `mechanisms/fleet` rewrite this same registry, and the fleet runs lanes in
+    # parallel by design, so two writers reading the same bytes silently lost one of the
+    # two transitions. `squad/shared_file.py` carries the measurement.
+    try:
+        lock = shared_file.locked(args.backlog)
+        lock.__enter__()
+    except TimeoutError as exc:
+        print(f"REFUSED: {exc}", file=sys.stderr)
+        return 1
+    try:
+        return _apply_under_lock(args)
+    finally:
+        lock.__exit__(None, None, None)
+
+
+def _apply_under_lock(args: argparse.Namespace) -> int:
     content = args.backlog.read_text(encoding="utf-8")
 
     try:
         if args.to:
             updated = advance(content, args.item, args.to, args.kill_reason,
-                              args.approved_by)
+                              args.approved_by,
+                              withdraw_reason=args.withdraw_reason)
             action = f"{args.item} -> {args.to}"
         elif args.block_on is not None:
             updated = block(content, args.item, args.block_on, args.because)
@@ -492,7 +667,24 @@ def main() -> int:
         print(updated[start:end].strip())
         return 0
 
-    args.backlog.write_text(updated, encoding="utf-8")
+    shared_file.write_atomic(args.backlog, updated)
+
+    # `shipped` is the one status that claims something about the WORLD rather than about the
+    # registry, so it is the one worth confronting with the world. Reported and never refused:
+    # this script cannot know which commit closes which item, so a refusal here would fire on
+    # anyone holding unrelated local work — and a gate that fires on ordinary work is a gate
+    # somebody disables. The honest middle is the one `promote_to_develop.py` already takes for
+    # review drift: say what was found, and say plainly that nothing here checked the rest.
+    if args.to == "shipped":
+        ahead = _unpushed_commits(args.backlog)
+        if ahead is None:
+            print("  unpushed commits: NOT MEASURED — no upstream, no repository, or no git here.")
+        elif ahead > 0:
+            print(f"  WARNING: {ahead} commit(s) on this branch are not on its upstream. "
+                  f"`shipped` claims the work is AVAILABLE, not merely written — "
+                  f"cycle-maintenance.md separates integration from availability. "
+                  f"If any of those commits closes this item, the claim is early.")
+
     print(f"OK: {action}")
     return 0
 

@@ -38,7 +38,10 @@ for _up in Path(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         sys.path.insert(0, str(_up))
         break
-from squad.paths import lead_log_path  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import lead_log_path  # noqa: E402 — post-bootstrap import
 
 #: Decisions that handed work to a session. Everything else is the queue not moving.
 PRODUCTIVE = ("start",)
@@ -62,12 +65,34 @@ class IdleReport:
         return self.idle_seconds / self.window_seconds if self.window_seconds else 0.0
 
 
+class LogUnreadable(OSError):
+    """The decision log exists and could not be read.
+
+    `read_events` used to return the empty list for this, and `main` has already
+    confirmed the file exists — so the OSError it hid is a permission or I/O failure,
+    and the report produced from an empty list reads "fewer than two events — there is
+    no interval to measure", which is what a YOUNG FLEET looks like. An unreadable log
+    and a fleet that just started became the same sentence.
+    """
+
+
 def read_events(log: Path) -> list[dict]:
-    rows = []
+    """Decision rows with a PARSEABLE timestamp, oldest-first order left to the caller.
+
+    The stamp is parsed HERE, not in `measure`. `measure` called
+    `dt.datetime.fromisoformat(event["at"])` inside a sort key and a subtraction, so one
+    line whose `at` is not ISO-8601 raised ValueError out of `main`, and a log mixing
+    aware with naive stamps raised TypeError on the subtraction. Both are ordinary in a
+    log several processes append to.
+    """
+    rows: list[dict] = []
+    if not log.exists():
+        # Absent is a different fact from unreadable, and `main` reports it separately.
+        return rows
     try:
         text = log.read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return rows
+    except OSError as exc:
+        raise LogUnreadable(f"{log} exists and could not be read: {exc}") from exc
     for line in text.splitlines():
         try:
             row = json.loads(line)
@@ -78,7 +103,40 @@ def read_events(log: Path) -> list[dict]:
     return rows
 
 
+def _stamp(raw: object) -> dt.datetime | None:
+    """`raw` as an AWARE UTC datetime, or None when it is not a timestamp.
+
+    Naive stamps are read as UTC rather than dropped: the lead writes them with
+    `datetime.now(timezone.utc).isoformat()`, and a log carrying both shapes is a log
+    written across a change in that line — not a log to refuse.
+    """
+    if not isinstance(raw, str):
+        return None
+    try:
+        parsed = dt.datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=dt.timezone.utc)
+
+
 def measure(rows: list[dict], watched: list[str] | None = None) -> IdleReport:
+    # Stamps are parsed HERE, before anything sorts or subtracts. `when()` used to call
+    # `fromisoformat` inside the sort key and inside the subtraction, so ONE row whose
+    # `at` is not ISO-8601 raised ValueError out of `main`, and a log mixing aware with
+    # naive stamps raised TypeError on the subtraction. Both are ordinary in a log that
+    # several processes append to across a change in how the stamp is written.
+    usable, unparseable = [], 0
+    for row in rows:
+        stamp = _stamp(row.get("at"))
+        if stamp is None:
+            unparseable += 1
+            continue
+        usable.append({**row, "_at": stamp})
+    if unparseable:
+        print(f"fleet-idle: {unparseable} row(s) carry a timestamp that will not parse "
+              f"and were dropped from the measurement", file=sys.stderr)
+    rows = usable
+
     report = IdleReport(events=len(rows))
     if len(rows) < 2:
         report.detail = ("fewer than two events — there is no interval to measure. "
@@ -86,7 +144,8 @@ def measure(rows: list[dict], watched: list[str] | None = None) -> IdleReport:
         return report
 
     def when(event: dict) -> dt.datetime:
-        return dt.datetime.fromisoformat(event["at"])
+        # Parsed and normalised by `read_events`; nothing here can raise.
+        return event["_at"]
 
     rows = sorted(rows, key=when)
     report.window_seconds = (when(rows[-1]) - when(rows[0])).total_seconds()
@@ -176,7 +235,16 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     watched = [s.strip() for s in args.session.split(",") if s.strip()]
-    report = measure(read_events(args.log), watched)
+    try:
+        rows = read_events(args.log)
+    except LogUnreadable as exc:
+        # The same refusal as the branch above, for the other way of not measuring. A
+        # log that exists and cannot be read used to produce "fewer than two events",
+        # which is what a fleet that just started looks like.
+        print(f"fleet-idle: {exc} — nothing was measured, which is not the same as an "
+              f"idle fleet", file=sys.stderr)
+        return 2
+    report = measure(rows, watched)
     print(json.dumps(asdict(report), indent=2) if args.json else render(report))
     return 0
 

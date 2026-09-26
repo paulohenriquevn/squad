@@ -36,8 +36,8 @@ def _hook(name: str) -> Path:
 def _run(name: str, payload: dict) -> subprocess.CompletedProcess:
     hook = _hook(name)
     cmd = ["bash", str(hook)] if hook.suffix == ".sh" else [sys.executable, str(hook)]
-    return subprocess.run(cmd, input=json.dumps(payload), capture_output=True,  # noqa: PLW1510
-                          text=True, cwd=REPO)
+    return subprocess.run(cmd, input=json.dumps(payload), capture_output=True,
+                          text=True, cwd=REPO, check=False)
 
 
 def _post(file_path: str | None = None, **extra) -> dict:
@@ -85,15 +85,18 @@ def test_english_only_is_quiet_about_english(tmp_path: Path) -> None:
 @pytest.mark.parametrize("name", ["diagram.png", "font.woff2", "poetry.lock"])
 def test_english_only_skips_what_is_not_prose(tmp_path: Path, name: str) -> None:
     target = tmp_path / name
-    # english-only: Portuguese on purpose — the point is that it is NOT scanned
-    target.write_text("nao e prosa, e voce sabe disso\n", encoding="utf-8")
+    target.write_text("nao e prosa, e voce sabe disso\n", encoding="utf-8")  # english-only: Portuguese on purpose — the point is that it is NOT scanned
 
     assert _run("english-only-check", _post(str(target))).stdout.strip() == ""
 
 
 def test_english_only_skips_third_party_material(tmp_path: Path) -> None:
-    """`study-material/` is not ours to rewrite."""
-    target = tmp_path / "study-material" / "vendor.md"
+    """The study zone is not ours to rewrite.
+
+    `check_english_only` skips it by directory NAME, so it holds wherever the zone
+    sits — the path below is the real one since the zone moved under the write root.
+    """
+    target = tmp_path / ".squad" / "study-material" / "vendor.md"
     target.parent.mkdir(parents=True)
     target.write_text(
         "isto nao esta em ingles e voce nao deveria fazer isso\n",  # english-only: Portuguese on purpose — the point is that it is SKIPPED

@@ -23,8 +23,14 @@ Outputs JSON validation report. Saves a markdown summary at:
 
 Exit codes:
   0 — All gates PASS or N/A
-  1 — At least one gate FAIL (do NOT handoff to cycle-review)
-  2 — Error (project root not found, slug missing, etc.)
+  1 — At least one gate FAIL (do NOT handoff to cycle-review), or — with no FAIL —
+      at least one check TIMED OUT: `overall_status: NOT_VALIDATED`, the checks named
+      in `timed_out`. Not a pass; the remedy is the budget, not the code.
+  2 — Error (project root not found, slug missing, a malformed
+      `validation.timeout_s.*` budget, etc.)
+
+Command budgets: `DEFAULT_COMMAND_BUDGETS_S`, overridable per project in
+`rules/code-quality-thresholds.txt` as `validation.timeout_s.<name> = <seconds>`.
 """
 from __future__ import annotations
 
@@ -37,13 +43,13 @@ import sys
 # four different orders, and `check_write_containment.py` refuses a second one.
 import sys as _sys_bootstrap
 from datetime import datetime, timezone
-from pathlib import Path
-from pathlib import Path as _Path_bootstrap
+from pathlib import Path, Path as _Path_bootstrap
 from typing import Any
 
-from coverage_gate import evaluate as coverage_evaluate
+from coverage_gate import evaluate as coverage_evaluate, project_setting
 from diff_symbols import added_symbols_from_shas, shas_from_progress
 from suite_runners import (
+    STATUS_TIMEOUT,
     check_go_tests,
     check_lint,
     check_python_tests,
@@ -52,6 +58,7 @@ from suite_runners import (
     check_typecheck,
     run_command,
     scope_suite_to_change,
+    timed_out_check,
 )
 from wiring_recheck import recheck_pillar_a
 
@@ -59,14 +66,25 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _sys_bootstrap.path.insert(0, str(_up))
         break
-from squad.paths import (  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import (  # noqa: E402 — post-bootstrap import
     DATA_DIRNAME,
     LEGACY_RECORDS_ROOTS,
     write_records_dir,
 )
 
 
-def _find_project_root(start: Path) -> Path:
+def _find_project_root(start: Path) -> Path | None:
+    """The project root above `start`, or None when there is none.
+
+    It used to fall back to `start.resolve()`, which cannot fail and therefore cannot
+    report failure. A run launched outside any project validated the caller's working
+    directory instead, SKIPped every check it could not find a subject for, and exited
+    0 — which SKILL.md reads as "proceed directly to Step 6". None is the honest
+    answer, and `main` turns it into the exit 2 three documents already promise.
+    """
     current = start.resolve()
     for _ in range(20):
         if (current / ".claude").exists() or (current / ".git").exists():
@@ -74,7 +92,7 @@ def _find_project_root(start: Path) -> Path:
         if current == current.parent:
             break
         current = current.parent
-    return start.resolve()
+    return None
 
 
 def _has_package_json(project_root: Path) -> bool:
@@ -97,12 +115,70 @@ def _run_command(cmd: list[str], cwd: Path, timeout: int = 300) -> dict[str, Any
     return run_command(cmd, cwd, timeout)
 
 
+#: Seconds each npm command may run before it is reported TIMEOUT (not FAIL). A project
+#: overrides any of them in `rules/code-quality-thresholds.txt` as
+#: `validation.timeout_s.<name> = <seconds>`.
+#:
+#: They were hardcoded, and two were below what a real repository takes: measured on a
+#: consumer 2026-09-24, `npm test` ran 657.90s against 600 and `npm run lint` 197.13s
+#: against 180, both exiting 0. `npm_test` and `test_coverage` now match the 900s the
+#: pytest and go runners already had — one suite, one budget, whatever the language —
+#: and `npm_lint` matches `npm_typecheck`. `project_gates` runs the whole suite plus
+#: everything else, hence the larger number.
+DEFAULT_COMMAND_BUDGETS_S: dict[str, int] = {
+    "npm_test": 900,
+    "npm_typecheck": 300,
+    "npm_lint": 300,
+    "project_gates": 1800,
+    "test_coverage": 900,
+}
+_BUDGET_KEY_PREFIX = "validation.timeout_s."
+
+
+class InvalidBudgetError(ValueError):
+    """A budget the project set that is not a positive whole number of seconds."""
+
+
+def command_budget(project_root: Path, name: str) -> tuple[int, str]:
+    """(seconds, source) for one npm command; source is `project` or `default`.
+
+    A value that is not a positive integer raises instead of falling back: the author
+    who wrote `ten minutes` meant to RAISE the budget, and silently keeping the default
+    would reproduce the exact timeout they were trying to fix.
+    """
+    key = f"{_BUDGET_KEY_PREFIX}{name}"
+    for value, path in project_setting(project_root, key):
+        try:
+            seconds = int(value)
+        except ValueError:
+            seconds = 0
+        if seconds <= 0:
+            raise InvalidBudgetError(
+                f"{path}: `{key} = {value}` is not a positive whole number of seconds")
+        return seconds, "project"
+    return DEFAULT_COMMAND_BUDGETS_S[name], "default"
+
+
+def _budgeted_run(cmd: list[str], project_root: Path, budget_name: str,
+                  check_name: str) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """Run an npm command under its budget; the second value is the TIMEOUT check, if any."""
+    seconds, source = command_budget(project_root, budget_name)
+    result = _run_command(cmd, project_root, timeout=seconds)
+    if result.get("timed_out"):
+        return result, timed_out_check(check_name, result, budget_source=source,
+                                       budget_key=f"{_BUDGET_KEY_PREFIX}{budget_name}")
+    return result, None
+
+
 def check_npm_test(project_root: Path) -> dict[str, Any]:
     if not _has_package_json(project_root):
         return {"name": "npm test", "status": "SKIP", "reason": "no package.json at the repo root — this check is for javascript"}
     if not _has_npm_script(project_root, "test"):
         return {"name": "npm test", "status": "SKIP", "reason": "no 'test' script in package.json"}
-    result = _run_command(["npm", "test", "--silent"], project_root, timeout=600)
+    result, timed_out = _budgeted_run(["npm", "test", "--silent"], project_root,
+                                      "npm_test", "npm test")
+    if timed_out:
+        return timed_out
     if result.get("exit_code") == 0:
         return {"name": "npm test", "status": "PASS"}
     return {
@@ -119,7 +195,10 @@ def check_npm_typecheck(project_root: Path) -> dict[str, Any]:
     if not _has_npm_script(project_root, "typecheck"):
         # Fallback: run tsc --noEmit
         if (project_root / "tsconfig.json").exists():
-            result = _run_command(["npx", "--no", "tsc", "--noEmit"], project_root, timeout=300)
+            result, timed_out = _budgeted_run(["npx", "--no", "tsc", "--noEmit"], project_root,
+                                              "npm_typecheck", "tsc --noEmit (fallback)")
+            if timed_out:
+                return timed_out
             if result.get("exit_code") == 0:
                 return {"name": "tsc --noEmit (fallback)", "status": "PASS"}
             return {
@@ -129,7 +208,10 @@ def check_npm_typecheck(project_root: Path) -> dict[str, Any]:
                 "stderr_tail": result.get("stderr_tail", "")[:500],
             }
         return {"name": "typecheck", "status": "SKIP", "reason": "no 'typecheck' script AND no tsconfig.json"}
-    result = _run_command(["npm", "run", "typecheck", "--silent"], project_root, timeout=300)
+    result, timed_out = _budgeted_run(["npm", "run", "typecheck", "--silent"], project_root,
+                                      "npm_typecheck", "npm run typecheck")
+    if timed_out:
+        return timed_out
     if result.get("exit_code") == 0:
         return {"name": "npm run typecheck", "status": "PASS"}
     return {
@@ -145,7 +227,10 @@ def check_npm_lint(project_root: Path) -> dict[str, Any]:
         return {"name": "npm run lint", "status": "SKIP", "reason": "no package.json at the repo root — this check is for javascript"}
     if not _has_npm_script(project_root, "lint"):
         return {"name": "npm run lint", "status": "SKIP", "reason": "no 'lint' script in package.json"}
-    result = _run_command(["npm", "run", "lint", "--silent"], project_root, timeout=180)
+    result, timed_out = _budgeted_run(["npm", "run", "lint", "--silent"], project_root,
+                                      "npm_lint", "npm run lint")
+    if timed_out:
+        return timed_out
     if result.get("exit_code") == 0:
         return {"name": "npm run lint", "status": "PASS"}
     return {
@@ -169,8 +254,9 @@ def check_project_gates(project_root: Path) -> dict[str, Any]:
     standard that was never checked is the defect B-019 and B-048 record elsewhere in this
     repository, and this function exists because of it.
 
-    The timeout is generous because `gates` runs the whole suite. A timeout is reported as FAIL
-    with the reason rather than swallowed — a gate that times out has not passed.
+    The timeout is generous because `gates` runs the whole suite. A timeout is reported as
+    TIMEOUT with the budget rather than swallowed — a gate that times out has not passed, and it
+    has not failed either; the run's verdict becomes NOT_VALIDATED, which exits 1.
     """
     if not _has_package_json(project_root):
         return {
@@ -185,7 +271,10 @@ def check_project_gates(project_root: Path) -> dict[str, Any]:
             "reason": "no 'gates' script in package.json — this project declares no composite gate, "
                       "so the checks above are all that ran",
         }
-    result = _run_command(["npm", "run", "gates", "--silent"], project_root, timeout=1800)
+    result, timed_out = _budgeted_run(["npm", "run", "gates", "--silent"], project_root,
+                                      "project_gates", "project gates")
+    if timed_out:
+        return timed_out
     if result.get("exit_code") == 0:
         return {"name": "project gates", "status": "PASS"}
     return {
@@ -207,7 +296,10 @@ def check_coverage(project_root: Path) -> dict[str, Any]:
     command_ran = False
     command_failed = False
     if _has_package_json(project_root) and _has_npm_script(project_root, "test:coverage"):
-        result = _run_command(["npm", "run", "test:coverage", "--silent"], project_root, timeout=600)
+        result, timed_out = _budgeted_run(["npm", "run", "test:coverage", "--silent"],
+                                          project_root, "test_coverage", "coverage")
+        if timed_out:
+            return timed_out
         command_ran = True
         command_failed = result.get("exit_code") != 0
 
@@ -242,6 +334,7 @@ def wiring_summary(project_root: Path, slug: str) -> dict[str, Any]:
             "name": "wiring_triad",
             "status": "SKIP",
             "reason": "no progress file found — implement may not have been invoked",
+            "skip_kind": _checkpoint_skip_kind(project_root, slug),
         }
 
     tasks = progress.get("tasks", []) if isinstance(progress, dict) else progress
@@ -267,6 +360,11 @@ def wiring_summary(project_root: Path, slug: str) -> dict[str, Any]:
         "symbols_resolved": recheck.symbols_resolved,
         "pillar_a_fails": recheck.pillar_a_fails,
         "pillar_a_fail_symbols": list(recheck.fail_symbols),
+        #: Named, because a reader of `symbols_resolved` cannot otherwise tell a complete check
+        #: from a partial one. A consumer measured 17 resolved out of 28 with the other 11
+        #: appearing nowhere, and the four exports under review were among them (#190).
+        "symbols_unresolved": list(recheck.unresolved_symbols),
+        "searched_roots": list(recheck.searched_roots),
     }
 
     if recheck.pillar_a_fails > 0:
@@ -303,6 +401,23 @@ def wiring_summary(project_root: Path, slug: str) -> dict[str, Any]:
             ),
         }
 
+    if recheck.unresolved_symbols:
+        # Not PASS over what was never located, and not FAIL over what nothing found unwired.
+        # PARTIAL resolution was reported PASS until the safe option of #190 was taken: the
+        # consumer that measured it had the four exports under review among 11 unlocated
+        # symbols, because their module sat outside the searched directories.
+        return {
+            **base,
+            "status": STATUS_INCONCLUSIVE,
+            "reason": (
+                f"{len(recheck.unresolved_symbols)} of {recheck.symbols_checked} symbol(s) "
+                f"could not be located under {', '.join(recheck.searched_roots)} — pillar (a) "
+                f"is unverified for: {', '.join(recheck.unresolved_symbols)}. A derived or "
+                "dynamic name legitimately does not resolve; a module outside the searched "
+                "directories does not either."
+            ),
+        }
+
     return {**base, "status": "PASS"}
 
 
@@ -332,7 +447,7 @@ def check_code_quality(project_root: Path, plan_slug: str, *, skip: bool = False
     cq_invoke_dir = Path(__file__).resolve().parent.parent.parent / "code-quality" / "scripts"
     sys.path.insert(0, str(cq_invoke_dir))
     try:
-        import cq_invoke  # type: ignore[import-not-found]
+        import cq_invoke  # type: ignore[import-not-found] — sibling skill, resolved by the sys.path line above
     except ImportError:
         return {
             "name": "code_quality",
@@ -355,10 +470,19 @@ def check_code_quality(project_root: Path, plan_slug: str, *, skip: bool = False
             "reason": f"/code-quality invocation raised: {type(exc).__name__}: {exc}",
         }
     if summary is None:
+        why, detail = cq_invoke.last_failure()
+        # SKIP means "there was nothing to run". A gate that RAN and fell over is a
+        # failure, and folding the two together is what let ORCHESTRATOR_CRASH (exit 2)
+        # arrive here as SKIP, become PARTIAL and exit 0 — delivery proceeding on a
+        # quality gate that crashed.
+        ran_and_failed = why in (cq_invoke.Unavailable.CRASHED,
+                                 cq_invoke.Unavailable.TIMEOUT,
+                                 cq_invoke.Unavailable.UNPARSEABLE)
         return {
             "name": "code_quality",
-            "status": "SKIP",
-            "reason": "/code-quality script unavailable or invocation failed",
+            "status": "FAIL" if ran_and_failed else "SKIP",
+            "reason": (f"/code-quality {why.value if why else 'unavailable'}: {detail}"
+                       if why else "/code-quality script unavailable"),
         }
 
     verdict = summary.get("verdict", "UNKNOWN")
@@ -626,7 +750,8 @@ def check_checkpoint_consistency_gate(project_root: Path, slug: str) -> dict[str
     plan = _find_plan(project_root, slug)
     if path is None:
         return {"name": "checkpoint_consistency", "status": "SKIP",
-                "reason": "no progress checkpoint — implement may not have run"}
+                "reason": "no progress checkpoint — implement may not have run",
+                "skip_kind": _checkpoint_skip_kind(project_root, slug)}
     if plan is None:
         return {"name": "checkpoint_consistency", "status": "SKIP",
                 "reason": f"plan not found for slug '{slug}' — cannot map task ids"}
@@ -646,7 +771,7 @@ def check_checkpoint_consistency_gate(project_root: Path, slug: str) -> dict[str
                 "reason": "checkpoint is malformed JSON (see progress_schema gate)"}
 
     plan_ids = plan_task_ids_from_text(plan.read_text(encoding="utf-8-sig"))
-    report = check_checkpoint_consistency(progress, project_root, plan_ids)
+    report = check_checkpoint_consistency(progress, project_root, plan_ids, slug=slug)
     return {
         "name": "checkpoint_consistency",
         "status": report.status,
@@ -672,8 +797,18 @@ def check_tdd_shape_gate(project_root: Path, slug: str) -> dict[str, Any]:
 
     report = check_tdd_shape(plan)
     if report.total_tasks == 0:
-        return {"name": "tdd_shape", "status": "SKIP",
-                "reason": "the plan declares no `### T{n}.{m}` task blocks"}
+        # FAIL, not SKIP. The plan FILE exists — `_find_plan` returned it — so zero task
+        # blocks is a fact about what this checker could read, not a fact about the plan.
+        # As a SKIP it counted into `skips`, `overall` became PARTIAL, and PARTIAL exits
+        # 0, so IMPLEMENTATION_COMPLETE could be emitted with the TDD shape never
+        # verified. `rules/cycle-implement.md § Hard gates` calls this gate blocking.
+        return {"name": "tdd_shape", "status": "FAIL",
+                "reason": (f"{plan.name} parsed to zero `### T{{n}}.{{m}}` task blocks. "
+                           f"The plan is on disk, so this is what the checker could read "
+                           f"— not a plan that declares no tasks. A shape that could not "
+                           f"be audited is not a shape that passed."),
+                "findings": [{"severity": "HIGH", "code": "tdd_shape_unreadable",
+                              "message": f"no task block parsed from {plan}"}]}
     without = [t.task_id for t in report.tasks if not t.has_executable_shape]
     return {
         "name": "tdd_shape",
@@ -699,13 +834,19 @@ def check_phase_review_gate(project_root: Path, slug: str) -> dict[str, Any]:
     progress = _read_progress(project_root, slug)
     if progress is None:
         return {"name": "phase_review", "status": "SKIP",
-                "reason": "no progress checkpoint — implement may not have run"}
+                "reason": "no progress checkpoint — implement may not have run",
+                "skip_kind": _checkpoint_skip_kind(project_root, slug)}
     from check_phase_review import check_phase_review
 
     review_dirs = [
         *_artefact_dirs(project_root, "mini-reviews"),
     ]
-    report = check_phase_review(plan, progress, slug, review_dirs)
+    # `repo_root` is what `_check_ordering` needs to compare the review's recorded head
+    # against the phase's last commit. Both production call sites omitted it, so
+    # `_is_ancestor` ran only in tests and the HIGH `retroactive_review` finding — a
+    # review signed off before the code it reviews existed — could never be produced
+    # outside the suite. The value was already in hand here.
+    report = check_phase_review(plan, progress, slug, review_dirs, repo_root=project_root)
     return {
         "name": "phase_review",
         "status": report.status,
@@ -724,7 +865,7 @@ def _files_touched_by_this_change(project_root: Path, slug: str) -> list[str]:
     reads it as "do not scope", reporting the whole failure rather than a guess at which
     part of it belongs here.
     """
-    from check_acceptance_criteria import _changed_files  # noqa: PLC0415 — path-loaded
+    from check_acceptance_criteria import _changed_files
 
     progress = _read_progress(project_root, slug)
     shas = shas_from_progress(progress) if isinstance(progress, dict) else []
@@ -775,6 +916,47 @@ def check_test_obligations_gate(project_root: Path, slug: str) -> dict[str, Any]
     }
 
 
+STATUS_INCONCLUSIVE = "INCONCLUSIVE"
+
+
+def check_census(checks: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    """The checks grouped by what they mean for the verdict. One place, so the verdict
+    and the report's counts cannot disagree about which check is which."""
+    fails = [c for c in checks if c.get("status") == "FAIL"]
+    #: A precondition that is absent is not a check that does not apply. Counted with
+    #: the failures, because "the work did not happen" and "this gate has no subject
+    #: here" reached the same verdict and the same exit code — and the first one is the
+    #: thing this gate exists to catch.
+    blocked = [c for c in checks
+               if c.get("status") == "SKIP"
+               and c.get("skip_kind") == SKIP_PRECONDITION_MISSING]
+    # Every SKIP, for the summary buckets — `test_summary_buckets_account_for_every_check`
+    # asserts they sum to the total, and pulling the blocked ones out of this list made
+    # two checks vanish from the arithmetic. The distinction belongs to the VERDICT, not
+    # to the census.
+    skips = [c for c in checks if c.get("status") == "SKIP"]
+    #: A check that ran out of budget. It outranks PARTIAL and PASS — the unfinished check
+    #: may be hiding a failure — and yields to FAIL, which is already a definite answer.
+    timed_out = [c for c in checks if c.get("status") == STATUS_TIMEOUT]
+    #: A check that verified part of its subject and could not locate the rest (the wiring
+    #: recheck with unresolved symbols). Not a failure — nothing was found wrong — and not
+    #: a pass over what it never looked at: the run is PARTIAL, which already means "the
+    #: verdict covers what ran".
+    inconclusive = [c for c in checks if c.get("status") == STATUS_INCONCLUSIVE]
+    return {"fails": fails, "blocked": blocked, "skips": skips,
+            "timed_out": timed_out, "inconclusive": inconclusive}
+
+
+def overall_status(census: dict[str, list[dict[str, Any]]]) -> str:
+    if census["fails"] or census["blocked"]:
+        return "FAIL"
+    if census["timed_out"]:
+        return "NOT_VALIDATED"
+    if census["skips"] or census["inconclusive"]:
+        return "PARTIAL"
+    return "PASS"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Final validation gate for /implement.")
     parser.add_argument("slug", help="Plan slug (matches .claude/records/implementations/{slug}-implementation.md)")
@@ -788,10 +970,26 @@ def main() -> int:
     args = parser.parse_args()
 
     project_root = args.project_root if args.project_root else _find_project_root(Path.cwd())
+    if project_root is None:
+        print(f"UNCHECKED: no project root at or above {Path.cwd()} — no `.claude/` and "
+              f"no `.git/` within 20 levels. Pass --project-root if that is deliberate.",
+              file=sys.stderr)
+        return 2
+
+    # Every budget is read before any command runs: a malformed one is a configuration
+    # error (exit 2), not something to discover twenty minutes in as a crashed check.
+    try:
+        for budget_name in DEFAULT_COMMAND_BUDGETS_S:
+            command_budget(project_root, budget_name)
+    except InvalidBudgetError as error:
+        print(f"UNCHECKED: {error}", file=sys.stderr)
+        return 2
 
     # Every language whose suite the gate knows how to run. The npm check stays
     # first for report stability; test_execution consolidates all of them and is
     # what turns "nothing ran" into a FAIL instead of a silent PARTIAL.
+    _emit_phase_start(project_root, cycle="implement", slug=args.slug)
+
     touched = _files_touched_by_this_change(project_root, args.slug)
     suite_checks = [
         scope_suite_to_change(check_npm_test(project_root), touched),
@@ -822,18 +1020,33 @@ def main() -> int:
         check_code_quality(project_root, args.slug, skip=args.no_code_quality),
     ]
 
-    fails = [c for c in checks if c.get("status") == "FAIL"]
-    skips = [c for c in checks if c.get("status") == "SKIP"]
-    overall = "FAIL" if fails else ("PARTIAL" if skips else "PASS")
+    # A SKIP that names no kind is `not_applicable`: the checks that KNOW they are
+    # missing a precondition say so, and silence means the check simply has no subject
+    # here. Defaulting the other way would turn every honest SKIP into a failure on the
+    # day this landed.
+    for check in checks:
+        if check.get("status") == "SKIP":
+            check.setdefault("skip_kind", SKIP_NOT_APPLICABLE)
+
+    census = check_census(checks)
+    fails, blocked, skips = census["fails"], census["blocked"], census["skips"]
+    timed_out, inconclusive = census["timed_out"], census["inconclusive"]
+    overall = overall_status(census)
 
     report: dict[str, Any] = {
         "slug": args.slug,
         "project_root": str(project_root),
         "validated_at": datetime.now(timezone.utc).isoformat(),
         "overall_status": overall,
+        #: Named separately from `fails` so a reader can tell a gate that FAILED from a
+        #: gate that could not run at all.
+        "preconditions_missing": [c["name"] for c in blocked],
+        #: Named apart from `fails` for the same reason: "did not finish" is not "went red".
+        "timed_out": [c["name"] for c in timed_out],
         "checks": checks,
         "summary": {
-            # Every status bucket is counted so pass+fail+skip+warn+partial+n_a == total.
+            # Every status bucket is counted so pass+fail+skip+warn+partial+n_a+timeout
+            # +inconclusive == total.
             "total": len(checks),
             "pass": sum(1 for c in checks if c.get("status") == "PASS"),
             "fail": len(fails),
@@ -841,6 +1054,8 @@ def main() -> int:
             "warn": sum(1 for c in checks if c.get("status") == "WARN"),
             "partial": sum(1 for c in checks if c.get("status") == "PARTIAL"),
             "n_a": sum(1 for c in checks if c.get("status") == "N/A"),
+            "timeout": len(timed_out),
+            "inconclusive": len(inconclusive),
         },
     }
 
@@ -855,7 +1070,7 @@ def main() -> int:
 
 **Date:** {today}
 **Overall:** {overall}
-**Total checks:** {len(checks)} (PASS: {report['summary']['pass']}, FAIL: {len(fails)}, SKIP: {len(skips)})
+**Total checks:** {len(checks)} (PASS: {report['summary']['pass']}, FAIL: {len(fails)}, SKIP: {len(skips)}, TIMEOUT: {len(timed_out)}, INCONCLUSIVE: {len(inconclusive)})
 
 ## Checks
 
@@ -869,6 +1084,11 @@ def main() -> int:
                 md += "- Verification: independent recheck of `check_wiring.py`\n"
                 md += f"- Symbols derived from diff: {c.get('symbols_derived')}\n"
                 md += f"- Symbols independently resolved: {c.get('symbols_resolved')}\n"
+                _unresolved = c.get("symbols_unresolved") or []
+                if _unresolved:
+                    md += (f"- Symbols the checker could NOT locate ({len(_unresolved)}) under "
+                           f"{', '.join(c.get('searched_roots') or [])}, so nothing above "
+                           f"covers them: {', '.join(_unresolved)}\n")
                 md += f"- Pillar (a) fails (uncalled symbols): {c.get('pillar_a_fails')}\n"
                 if c.get("pillar_a_fail_symbols"):
                     md += f"- Failing symbols: {', '.join(c['pillar_a_fail_symbols'])}\n"
@@ -887,6 +1107,11 @@ def main() -> int:
             md += "Implementation PASSes all gates. Ready for `cycle-review` (when built).\n"
         elif overall == "FAIL":
             md += "Implementation FAILS at least one gate. Loop back to /implement to address.\n"
+        elif overall == "NOT_VALIDATED":
+            md += ("Implementation NOT VALIDATED — no gate failed, but "
+                   f"{', '.join(c['name'] for c in timed_out)} did not finish within budget. "
+                   "Changing the code will not fix this: raise the budget named in the check's "
+                   "reason, or make the command faster, and re-run.\n")
         else:
             md += "Implementation PARTIAL — some gates were SKIPped because pre-conditions absent (e.g., package.json). Decide whether SKIPs are acceptable for this phase.\n"
         md_path.write_text(md, encoding="utf-8")
@@ -898,6 +1123,57 @@ def main() -> int:
     _emit_phase_end(project_root, cycle="implement", slug=args.slug, verdict=overall)
 
     return 0 if overall in ("PASS", "PARTIAL") else 1
+
+
+#: Why a check did not run. The two are opposite facts and were one status.
+#:
+#: `not_applicable` — the check has no subject here: `npm test` in a Go repository.
+#: `precondition_missing` — the check has a subject and the thing it reads is absent,
+#: which is a fact about the WORK rather than about the repository.
+#:
+#: Measured 2026-09-21 on a repository holding a plan and no checkpoint: 16 SKIPs,
+#: `overall_status: PARTIAL`, exit 0 — "proceed" — while four of those SKIPs said, in
+#: their own reason strings, that `/implement` may not have run. The kit had already
+#: argued the correct shape twice, in the comments of `tdd_shape` and `test_execution`,
+#: and fixed it one check at a time. This is the general form.
+SKIP_NOT_APPLICABLE = "not_applicable"
+SKIP_PRECONDITION_MISSING = "precondition_missing"
+
+
+def _checkpoint_skip_kind(project_root: Path, slug: str) -> str:
+    """Is a missing checkpoint a fact about the WORK, or about the phase?
+
+    Only when a plan exists for this slug. Without one, `/implement` was never supposed
+    to run and its absent checkpoint is the honest state of a pre-code tree — the first
+    cut ignored that and turned `test_pre_code_phase_all_skip` red, which was the test
+    saying so.
+
+    With a plan on disk the reading flips: the work was planned, the gate that closes it
+    is running, and the record it reads is not there. That is the fact the four
+    checkpoint-dependent checks were reporting in prose while returning SKIP, and SKIP
+    exits 0.
+    """
+    return (SKIP_PRECONDITION_MISSING if _find_plan(project_root, slug) is not None
+            else SKIP_NOT_APPLICABLE)
+
+
+def _emit_phase_start(project_root, *, cycle: str, slug: str) -> None:
+    """Record that the phase began, so the pair can be timed.
+
+    Emitted before the gates run: a validation that dies mid-way leaves a start with no
+    end, which is what an interrupted phase is. Recording it only on success would draw
+    the stream as though nothing had been attempted, and 37 ends against 1 start is the
+    state that made WIP incomputable on one consumer.
+    """
+    tooling = Path(__file__).resolve().parents[3] / "mechanisms" / "cycle"
+    if str(tooling) not in sys.path:
+        sys.path.insert(0, str(tooling))
+    try:
+        from cycle_events import emit_phase_start
+    except ImportError as error:
+        print(f"cycle-events: emitter unavailable ({error})", file=sys.stderr)
+        return
+    emit_phase_start(project_root, cycle=cycle, slug=slug)
 
 
 def _emit_phase_end(project_root, *, cycle: str, slug: str, verdict) -> None:

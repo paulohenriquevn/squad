@@ -59,7 +59,14 @@ for _up in Path(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         sys.path.insert(0, str(_up))
         break
-from squad.paths import wiki_dir  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import wiki_dir  # noqa: E402 — post-bootstrap import
+from squad.signoff import (  # noqa: E402 — post-bootstrap import
+    SignOff,
+    read as read_signoff,
+)
 
 
 #: The drawings, in the order they remove ambiguity. `mermaid` is the kind the block
@@ -91,9 +98,27 @@ DESIGN_LEAF = "design"
 PIECES_DOC = "technical-pieces.md"
 PIECE_RE = re.compile(r"^##\s+(PIECE-\d+)\s*(?:—|-)\s*(.+)$", re.MULTILINE)
 MERMAID_RE = re.compile(r"```mermaid\s*\n(.*?)```", re.DOTALL)
-SIGNED_BY_RE = re.compile(r"<!--\s*signed-by:\s*([^\s>]+)\s*-->")
-UNTICKED_RE = re.compile(r"^\s*-\s*\[\s*\]\s+\S", re.MULTILINE)
-PLACEHOLDER_RE = re.compile(r"\b(TBD|TODO|FIXME|XXX|\?\?\?|LOREM)\b", re.IGNORECASE)
+#: Who signed and how many boxes carry a mark come from `squad.signoff`, the one
+#: reader every gate shares. This file carried its own `([^\s>]+)` and its own rule,
+#: and the pair failed in both directions at once — see that module.
+#:
+#: The word forms keep their `\b`; `???` must not have one. `\b` needs a word character
+#: beside it and `?` is not one, so `owner: ???` sat in the pattern unmatchable — the
+#: same defect the product scorer carried in the same expression.
+PLACEHOLDER_RE = re.compile(r"\b(?:TBD|TODO|FIXME|XXX|LOREM)\b|\?\?\?", re.IGNORECASE)
+
+#: A `PIECE-N` mention in the map. Matched as a WHOLE id: `"PIECE-1" in map_body` is a
+#: substring test and `PIECE-1` is a substring of `PIECE-10`. Measured 2026-09-20 with
+#: eleven pieces and a map naming only PIECE-10 and PIECE-11 — "11 declared, 3 covered".
+#: It fails only in the permissive direction, and it fires on any product with ten or
+#: more pieces.
+#: Every `PIECE-N` a body NAMES, for the reverse of `_mentions`. The negative lookahead
+#: is the same guard: `PIECE-1` must not be harvested out of `PIECE-10`.
+PIECE_IN_TEXT_RE = re.compile(r"\b(PIECE-\d+)\b(?!-?\d)")
+
+
+def _mentions(piece_id: str, body: str) -> bool:
+    return re.search(rf"\b{re.escape(piece_id)}\b(?!-?\d)", body) is not None
 
 #: A mermaid block under this many non-empty lines is a kind line and one edge —
 #: which asserts a relationship exists and nothing about it.
@@ -122,19 +147,60 @@ class Finding:
 class Report:
     verdict: str = ""
     present: list[str] = field(default_factory=list)
+    #: Optional drawings that are NOT on disk. They were put in `present`, so
+    #: `render` printed `ok  system-map  (derived)` for a file nobody had
+    #: written — the one non-mandatory drawing, reported as done because it was
+    #: allowed to be absent. Absent and optional is a third state, and it is the
+    #: one a reader needs to see.
+    absent_optional: list[str] = field(default_factory=list)
     missing: list[str] = field(default_factory=list)
     pieces: list[str] = field(default_factory=list)
+    #: Named by the map and declared by nobody. Its own field, because "the map forgot
+    #: a piece" and "the map invented one" are different findings and one number out of
+    #: two questions is the class this fix belongs to.
+    undeclared: list[str] = field(default_factory=list)
     uncovered: list[str] = field(default_factory=list)
     signers: list[str] = field(default_factory=list)
     unticked: int = -1
+    #: The parsed sign-off. `SignOff(absent=True)` until one is read, so an absent
+    #: checklist and an empty one are the same refusal by construction.
+    sheet: SignOff = field(default_factory=lambda: SignOff(absent=True))
     findings: list[Finding] = field(default_factory=list)
     unmeasured_because: str = ""
 
 
+class Unreadable(Exception):
+    """On disk and could not be opened. NOT the same fact as absent.
+
+    `_read` swallowed `OSError` into `""`, so a present-but-unreadable drawing was
+    reported MISSING and the verdict became INVALID — "draw it", about a file the
+    person already has. The product scorer keeps `unreadable_document` as its own cap
+    for the same reason.
+    """
+
+
 def _read(path: Path) -> str:
+    """The body, `""` when there is no such file, `Unreadable` when there is one.
+
+    The split matters and only the second half is new: NOT THERE and THERE BUT SHUT
+    are different facts, and the caller reports them to different people. A missing
+    file keeps returning `""` so an absent drawing stays `drawing_missing`.
+    """
     try:
         return path.read_text(encoding="utf-8-sig")
-    except OSError:
+    except FileNotFoundError:
+        return ""
+    except IsADirectoryError:
+        return ""
+    except OSError as exc:
+        raise Unreadable(str(exc)) from exc
+
+
+def _read_or_empty(path: Path) -> str:
+    """For documents whose absence and unreadability the caller treats alike."""
+    try:
+        return _read(path)
+    except Unreadable:
         return ""
 
 
@@ -190,9 +256,19 @@ def check(project: Path) -> Report:
 
     for drawing in DRAWINGS:
         path = design / drawing.filename
-        body = _read(path)
+        try:
+            body = _read(path)
+        except Unreadable as exc:
+            rep.present.append(drawing.key)
+            rep.findings.append(Finding(
+                "drawing_unreadable", "blocker" if drawing.mandatory else "major",
+                drawing.filename,
+                f"the file is on disk and could not be opened ({exc}). Reporting this "
+                "as MISSING would send somebody to draw what they already have"))
+            continue
         if not body.strip():
-            (rep.missing if drawing.mandatory else rep.present).append(drawing.key)
+            (rep.missing if drawing.mandatory
+             else rep.absent_optional).append(drawing.key)
             if drawing.mandatory:
                 rep.findings.append(Finding(
                     "drawing_missing", "blocker", drawing.filename,
@@ -242,7 +318,7 @@ def check(project: Path) -> Report:
                 "than an absent drawing, which at least reports itself"))
 
     # ---- coverage: every declared piece has a place in the map -----------------
-    pieces_body = _read(product / PIECES_DOC) if product else ""
+    pieces_body = _read_or_empty(product / PIECES_DOC) if product else ""
     if not pieces_body:
         rep.findings.append(Finding(
             "pieces_unreadable", "major", PIECES_DOC,
@@ -250,9 +326,30 @@ def check(project: Path) -> Report:
             "The drawings may omit half the product and nothing here would know"))
     else:
         rep.pieces = [pid for pid, _title in PIECE_RE.findall(pieces_body)]
-        map_body = _read(design / "system-map.md")
+        map_body = _read_or_empty(design / "system-map.md")
         if rep.pieces and map_body:
-            rep.uncovered = [p for p in rep.pieces if p not in map_body]
+            rep.uncovered = [p for p in rep.pieces if not _mentions(p, map_body)]
+            # THE OTHER DIRECTION, which was not computed at all. A map may name a piece
+            # `technical-pieces.md` never declared, and the two readings mean different
+            # things: a piece missing from the map is work the drawing forgot, while a
+            # piece in the map that nobody declared is the map drawing something no one
+            # decided — or a piece list that lost an entry. This cycle exists to settle
+            # the shape before any item is filed against it, so both answers are worth
+            # having then.
+            #
+            # Matched with the same whole-id rule `_mentions` uses, for the same measured
+            # reason: `PIECE-1` is a substring of `PIECE-10`, and a substring test here
+            # would call `PIECE-10` declared on the strength of `PIECE-1`.
+            declared = set(rep.pieces)
+            rep.undeclared = sorted(
+                {pid for pid in PIECE_IN_TEXT_RE.findall(map_body)} - declared,
+                key=lambda pid: int(pid.split("-")[1]))
+            for piece in rep.undeclared:
+                rep.findings.append(Finding(
+                    "piece_not_declared", "major", piece,
+                    f"drawn in the system map and declared in no {PIECES_DOC}. Either "
+                    "the map is drawing a responsibility nobody decided, or the piece "
+                    "list lost an entry — and the map is not the place that decides"))
             for piece in rep.uncovered:
                 rep.findings.append(Finding(
                     "piece_not_in_map", "major", piece,
@@ -267,10 +364,19 @@ def check(project: Path) -> Report:
                 "against. Coverage was not verified"))
 
     # ---- the signature ---------------------------------------------------------
-    signoff = _read(design / "sign-off.md")
+    signoff_path = design / "sign-off.md"
+    try:
+        signoff = _read(signoff_path) if signoff_path.is_file() else ""
+    except Unreadable as exc:
+        signoff = ""
+        rep.findings.append(Finding(
+            "signoff_unreadable", "major", "sign-off.md",
+            f"the checklist is on disk and could not be opened ({exc}), so nothing "
+            "here knows whether it was signed"))
     if signoff:
-        rep.signers = SIGNED_BY_RE.findall(signoff)
-        rep.unticked = len(UNTICKED_RE.findall(signoff))
+        rep.sheet = read_signoff(signoff)
+        rep.signers = rep.sheet.signers
+        rep.unticked = rep.sheet.unticked
 
     rep.verdict = verdict_of(rep)
     return rep
@@ -286,9 +392,16 @@ def verdict_of(rep: Report) -> str:
     #: A complete, covered set of drawings that nobody signed is not agreed. The same
     #: shape `score_product_alignment` holds: the machine can count, and what it cannot
     #: do is say the drawings are RIGHT.
-    if rep.unticked != 0 or not rep.signers:
+    #:
+    #: Three conditions, because two of them were holes. `complete` requires boxes that
+    #: were TICKED — a section whose boxes were DELETED has nothing unticked in it —
+    #: and `human_signed` is an ALLOWLIST. Refusing only `judge/` agreed a design
+    #: signed `daedalus-tech-lead`, the agent that draws them, while the same run
+    #: refused `human/paulo (approved in session)` because the local pattern could not
+    #: see a route. `cycle-design.md`: "a person, and only a person".
+    if not rep.sheet.complete or not rep.sheet.signers:
         return "AWAITING_REVIEW"
-    if any(s.startswith("judge/") for s in rep.signers):
+    if not rep.sheet.human_signed:
         return "AWAITING_REVIEW"
     return "DESIGN_AGREED"
 
@@ -311,7 +424,12 @@ def render(rep: Report) -> str:
         return "\n".join(out)
 
     for drawing in DRAWINGS:
-        mark = "ok " if drawing.key in rep.present else "MISSING"
+        if drawing.key in rep.present:
+            mark = "ok "
+        elif drawing.key in rep.absent_optional:
+            mark = "absent (optional — not drawn, not a failure)"
+        else:
+            mark = "MISSING"
         flag = "" if drawing.mandatory else "  (derived)"
         out.append(f"  {mark:8} {drawing.key:12}{flag}")
     out.append("")

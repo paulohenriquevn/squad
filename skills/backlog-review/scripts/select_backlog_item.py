@@ -24,8 +24,10 @@ kit, and it was invisible to `check_gate_mechanisms.py` because that sweep reads
 ## Age is the id
 
 The ranking says "oldest first". This reads the id, not the date: ids are monotonic
-and never reused (the contract says so and `check_backlog_structure.py` enforces it
-as `renumbered`), so a lower number was registered earlier. Measured in one real
+and never reused (the contract says so, and `check_backlog_structure.py` enforces the
+observable half as `duplicate_id` — the order BLOCKS sit in the file is not evidence of
+anything, which is why the check that read it was removed in #169), so a lower number was
+registered earlier. Measured in one real
 registry: 166 items, 52 carrying a registration date — 31%. Ordering by the date
 would leave two thirds of the backlog with no key at all, and would be a second
 source for a fact the id already carries.
@@ -59,16 +61,24 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
         _sys_bootstrap.path.insert(0, str(_up))
         break
 
-from squad.paths import records_dir  # noqa: E402
-
-from check_backlog_structure import (
+# These resolve only after the sys.path bootstrap above: the kit ships as loose
+# scripts, not an installed package, so E402 is suppressed here on purpose.
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from check_backlog_structure import (  # noqa: E402 — post-bootstrap import
+    IDENTITY_CHECKS,
     OPEN_STATUS,
     Item,
     _parse_items,
     carries_prose,
+    check_backlog,
     declares_impediment,
     parse_blocked_by,
 )
+
+from squad.paths import records_dir  # noqa: E402 — post-bootstrap import
+
 
 def _records_by_item(root: Path, sub: str, suffix: str) -> dict:
     """Through `squad_boss.records_by_item`, which knows BOTH filename spellings.
@@ -82,12 +92,12 @@ def _records_by_item(root: Path, sub: str, suffix: str) -> dict:
     Empty on ImportError rather than falling back to a local glob: a second
     implementation appearing whenever an import fails is exactly how these two diverged.
     """
-    from squad.paths import records_dir  # noqa: PLC0415
+    from squad.paths import records_dir
     records = records_dir(root, "") if root is not None else None
     if records is None or not records.is_dir():
         return {}
     try:
-        from squad_boss import records_by_item  # noqa: PLC0415
+        from squad_boss import records_by_item
     except ImportError:
         return {}
     return records_by_item(records, sub, suffix)
@@ -95,6 +105,17 @@ def _records_by_item(root: Path, sub: str, suffix: str) -> dict:
 
 #: The chain's filter. `planned` is open but already has a plan — SELECT hands work
 #: to `/discover-plan` or `/idea-to-release`, and an item that has one is in flight.
+#: An item recording a constraint nobody HERE can clear — a sponsor decision, a
+#: ratification, a vendor fix, a regulatory hold. It is a `B-NNN` like any other, so
+#: `blocked_by` can point at it and the edge is verifiable; it is never handed out as
+#: work, because what closes it is somebody outside this repository acting.
+#:
+#: `cycle-backlog.md` measured the alternative: seven of eight impediments named a
+#: decision rather than an item, so they resolved only when a human remembered to
+#: delete the line, were invisible to G6 and G7, and appeared in no report as a thing
+#: that was itself pending. Giving the constraint a number buys all three back.
+EXTERNAL_BLOCKER_SOURCE = "external-blocker"
+
 SELECTABLE = ("triaged", "raw")
 
 #: Triaged before raw: a triaged item carries measured evidence, so its cost to finish
@@ -142,7 +163,7 @@ NOT_SELECTABLE = {
 
 @dataclass
 class Selection:
-    verdict: str                      # ITEM_SELECTED · BACKLOG_EMPTY · BACKLOG_BLOCKED
+    verdict: str  # ITEM_SELECTED · BACKLOG_EMPTY · BACKLOG_BLOCKED · BACKLOG_INVALID
                                       # · ITEM_IN_FLIGHT · ITEM_SHIPPED · ITEM_KILLED
                                       # · ITEM_HALTED
     item_id: str | None = None
@@ -231,6 +252,13 @@ class Selection:
             "in_flight_implemented": self.in_flight_implemented or [],
             "plan_written": self.plan_written or [],
             "approved_implemented": self.approved_implemented or [],
+            # Always present, and over EVERY open status. It was absent from the JSON
+            # entirely, and computed only over `raw`/`triaged` — while `_read_state`
+            # subtracts a halted item from every approved key. So a halted `approved`
+            # item sat in no key at all, and `/pipeline` Step 0, which schedules from
+            # this JSON, dropped it with nothing saying so: 2 of 9 unblocked items on a
+            # consumer 2026-09-24, while the human output named a third (#209).
+            "halted": self.halted or [],
         }
 
 
@@ -272,7 +300,7 @@ def live_blockers(item: Item, statuses: dict[str, str]) -> list[str] | None:
     # value was nothing BUT item ids. When it states a reason, the ids in it are
     # context and the reason is the barrier.
     #
-    # Measured on a consumer 2026-09-02. B-060 reads "aguardando disposição de
+    # Measured on a consumer 2026-09-02. B-060 reads "aguardando disposição de  # english-only: verbatim quote of B-060's blocked_by in a consumer registry
     # status: ... bala 2 movida para B-061 (shipped) ... Vide report B-060". The
     # parser lifts B-061 and B-060; the self-mention is dropped above; B-061 is
     # shipped, so no open id remains, and the item was returned as NOT BLOCKED and
@@ -288,14 +316,44 @@ def live_blockers(item: Item, statuses: dict[str, str]) -> list[str] | None:
     return [] if carries_prose(raw) else None
 
 
-def rank(items: list[Item], unblocking: frozenset[str] = frozenset()) -> list[Item]:
-    """The chain's order: what unblocks a halt first, then triaged before raw, then
-    oldest first.
+#: The `source` values that put an item in the obligation band. ONE today, and the
+#: narrowness is the point: `live-incident` already means "something is wrong in the
+#: running system NOW", and it is the only obligation the registry can MEASURE.
+#:
+#: A security finding, a legal obligation and an SLA breach belong here by every argument
+#: below, and there is no field that identifies them — so they are not in the band, and
+#: this comment says so rather than letting the name imply a coverage the schema cannot
+#: support. When a field exists, the set widens and this comment changes with it.
+OBLIGATION_SOURCES = frozenset({"live-incident"})
+
+
+def is_obligation(item: Item) -> bool:
+    """Is this item costing while it waits, rather than merely waiting?"""
+    return item.fields.get("source", "").strip() in OBLIGATION_SOURCES
+
+
+def rank(items: list[Item], unblocking: frozenset[str] = frozenset(),
+         project_root: Path | str | None = None) -> list[Item]:
+    """The chain's order: an obligation first, then what unblocks a halt, then triaged
+    before raw, then oldest first.
 
     Age normally decides, and it still decides among equals. But an item that some
     halted item's BLOCKED report names as its cause is not an equal: finishing it
     turns a stopped item back into a moving one, and every hour it waits is an hour
     the halted item also waits.
+
+    ABOVE BOTH: an obligation. `source: live-incident` means something is wrong in the
+    running system now, and the cost of waiting does not depend on the item's age — it
+    depends on the incident's. Until 2026-09-22 such an item entered the queue by number
+    and sat behind everything filed before it.
+
+    The two upper bands never competed before this one existed, so nothing is reversed.
+    Between them: an unblocking item turns a stopped item into a moving one; an incident
+    is burning while it waits. The one already burning goes first.
+
+    The band changes WHO is compared, never HOW. Inside it, status still ranks before age
+    — a `raw` incident is one nobody has measured, and putting the chain on evidence that
+    is `none-yet` is the state G5 exists to hold.
 
     Measured on 2026-08-31: B-033 halted on three named causes — B-168, B-169, B-170,
     all triaged — and by age alone the queue would have reached them after twenty
@@ -304,26 +362,56 @@ def rank(items: list[Item], unblocking: frozenset[str] = frozenset()) -> list[It
     This is ORDER, not eligibility. An unblocking item that is itself blocked or
     halted is still held by the rules that hold it; it never gets in ahead of them.
     """
-    return sorted(items, key=lambda i: (i.item_id not in unblocking,
+    # THE SPRINT'S BAND sits third, and the position is the design. It sorts after the two
+    # things that already outrank everything — an obligation, which is costing while it
+    # waits, and an item some halt names as its cause — and before status. Focus does not
+    # outrank a live incident: the incident costs now, the sprint says what matters
+    # generally.
+    #
+    # `project_root=None` returns a flat band for every item, so every existing caller gets
+    # exactly the order it got before. No sprint means no focus to honour, not a
+    # fabricated one.
+    band = _sprint_band(project_root)
+    return sorted(items, key=lambda i: (not is_obligation(i),
+                                        i.item_id not in unblocking,
+                                        band(i.item_id),
                                         _RANK.get(i.fields.get("status", ""), 99),
                                         _number(i)))
 
 
-def select(text: str, requested: str | None = None,
-           halted: frozenset[str] = frozenset(),
-           unblocking: frozenset[str] = frozenset(),
-           root: Path | None = None) -> Selection:
-    """Choose the next item, or explain why none may start.
+def _sprint_band(project_root: Path | str | None):
+    """The band function, resolved ONCE per ranking rather than per item.
 
-    `requested` asks the narrower question — may THIS one start? — which is the form
-    the gate takes when a human has already picked. Same computation either way, so
-    the gate and the selector cannot disagree.
+    `rank_band` reads the record from disk, and a sort key is called O(n log n) times — so
+    calling it inside the key would read one small file a few hundred times to answer a
+    question whose answer cannot change during the sort.
+    """
+    if project_root is None:
+        return lambda _item_id: 0
+    from squad.sprint import load as _load_sprint
+
+    sprint = _load_sprint(project_root)
+    if sprint is None or not sprint.is_open:
+        return lambda _item_id: 0
+    admitted = frozenset(sprint.admitted)
+    return lambda item_id: 0 if item_id in admitted else 1
+
+
+def _read_queue(text: str, halted: set[str], unblocking: set[str]) -> tuple:
+    """What may start now, ranked — and what is held by a person rather than an item.
+
+    Extracted from `select`, which measured cyclomatic complexity 64 across 252 lines.
+    Pure code movement: the block below is the block that was there, reading the same
+    registry. What changed is that each half declares what it reads and what it
+    produces, instead of leaving both in a shared scope.
     """
     items = _parse_items(text)
     by_id = {i.item_id: i for i in items}
     statuses = {i.item_id: i.fields.get("status", "") for i in items}
 
-    selectable = [i for i in items if i.fields.get("status", "") in SELECTABLE]
+    selectable = [i for i in items
+                  if i.fields.get("status", "") in SELECTABLE
+                  and i.fields.get("source", "").strip() != EXTERNAL_BLOCKER_SOURCE]
     walls: dict[str, list[str]] = {}
     free: list[Item] = []
     stopped: list[str] = []
@@ -353,6 +441,21 @@ def select(text: str, requested: str | None = None,
     # other work exists, and the rules that declare this verdict say the cost of
     # not emitting it is that "every reader sees an item that was never touched".
     awaiting = sorted(k for k, v in walls.items() if not v)
+    return items, by_id, statuses, queue, ordered, awaiting, walls, stopped
+
+
+def _read_state(items: list, statuses: dict, halted: set[str], root) -> tuple:
+    """The four keys BESIDE the queue: approved, planned, implemented, in flight.
+
+    Each of these was absent from every key a scheduler reads at some point, and each
+    absence sent a reader somewhere there was nothing to do — the comments below record
+    the three measured instances.
+
+    Extracted from `select`, which measured cyclomatic complexity 64 across 252 lines.
+    Pure code movement: the block below is the block that was there, reading the same
+    registry. What changed is that each half declares what it reads and what it
+    produces, instead of leaving both in a shared scope.
+    """
 
     # Decided, not yet planned. Reported beside the queue and never inside it: SELECT
     # hands work to `/discover-plan`, and `cycle-maintenance.md § Chain` sends an
@@ -390,7 +493,11 @@ def select(text: str, requested: str | None = None,
         key=_number)
     # An approved item whose plan is already written is not awaiting a plan. Saying so
     # sent a reader to /plan-write against 34 finished plans on a consumer 2026-09-16.
-    awaiting_plan = [i.item_id for i in approved_open if i.item_id not in plans_on_disk]
+    # Nor is one whose IMPLEMENT record exists: that item is `approved_implemented`, and
+    # `--check` says ITEM_IMPLEMENTED about it. Listing it here too put one item in two
+    # keys, dispatched to two stages, one of them finished.
+    awaiting_plan = [i.item_id for i in approved_open
+                     if i.item_id not in plans_on_disk and i.item_id not in implemented]
     plan_written = [i.item_id for i in approved_open
                     if i.item_id in plans_on_disk and i.item_id not in implemented]
     #: Approved, implemented, and never advanced. Reported apart from `plan_written`
@@ -426,6 +533,31 @@ def select(text: str, requested: str | None = None,
              and live_blockers(i, statuses) is None),
             key=_number)]
 
+    return (awaiting_plan, plan_written, approved_implemented, in_flight,
+            implemented, plans_on_disk)
+
+
+def select(text: str, requested: str | None = None,
+           halted: frozenset[str] = frozenset(),
+           unblocking: frozenset[str] = frozenset(),
+           root: Path | None = None) -> Selection:
+    """Choose the next item, or explain why none may start.
+
+    `requested` asks the narrower question — may THIS one start? — which is the form
+    the gate takes when a human has already picked. Same computation either way, so
+    the gate and the selector cannot disagree.
+    """
+    (items, by_id, statuses, queue, ordered, awaiting, walls,
+     stopped) = _read_queue(text, halted, unblocking)
+    (awaiting_plan, plan_written, approved_implemented, in_flight,
+     implemented, plans_on_disk) = _read_state(items, statuses, halted, root)
+    # `stopped` counts only SELECTABLE items, which is what the BACKLOG_BLOCKED reason
+    # below counts. The reported key covers every open item a phase stopped on — see
+    # `as_dict` for what its absence cost.
+    stopped = [i.item_id for i in sorted(items, key=_number)
+               if i.item_id in halted and statuses.get(i.item_id) in OPEN_STATUS]
+    held_selectable = sum(1 for i in stopped if statuses.get(i) in SELECTABLE)
+
     if requested:
         if requested not in by_id:
             return Selection("BACKLOG_BLOCKED", reason=f"{requested} is not in this backlog",
@@ -434,7 +566,37 @@ def select(text: str, requested: str | None = None,
                              in_flight_implemented=[i for i in in_flight if i in implemented],
                              plan_written=plan_written,
                              approved_implemented=approved_implemented)
+        if by_id[requested].fields.get("source", "").strip() == EXTERNAL_BLOCKER_SOURCE:
+            return Selection("ITEM_EXTERNALLY_BLOCKED", item_id=requested,
+                             reason=f"{requested} records a constraint outside this "
+                                    f"repository. Nothing here closes it: it closes "
+                                    f"when whoever owns it acts, and then every item "
+                                    f"naming it stops being blocked with no second edit",
+                             walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting,
+                             awaiting_plan=awaiting_plan, in_flight=in_flight,
+                             in_flight_implemented=[i for i in in_flight if i in implemented],
+                             plan_written=plan_written,
+                             approved_implemented=approved_implemented)
         status = statuses.get(requested, "")
+        # A halted `approved` item is asked about the halt BEFORE the status table, as
+        # a halted selectable one always was, because the JSON subtracts it from every
+        # approved key and reports it under `halted`. The table answered
+        # ITEM_AWAITING_PLAN — "no plan exists yet" — for an item whose plan was on
+        # disk and whose IMPLEMENT had stopped, so the gate and the selector disagreed
+        # about one item (#209). `planned` stays with the
+        # table: the JSON keeps a halted planned item in `in_flight` on purpose, and
+        # the reason below names the halt so the reader sees both facts.
+        if requested in halted and status in (*SELECTABLE, "approved"):
+            return Selection(
+                "ITEM_HALTED", item_id=requested,
+                reason=(f"{requested} is {status}, but a phase stopped on it and wrote a "
+                        f"BLOCKED report. Starting it again reruns what halted; read the "
+                        f"report first."),
+                walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting,
+                awaiting_plan=awaiting_plan, in_flight=in_flight,
+                in_flight_implemented=[i for i in in_flight if i in implemented],
+                plan_written=plan_written,
+                approved_implemented=approved_implemented)
         if status not in SELECTABLE:
             entry = NOT_SELECTABLE.get(status)
             if entry is None:
@@ -478,21 +640,13 @@ def select(text: str, requested: str | None = None,
                 verdict = "ITEM_PLAN_WRITTEN"
                 next_step = (" The plan exists and nothing advanced the status;"
                              " continue with IMPLEMENT, which writes `planned` itself.")
+            if requested in halted:
+                next_step += (" A phase also stopped on it and wrote a BLOCKED report;"
+                              " read it before continuing.")
             return Selection(verdict, item_id=requested,
                              reason=f"{requested} is {status}, past the point where SELECT hands"
                                     f" out work.{next_step}",
                              walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting,
-                             awaiting_plan=awaiting_plan, in_flight=in_flight,
-                             in_flight_implemented=[i for i in in_flight if i in implemented],
-                             plan_written=plan_written,
-                             approved_implemented=approved_implemented)
-        if requested in halted:
-            return Selection(
-                "ITEM_HALTED", item_id=requested,
-                reason=(f"{requested} is {status}, but a phase stopped on it and wrote a "
-                        f"BLOCKED report. Starting it again reruns what halted; read the "
-                        f"report first."),
-                walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting,
                              awaiting_plan=awaiting_plan, in_flight=in_flight,
                              in_flight_implemented=[i for i in in_flight if i in implemented],
                              plan_written=plan_written,
@@ -535,8 +689,8 @@ def select(text: str, requested: str | None = None,
                              plan_written=plan_written,
                              approved_implemented=approved_implemented)
 
-    if walls or stopped:
-        held = len(walls) + len(stopped)
+    if walls or held_selectable:
+        held = len(walls) + held_selectable
         # An empty wall list means the impediment names no item — a person's
         # decision, an approval, another repository. That is a different fact from
         # "waits on B-075", and conflating them is what made 14 items look like a
@@ -547,7 +701,7 @@ def select(text: str, requested: str | None = None,
             reason=(f"{held} selectable item(s) remain and every one is held "
                     f"({by_item} by another item, {len(awaiting)} AWAITING_HUMAN — a "
                     f"decision, approval or dependency only a person opens — and "
-                    f"{len(stopped)} by a phase that halted). "
+                    f"{held_selectable} by a phase that halted). "
                     f"This is not an empty backlog — running a sweep would add items "
                     f"beside a wall instead of clearing it."),
             walls=walls, queue=queue, halted=stopped,
@@ -599,7 +753,37 @@ def main() -> int:
             print(f"halt detection unavailable ({error}); proceeding without it",
                   file=sys.stderr)
 
-    result = select(text, args.check, halted, unblocking, root=Path(args.backlog).resolve().parent)
+    # ASK THE GATE FIRST, about IDENTITY only. This script and
+    # `check_backlog_structure` read the same file with the same parser — the
+    # imports above are the checker's — and they disagreed in the one direction
+    # that matters: the gate refused the file and this served from it. Measured
+    # 2026-09-19 on a registry holding `B-001` twice, the checker returned INVALID
+    # with "ids are the audit trail; two blocks sharing one destroys it", and this
+    # returned ITEM_SELECTED -> B-001 with a queue of ['B-001', 'B-001']. The caller
+    # cannot tell which of the two blocks it was handed.
+    #
+    # `IDENTITY_CHECKS`, not `verdict == "INVALID"`. The first draft took the whole
+    # verdict and with it every blocker, so one `triaged_without_evidence` stopped
+    # the registry from handing out any work — which is this gate blocking the
+    # machine over the very thing the machine exists to fix. Three existing tests
+    # caught it. What remains is the narrow case: this script RETURNS an id, and
+    # after a duplicate or a reused one that id does not name a single item, so
+    # there is no honest answer to give.
+    structure = check_backlog(args.backlog)
+    broken = [f for f in structure["findings"] if f["check"] in IDENTITY_CHECKS]
+    if broken:
+        # NAMED, not counted. "1 blocker" sends a person to run a second command to
+        # find out which one.
+        detail = "; ".join(f"{f.get('item') or '—'} {f['check']}: {f['message']}"
+                           for f in broken)
+        result = Selection(
+            "BACKLOG_INVALID", None,
+            f"the registry's ids do not identify one item each: {detail} Nothing "
+            f"may be selected until that is fixed — every id this would return is "
+            f"ambiguous.")
+    else:
+        result = select(text, args.check, halted, unblocking,
+                        root=Path(args.backlog).resolve().parent)
 
     if args.json:
         print(json.dumps(result.as_dict(), indent=2, ensure_ascii=False))

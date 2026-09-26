@@ -46,14 +46,20 @@ for _up in Path(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         sys.path.insert(0, str(_up))
         break
-from squad.paths import DATA_DIRNAME, WIKI  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad import backlog as _shared_backlog  # noqa: E402 — post-bootstrap import
+from squad.paths import DATA_DIRNAME, WIKI  # noqa: E402 — post-bootstrap import
 
 #: Where `/brainstorm-objectives` writes. Named once here; the message that tells a
 #: reader what is missing quotes this same constant.
 OBJECTIVES_REL = f"{DATA_DIRNAME}/{WIKI}/product/objectives.md"
 
 OBJECTIVE_RE = re.compile(r"^##\s+(OBJ-\d+)\s*[—-]\s*(.*?)\s*$", re.M)
-ITEM_RE = re.compile(r"^##\s+(B-\d+)\s*[—-]\s*(.*?)\s*(?:\[[ x]\])?\s*$", re.M)
+#: Imported, not compiled — `squad/backlog.py` owns what an item header is.
+#: Six readers each carried one and they disagreed about the separator.
+ITEM_RE = _shared_backlog.BLOCK_RE
 TRACES_RE = re.compile(r"OBJ-\d+")
 
 

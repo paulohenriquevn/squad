@@ -12,11 +12,13 @@ from contextlib import contextmanager
 from dataclasses import asdict
 from pathlib import Path
 
-from check_coverage_matrix import check_coverage_matrix  # noqa: E402
-from check_spec_smells import check_spec_smells  # noqa: E402
-from hypothesis import HealthCheck, given, settings
-from hypothesis import strategies as st
-from run_structural import (  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from check_coverage_matrix import check_coverage_matrix  # noqa: E402 — post-bootstrap import
+from check_spec_smells import check_spec_smells  # noqa: E402 — post-bootstrap import
+from hypothesis import HealthCheck, given, settings, strategies as st
+from run_structural import (  # noqa: E402 — post-bootstrap import
     SOTA_WEIGHTS,
     renormalize_weights,
     run_structural,
@@ -171,12 +173,21 @@ def test_coverage_ratio_always_in_range(n_gaps: int, n_mapped: int) -> None:
 # was replayed alone — the inputs pass in isolation, which is what pointed at shared
 # state rather than at a bug in the code under test.
 #
-# The remaining 1-in-85 was not captured: 60 consecutive runs after it produced
-# nothing to read. So this is an eleven-fold reduction that was measured, and NOT a
-# fix that was proven — if it fires again, the thing to do is capture the failing
-# output rather than re-run until it passes. A test that fails one run in eight is a
-# bug with top priority by the unbreakable rules; one in eighty-five is a smaller bug
-# with the same name.
+# WHERE THIS STANDS NOW
+#
+# The paragraph that used to close this section said the residual "was not captured"
+# and was "NOT a fix that was proven". That was written BEFORE the 2026-09-09
+# measurement above, and the section it sat under now identifies the cause precisely:
+# 104 runs produced 21 failures and every one was Hypothesis's deadline, never an
+# assertion. `deadline=None` on both decorators is the fix for that, and it is not a
+# mitigation — a wall-clock budget is not a property of the code under test, so there
+# is no number that would be correct here.
+#
+# What remains open is only this: the ONE failure in 85 predates the deadline finding
+# and was never captured, so nothing proves it was the same cause. If an assertion here
+# ever fails — an assertion, not a `FlakyFailure` — capture the output rather than
+# re-running until it passes. The two are distinguishable in the report, which is the
+# whole reason the distinction is written down.
 # ---------------------------------------------------------------------------
 
 @contextmanager

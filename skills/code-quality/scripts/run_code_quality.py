@@ -5,9 +5,16 @@ T5.1 implementation: CLI + auto-detect + per-language detector dispatch.
 
 Modes:
   Mode 1 (no plan slug): repo-wide audit; JSON to stdout, no Markdown file.
-  Mode 2 (plan slug):    bind audit to the plan's `## Critical paths` (if any);
-                         write Markdown audit to .claude/records/audits/
-                         {slug}-code-quality-{date}.md unless --no-audit-write.
+  Mode 2 (plan slug):    record the audit against the plan and write Markdown to
+                         .claude/records/audits/{slug}-code-quality-{date}.md
+                         unless --no-audit-write.
+
+                         NOT scoped by the plan's `## Critical paths`. That claim stood
+                         here and in three places in SKILL.md until 2026-09-17, describing
+                         a scoping `detect_mutation_score` removed on purpose: neither
+                         mutmut nor Stryker accepts an arbitrary file list, so the list
+                         was built, passed and dropped. D4 reads what the PROJECT
+                         declared.
 
 CLI flags:
   {plan-slug} (positional, optional)
@@ -41,10 +48,13 @@ if str(_SKILL_ROOT) not in sys.path:
 
 # The one owner of every data-root literal. A local copy is what produced six lists in
 # four different orders, and `check_write_containment.py` refuses a second one.
-import sys as _sys_bootstrap  # noqa: E402
-from pathlib import Path as _Path_bootstrap  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+import sys as _sys_bootstrap  # noqa: E402 — post-bootstrap import
+from pathlib import Path as _Path_bootstrap  # noqa: E402 — post-bootstrap import
 
-from scripts._detector_contract import (  # noqa: E402
+from scripts._detector_contract import (  # noqa: E402 — post-bootstrap import
     Finding,
     compute_verdict,
     emit_json_summary,
@@ -53,16 +63,16 @@ from scripts._detector_contract import (  # noqa: E402
     load_languages_config,
     load_thresholds,
 )
-from scripts.detectors.go import GoDetector  # noqa: E402
-from scripts.detectors.python import PythonDetector  # noqa: E402
-from scripts.detectors.rust import RustDetector  # noqa: E402
-from scripts.detectors.typescript import TypescriptDetector  # noqa: E402
+from scripts.detectors.go import GoDetector  # noqa: E402 — post-bootstrap import
+from scripts.detectors.python import PythonDetector  # noqa: E402 — post-bootstrap import
+from scripts.detectors.rust import RustDetector  # noqa: E402 — post-bootstrap import
+from scripts.detectors.typescript import TypescriptDetector  # noqa: E402 — post-bootstrap import
 
 for _up in _Path_bootstrap(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _sys_bootstrap.path.insert(0, str(_up))
         break
-from squad.paths import write_records_dir  # noqa: E402
+from squad.paths import write_records_dir  # noqa: E402 — post-bootstrap import
 
 _DETECTOR_CLASSES = {
     "python": PythonDetector,
@@ -104,6 +114,11 @@ def _resolve_plan_path(slug: str, repo_root: Path) -> Path:
     raise FileNotFoundError(
         f"plan_not_found: looked in plans/{slug}-plan.md and plans/completed/{slug}-plan.md"
     )
+
+
+#: The value `PythonDetector` uses when no project threshold is declared. Named here so
+#: the report can state it rather than leaving "D1 clean" without a number.
+_DEFAULT_MIN_CONFIDENCE = 80
 
 
 def _build_detector(language: str, thresholds: dict | None = None):
@@ -172,133 +187,63 @@ def _enumerate_source_files(repo_root: Path, language: str) -> list[Path]:
     return enumerate_source_files(repo_root, language)
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Multi-language code-quality gate")
-    parser.add_argument("slug", nargs="?", default=None, help="plan slug (Mode 2 binding)")
-    parser.add_argument("--json-out", default="-")
-    parser.add_argument("--audit-out", default=None)
-    parser.add_argument("--no-audit-write", action="store_true")
-    parser.add_argument("--languages-rule", default=None)
-    parser.add_argument("--thresholds-rule", default=None)
-    parser.add_argument("--allowlist", default=None)
-    parser.add_argument("--baseline", default=None,
-                        help="findings recorded as pre-existing; removed from the verdict, "
-                             "kept in the report (default: .claude/rules/code-quality-baseline.txt)")
-    parser.add_argument("--write-baseline", action="store_true",
-                        help="record every finding of this run as pre-existing and exit. "
-                             "An explicit act: the baseline never grows by itself.")
-    parser.add_argument("--no-network", action="store_true",
-                        help="the default; kept so existing callers keep working")
-    parser.add_argument("--network", action="store_true",
-                        help="opt back into the networked D2 path, whose answer is not"
-                             " reproducible — see the comment below")
-    parser.add_argument("--repo-root", default=None)
-    args = parser.parse_args(argv)
+def settle_network_mode(args: argparse.Namespace) -> None:
+    """Decide `args.no_network` from the flags. Extracted so it can be TESTED.
 
-    # A baseline recorded with the network on is worthless, so it cannot be recorded
-    # that way. Measured on a real repository on 2026-08-31: the Go symbol detector
-    # resolves imports against the module proxy, and with the network reachable it
-    # reported 4777 fabrications; with `--no-network`, ONE. Two consecutive runs even
-    # disagreed with each other — 4818 then 4777 — because the result depends on what
-    # the proxy answered that second.
-    #
-    # Baselining that would have frozen ~4800 network failures into the repository as
-    # if they were debt, hidden a real defect behind them, and still failed the gate,
-    # because the next run produces a slightly different set that the baseline does
-    # not cover. The honest baseline is the deterministic one.
+    It lived inline in `main`, and the test that claimed to cover it built a fresh
+    parser, re-declared the two flags, re-executed the conditional in its own body and
+    asserted that its own two lines did what its own two lines say. That assertion was
+    true of the test and said nothing about this file: delete the rule here and it
+    stayed green.
+
+    A baseline recorded with the network on is worthless, so it cannot be recorded
+    that way. Measured on a real repository on 2026-08-31: the Go symbol detector
+    resolves imports against the module proxy, and with the network reachable it
+    reported 4777 fabrications; with `--no-network`, ONE. Two consecutive runs even
+    disagreed with each other — 4818 then 4777 — because the result depends on what
+    the proxy answered that second.
+
+    Baselining that would have frozen ~4800 network failures into the repository as
+    if they were debt, hidden a real defect behind them, and still failed the gate,
+    because the next run produces a slightly different set that the baseline does
+    not cover. The honest baseline is the deterministic one.
+    Offline is the default for a VERDICT too, not only for a baseline. The reasoning
+    above was applied to `cq_invoke.py` on 2026-09-13 and not to the thing it wraps,
+    so anyone typing this command by hand still got the networked path — and its
+    answer changes between two consecutive runs of the same tree.
+
+    Measured on a consumer 2026-09-16, one repository, minutes apart:
+
+        with network      PASS_WITH_CAVEATS   hard_caps: ['symbol_fab_unverifiable_go']
+        --no-network      PASS_WITH_CAVEATS   hard_caps: none
+
+    That cap is neither baselinable (its `file_path` is `.`) nor dismissible by ADR,
+    so a run that happened to reach the proxy held the work and a run that did not
+    released it. A gate whose answer depends on what a proxy said that second is not
+    a gate, and which ENTRY POINT you used is not a property of the code under test.
+
+    `--network` is the explicit opt-in for someone who wants that path knowingly.
+    """
     if getattr(args, "write_baseline", False):
         args.no_network = True
-
-    # Offline is the default for a VERDICT too, not only for a baseline. The reasoning
-    # above was applied to `cq_invoke.py` on 2026-09-13 and not to the thing it wraps,
-    # so anyone typing this command by hand still got the networked path — and its
-    # answer changes between two consecutive runs of the same tree.
-    #
-    # Measured on a consumer 2026-09-16, one repository, minutes apart:
-    #
-    #     with network      PASS_WITH_CAVEATS   hard_caps: ['symbol_fab_unverifiable_go']
-    #     --no-network      PASS_WITH_CAVEATS   hard_caps: none
-    #
-    # That cap is neither baselinable (its `file_path` is `.`) nor dismissible by ADR,
-    # so a run that happened to reach the proxy held the work and a run that did not
-    # released it. A gate whose answer depends on what a proxy said that second is not
-    # a gate, and which ENTRY POINT you used is not a property of the code under test.
-    #
-    # `--network` is the explicit opt-in for someone who wants that path knowingly.
     if not args.network:
         args.no_network = True
 
-    repo_root = Path(args.repo_root) if args.repo_root else _find_repo_root(Path.cwd())
 
-    rules_dir = repo_root / ".claude" / "rules"
-    languages_rule = Path(args.languages_rule) if args.languages_rule else rules_dir / "code-quality-languages.txt"
-    thresholds_rule = Path(args.thresholds_rule) if args.thresholds_rule else rules_dir / "code-quality-thresholds.txt"
-    allowlist_rule = Path(args.allowlist) if args.allowlist else rules_dir / "code-quality-allowlist.txt"
+def _audit_languages(args, cfg: dict, enabled_languages: list[str], thresholds,
+                     repo_root) -> tuple[list, list[str], dict[str, str]]:
+    """Run every enabled language's detectors. Returns `(findings, languages_audited)`.
 
-    try:
-        cfg = load_languages_config(languages_rule)
-    except (FileNotFoundError, ValueError) as e:
-        print(f"ERROR: cannot load languages config: {e}", file=sys.stderr)
-        return 2
+    Extracted from `main`, which measured cyclomatic complexity 32. Pure code movement:
+    the loop below is the loop that was there, over the same detectors.
 
-    thresholds: dict = {}
-    try:
-        if thresholds_rule.exists():
-            thresholds = load_thresholds(thresholds_rule)
-    except ValueError as e:
-        print(f"ERROR: thresholds malformed: {e}", file=sys.stderr)
-        return 2
-
-    try:
-        allowlist = load_allowlist(allowlist_rule) if allowlist_rule.exists() else []
-    except ValueError as e:
-        # EC-4 — surface as HARD Finding instead of crashing.
-        allowlist_malformed_finding = Finding(
-            detector="d1_dead_code",
-            language="unknown",
-            severity="HARD",
-            file_path=str(allowlist_rule.relative_to(repo_root) if allowlist_rule.is_absolute() else allowlist_rule),
-            symbol_or_line="code-quality-allowlist.txt",
-            message=f"allowlist_malformed_entry: {e}",
-            allowlist_key="unknown|.|dead_code|allowlist_malformed_entry",
-        )
-        return _emit_and_exit([allowlist_malformed_finding], args, repo_root, plan_path=None)
-
-    # Plan resolution (Mode 2)
-    plan_path = None
-    if args.slug:
-        try:
-            plan_path = _resolve_plan_path(args.slug, repo_root)
-        except FileNotFoundError as e:
-            print(f"ERROR: {e}", file=sys.stderr)
-            return 2
-
-    findings: list[Finding] = []
-
-    # Phase 1: D1 + D2 per enabled language
-    enabled_languages = [
-        lang for lang, meta in cfg.items() if meta["status"] == "ENABLED"
-    ]
+    `languages_audited` is as much of the answer as the findings — B-084: an audit that
+    ran zero detectors is not a clean audit, and the only way to tell the two apart is
+    to report which languages were actually reached.
+    """
+    findings: list = []
     languages_audited: list[str] = []
     languages_skipped: dict[str, str] = {}
-
-    # A config with no ENABLED row audits nothing, and the run that follows says so only
-    # through the stable id `no_languages_audited` — which names the SYMPTOM. Measured on
-    # a consumer on 2026-09-13: thirteen plans scoring 89-100 structurally, every one
-    # INVALID on that id, `skip_reasons: {}`, and a session that read the id and
-    # concluded a backlog item had to be implemented. The cause was a shipped template
-    # whose 83 lines are all commented examples, never configured for that project.
-    #
-    # `skip_reasons` is where a reader looks for why nothing happened, so the reason
-    # goes there rather than into a log line nobody reads. It is not a finding: the
-    # repository did nothing wrong, the installation was never finished.
-    if not enabled_languages:
-        languages_skipped["(none enabled)"] = (
-            f"{languages_rule} has no ENABLED row — the gate had nothing to audit. "
-            "This is configuration, not a defect in the code under test: add one row "
-            "per language this repository actually holds."
-        )
-
     for language in enabled_languages:
         manifest_marker = cfg[language]["manifest"]
         manifest_present = (repo_root / manifest_marker).exists()
@@ -377,6 +322,138 @@ def main(argv: list[str] | None = None) -> int:
         if d5_crash:
             findings.append(d5_crash)
         findings.extend(d5_findings)
+    return findings, languages_audited, languages_skipped
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Multi-language code-quality gate")
+    parser.add_argument("slug", nargs="?", default=None, help="plan slug (Mode 2 binding)")
+    parser.add_argument("--json-out", default="-")
+    parser.add_argument("--audit-out", default=None)
+    parser.add_argument("--no-audit-write", action="store_true")
+    parser.add_argument("--languages-rule", default=None)
+    parser.add_argument("--thresholds-rule", default=None)
+    parser.add_argument("--allowlist", default=None)
+    parser.add_argument("--baseline", default=None,
+                        help="findings recorded as pre-existing; removed from the verdict, "
+                             "kept in the report (default: .claude/rules/code-quality-baseline.txt)")
+    parser.add_argument("--write-baseline", action="store_true",
+                        help="record every finding of this run as pre-existing and exit. "
+                             "An explicit act: the baseline never grows by itself.")
+    parser.add_argument("--no-network", action="store_true",
+                        help="the default; kept so existing callers keep working")
+    parser.add_argument("--network", action="store_true",
+                        help="opt back into the networked D2 path, whose answer is not"
+                             " reproducible — see the comment below")
+    parser.add_argument("--repo-root", default=None)
+    args = parser.parse_args(argv)
+
+    settle_network_mode(args)
+
+    repo_root = Path(args.repo_root) if args.repo_root else _find_repo_root(Path.cwd())
+
+    rules_dir = repo_root / ".claude" / "rules"
+    languages_rule = Path(args.languages_rule) if args.languages_rule else rules_dir / "code-quality-languages.txt"
+    thresholds_rule = Path(args.thresholds_rule) if args.thresholds_rule else rules_dir / "code-quality-thresholds.txt"
+    allowlist_rule = Path(args.allowlist) if args.allowlist else rules_dir / "code-quality-allowlist.txt"
+
+    try:
+        cfg = load_languages_config(languages_rule)
+    except (FileNotFoundError, ValueError) as e:
+        print(f"ERROR: cannot load languages config: {e}", file=sys.stderr)
+        return 2
+
+    thresholds: dict = {}
+    try:
+        if thresholds_rule.exists():
+            thresholds = load_thresholds(thresholds_rule)
+    except ValueError as e:
+        print(f"ERROR: thresholds malformed: {e}", file=sys.stderr)
+        return 2
+
+    try:
+        allowlist = load_allowlist(allowlist_rule) if allowlist_rule.exists() else []
+    except ValueError as e:
+        # EC-4 — surface as HARD Finding instead of crashing.
+        allowlist_malformed_finding = Finding(
+            detector="d1_dead_code",
+            language="unknown",
+            severity="HARD",
+            file_path=str(allowlist_rule.relative_to(repo_root) if allowlist_rule.is_absolute() else allowlist_rule),
+            symbol_or_line="code-quality-allowlist.txt",
+            message=f"allowlist_malformed_entry: {e}",
+            allowlist_key="unknown|.|dead_code|allowlist_malformed_entry",
+        )
+        # Explicit, not defaulted: this run never reached a detector, so nothing was
+        # audited and nothing was skipped for a reason worth naming. Saying so at the
+        # call site is what removed the second verdict semantics `_emit_and_exit` used
+        # to carry for callers that omitted these.
+        return _emit_and_exit(
+            [allowlist_malformed_finding], args, repo_root, plan_path=None,
+            languages_audited=[], languages_skipped={}, cfg=None,
+            baseline=frozenset(), expired_allowlist=[], thresholds={})
+
+    # The phase BEGINS here, and the stream has to carry that.
+    #
+    # This emitted only `end` — as did review, implement and acceptance — and an end
+    # with no start is a phase that finished and was never running. Measured on one
+    # consumer: 37 ends, 1 start, and so no column could be drawn as working, no WIP
+    # could be counted, and no phase had a duration. `code-quality` alone emitted 29
+    # ends against one slug with no way to tell 29 runs from 29 reports of the same one.
+    #
+    # Emitted before the work rather than after the parse succeeds: a run that dies
+    # mid-phase should leave a start with no end, which is what an interrupted phase
+    # IS. Recording it only on success would draw the stream as though nothing had
+    # been attempted.
+    if args.slug:
+        _emit_phase_start(repo_root, cycle="code-quality", slug=args.slug)
+
+    # Plan resolution (Mode 2)
+    plan_path = None
+    if args.slug:
+        try:
+            plan_path = _resolve_plan_path(args.slug, repo_root)
+        except FileNotFoundError as e:
+            print(f"ERROR: {e}", file=sys.stderr)
+            return 2
+
+    findings: list[Finding] = []
+
+    # Phase 1: D1 + D2 per enabled language
+    enabled_languages = [
+        lang for lang, meta in cfg.items() if meta["status"] == "ENABLED"
+    ]
+    # `languages_audited` and `languages_skipped` come back from `_audit_languages`
+    # below. Declared here as empty so the no-ENABLED-row branch, which returns before
+    # that call, still has both to report with.
+    languages_audited: list[str] = []
+    languages_skipped: dict[str, str] = {}
+
+    # A config with no ENABLED row audits nothing, and the run that follows says so only
+    # through the stable id `no_languages_audited` — which names the SYMPTOM. Measured on
+    # a consumer on 2026-09-13: thirteen plans scoring 89-100 structurally, every one
+    # INVALID on that id, `skip_reasons: {}`, and a session that read the id and
+    # concluded a backlog item had to be implemented. The cause was a shipped template
+    # whose 83 lines are all commented examples, never configured for that project.
+    #
+    # `skip_reasons` is where a reader looks for why nothing happened, so the reason
+    # goes there rather than into a log line nobody reads. It is not a finding: the
+    # repository did nothing wrong, the installation was never finished.
+    if not enabled_languages:
+        languages_skipped["(none enabled)"] = (
+            f"{languages_rule} has no ENABLED row — the gate had nothing to audit. "
+            "This is configuration, not a defect in the code under test: add one row "
+            "per language this repository actually holds."
+        )
+
+    # MERGED, not replaced. The no-ENABLED-row branch above puts its reason in
+    # `languages_skipped`, and that reason is the whole answer on that path — a reader
+    # looking at `skip_reasons: {}` on a run that audited nothing was told the symptom
+    # and not the cause, which is the defect the comment above records.
+    findings, languages_audited, audited_skips = _audit_languages(
+        args, cfg, enabled_languages, thresholds, repo_root)
+    languages_skipped.update(audited_skips)
+
 
     # Apply allowlist (downgrade severities by 1 level when ACTIVE entry matches)
     expired_hits: list[Finding] = []
@@ -400,7 +477,8 @@ def main(argv: list[str] | None = None) -> int:
                           languages_skipped=languages_skipped,
                           cfg=cfg,
                           baseline=load_baseline(baseline_path),
-                          expired_allowlist=[f.allowlist_key for f in expired_hits])
+                          expired_allowlist=[f.allowlist_key for f in expired_hits],
+                          thresholds=thresholds)
 
 
 def _apply_allowlist(findings: list[Finding], allowlist: list, repo_root: Path,
@@ -499,23 +577,110 @@ def _write_baseline(findings: list[Finding], path: Path) -> int:
     return 0
 
 
+def _write_report(args, findings, repo_root, summary: dict) -> dict:
+    """Write the markdown audit and the JSON summary. Returns the summary.
+
+    Extracted from `_emit_and_exit`, which measured cyclomatic complexity 33 across 173
+    lines. Pure code movement: the block below is the block that was there, and the
+    markdown is still written BEFORE the JSON is serialised for the reason stated in it.
+    """
+    # The markdown report is written BEFORE the JSON is serialised, because the JSON
+    # publishes `report_path` and this order used to be the other way round: the payload
+    # was serialised, written and printed, and `summary["report_path"]` was assigned
+    # afterwards — into a dict nobody read again. `SKILL.md` Step 5 lists the key in the
+    # contract `/plan-confidence` and `/implement` consume, so every consumer saw the key
+    # missing while the report sat on disk beside them.
+    if args.slug and not args.no_audit_write:
+        audit_path = (
+            Path(args.audit_out)
+            if args.audit_out
+            else write_records_dir(repo_root, "audits")
+            / f"{args.slug}-code-quality-{datetime.now(timezone.utc).strftime('%Y-%m-%d')}.md"
+        )
+        _write_markdown_report(findings, summary, audit_path, args.slug)
+        summary["report_path"] = str(audit_path.relative_to(repo_root))
+
+    # JSON output
+    json_text = json.dumps(summary, indent=2, ensure_ascii=False)
+    if args.json_out and args.json_out != "-":
+        Path(args.json_out).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.json_out).write_text(json_text, encoding="utf-8")
+    else:
+        sys.stdout.write(json_text + "\n")
+
+    return summary
+
+
+def _record_phase_event(args, findings, languages_audited, repo_root, verdict) -> None:
+    """Leave the phase's event on the stream. Pure code movement from `_emit_and_exit`.
+
+    A missing audit cannot say it is missing, which is why the event exists — and an
+    event with no slug names no item: it cannot be placed, attributed or acted on.
+    """
+    # The phase leaves an event, not only a file. A missing audit cannot say
+    # whether the gate was skipped or ran and wrote nothing; an absent event can.
+    # An event with no slug names no item: it cannot be placed on a board, cannot be
+    # attributed to a cycle, and cannot be acted on. Writing one adds a row to a shared
+    # registry that every reader has to skip.
+    #
+    # Measured on a consumer 2026-09-16: 369 events in the stream and 121 of them —
+    # ONE THIRD — were `code-quality` phase:end with an empty slug, accumulated since
+    # 09-12. Every ad-hoc run of this gate had left one. The board counts them under
+    # `unplaced.without_item`, which is the honest place for them and still a number
+    # nobody can reduce by working.
+    #
+    # A measurement must not mutate the registry it is measuring. So an unattributed run
+    # says on stderr that it was not recorded, rather than recording something nobody
+    # can use — and `--slug` remains the way to have the run belong to an item.
+    if args.slug:
+        _emit_phase_end(
+            repo_root,
+            cycle="code-quality",
+            slug=args.slug,
+            verdict=verdict,
+            languages=languages_audited or [],
+            findings=len(findings),
+        )
+    else:
+        print("cycle-events: not recorded — this run names no item (`--slug`), and an"
+              " event with no slug cannot be placed, attributed or acted on.",
+              file=sys.stderr)
+
+
+
 def _emit_and_exit(
     findings: list[Finding],
     args,
     repo_root: Path,
     plan_path: Path | None,
-    languages_audited: list[str] | None = None,
-    languages_skipped: dict[str, str] | None = None,
-    # The language table, so the guard below can ask what is on disk rather than what the gate
-    # happened to look at. Optional so existing callers keep working; absent means the tree cannot
-    # be consulted, and the guard falls back to the narrower "audited nothing at all" question.
-    cfg: dict | None = None,
+    #: What the run reached, what it did not, and why. REQUIRED, all five.
+    #:
+    #: They were optional, with `cfg`'s comment stating the contract: "Optional so
+    #: existing callers keep working; absent means the tree cannot be consulted, and the
+    #: guard falls back to the narrower 'audited nothing at all' question." That is a
+    #: SECOND verdict semantics for a gate whose PASS is what the chain reads — and it
+    #: was reachable by forgetting an argument rather than by deciding anything. Two
+    #: call sites exist, both in this file; the second answer had no caller and could
+    #: only ever be produced by mistake.
+    #:
+    #: The error path passes empty values EXPLICITLY. That is the same information the
+    #: defaults carried and it is now written at the call site, where a reader can see
+    #: that an audit which never started audited nothing.
+    languages_audited: list[str],
+    languages_skipped: dict[str, str],
+    #: The knobs this run applied, so the report can say what a clean detector was
+    #: clean AT. Required for the same reason as the four above: a default here would
+    #: let a caller report a threshold it did not use.
+    thresholds: dict,
+    #: The language table, so the guard below asks what is on disk rather than what the
+    #: gate happened to look at.
+    cfg: dict | None,
     #: Finding keys recorded as pre-existing. Removed from the verdict, kept in the report.
-    baseline: frozenset[str] = frozenset(),
+    baseline: frozenset[str],
     #: Allowlist rows whose sunset has passed. The finding is back at full severity and
     #: the row no longer covers it — carried here so a machine reader sees it too, since
     #: the re-fired finding alone looks exactly like one nobody ever exempted.
-    expired_allowlist: list[str] | None = None,
+    expired_allowlist: list[str],
 ) -> int:
     verdict, stable_ids = compute_verdict(findings, baseline)
     baselined = [f for f in findings if f.allowlist_key in baseline] if baseline else []
@@ -610,63 +775,72 @@ def _emit_and_exit(
     # Always present, never conditional: an absent key asks whether the check ran, an
     # empty list answers that it did and found none.
     summary["expired_allowlist"] = list(expired_allowlist or [])
+    # The ACTIVE half of the same question. `templates/code-quality-report.md` declares
+    # `## Allowlist hits` with both counts and golden rule § 4 promises an expired entry
+    # is "listed under 'Allowlist hits — expired' in the audit report" — and the report
+    # rendered neither section, so the promise held in the JSON and nowhere a person
+    # reads. A count of what an exemption is holding belongs beside the findings it is
+    # holding back.
+    # The marker `_apply_allowlist` leaves: a downgraded finding carries `[allowlisted]`
+    # in its message. Counting the suffix rather than a field because that suffix IS the
+    # record — there is no other mark on a finding that an entry held back.
+    summary["allowlist_active"] = sum(
+        1 for f in findings if "[allowlisted]" in (f.message or ""))
     summary["skip_reasons"] = languages_skipped or {}
+    #: Every detector that RAN, per language. Derived from `languages_audited` because
+    #: the audit loop runs all five for every language it audits — the derivation is the
+    #: loop's own contract rather than a second list to keep in step.
+    #:
+    #: `findings_by_detector` lists only detectors that FOUND something, so a clean D1
+    #: and an absent D1 were the same report. Measured 2026-09-21: D1 ran over a
+    #: committed orphan function, reported nothing at its threshold, and appeared in
+    #: neither `findings_by_detector` nor `skip_reasons` — the detector the golden rule
+    #: lists first, invisible in both directions.
+    summary["detectors_run"] = {
+        det: list(languages_audited or [])
+        for det in ("d1_dead_code", "d2_symbol_fab", "d3_orphan_export",
+                    "d4_mutation", "d5_architecture")
+    }
+    #: The numbers this run applied. "D1 clean" is only a complete claim WITH the
+    #: threshold beside it: the golden rule defines D1 as "no exported symbol
+    #: unreachable from a caller or a test", and `vulture` scores exactly that class —
+    #: unused function, class, variable — at 60% confidence while the default is 80.
+    #: Measured on one file: 0 findings at 80, 2 at 60, both real orphans.
+    #:
+    #: The default is NOT changed here. The golden rule argues for it directly — turning
+    #: D1 up before the debt is paid "is how a gate becomes something people work
+    #: around" — and `--write-baseline` exists for the day a project decides to. What
+    #: changes is that a clean D1 now carries the number it was clean AT.
+    summary["thresholds_applied"] = dict(sorted(
+        (key, value) for key, value in (thresholds or {}).items()
+    )) or {"vulture.min_confidence": _DEFAULT_MIN_CONFIDENCE}
     summary["mode"] = "plan-bound" if plan_path else "standalone"
     if plan_path:
         summary["plan_path"] = str(plan_path.relative_to(repo_root))
 
-    # JSON output
-    json_text = json.dumps(summary, indent=2, ensure_ascii=False)
-    if args.json_out and args.json_out != "-":
-        Path(args.json_out).parent.mkdir(parents=True, exist_ok=True)
-        Path(args.json_out).write_text(json_text, encoding="utf-8")
-    else:
-        sys.stdout.write(json_text + "\n")
-
-    # Markdown audit (Mode 2 only, unless --no-audit-write)
-    if args.slug and not args.no_audit_write:
-        audit_path = (
-            Path(args.audit_out)
-            if args.audit_out
-            else write_records_dir(repo_root, "audits")
-            / f"{args.slug}-code-quality-{datetime.now(timezone.utc).strftime('%Y-%m-%d')}.md"
-        )
-        _write_markdown_report(findings, summary, audit_path, args.slug)
-        summary["report_path"] = str(audit_path.relative_to(repo_root))
-
-    # The phase leaves an event, not only a file. A missing audit cannot say
-    # whether the gate was skipped or ran and wrote nothing; an absent event can.
-    # An event with no slug names no item: it cannot be placed on a board, cannot be
-    # attributed to a cycle, and cannot be acted on. Writing one adds a row to a shared
-    # registry that every reader has to skip.
-    #
-    # Measured on a consumer 2026-09-16: 369 events in the stream and 121 of them —
-    # ONE THIRD — were `code-quality` phase:end with an empty slug, accumulated since
-    # 09-12. Every ad-hoc run of this gate had left one. The board counts them under
-    # `unplaced.without_item`, which is the honest place for them and still a number
-    # nobody can reduce by working.
-    #
-    # A measurement must not mutate the registry it is measuring. So an unattributed run
-    # says on stderr that it was not recorded, rather than recording something nobody
-    # can use — and `--slug` remains the way to have the run belong to an item.
-    if args.slug:
-        _emit_phase_end(
-            repo_root,
-            cycle="code-quality",
-            slug=args.slug,
-            verdict=verdict,
-            languages=languages_audited or [],
-            findings=len(findings),
-        )
-    else:
-        print("cycle-events: not recorded — this run names no item (`--slug`), and an"
-              " event with no slug cannot be placed, attributed or acted on.",
-              file=sys.stderr)
+    summary = _write_report(args, findings, repo_root, summary)
+    _record_phase_event(args, findings, languages_audited, repo_root, verdict)
 
     # Exit code
     if verdict in ("FAIL_HARD", "INVALID"):
         return 1
     return 0
+
+
+def _emit_phase_start(project_root, *, cycle: str, slug: str) -> None:
+    """Record that the phase began. Same contract as `_emit_phase_end` below: never let
+    bookkeeping fail the phase, and never swallow a real emitter bug into a silence that
+    looks like a phase nobody ran."""
+    from pathlib import Path as _Path
+    tooling = _Path(__file__).resolve().parents[3] / "mechanisms" / "cycle"
+    if str(tooling) not in sys.path:
+        sys.path.insert(0, str(tooling))
+    try:
+        from cycle_events import emit_phase_start, project_root_for
+    except ImportError as error:
+        print(f"cycle-events: emitter unavailable ({error})", file=sys.stderr)
+        return
+    emit_phase_start(project_root_for(project_root), cycle=cycle, slug=slug)
 
 
 def _emit_phase_end(project_root, *, cycle: str, slug: str, verdict, **extra) -> None:
@@ -689,6 +863,35 @@ def _emit_phase_end(project_root, *, cycle: str, slug: str, verdict, **extra) ->
         return
     emit_phase_end(project_root_for(project_root), cycle=cycle, slug=slug,
                    verdict=verdict, **extra)
+
+
+def _recommended_actions(by_severity: dict, summary: dict) -> str:
+    """What to do next, in the order the verdict makes it urgent.
+
+    `templates/code-quality-report.md` declares this section and the renderer omitted
+    it, so a reader reaching the end of an audit was handed a finding table and no
+    next step — which is the half of a report a person actually acts on.
+    """
+    lines: list[str] = []
+    if by_severity.get("HARD"):
+        lines.append(f"1. **Fix the {len(by_severity['HARD'])} HARD finding(s) above.** "
+                     f"They are what makes this verdict {summary['verdict']}; nothing "
+                     f"downstream may proceed on them.")
+    if by_severity.get("SOFT_CAP"):
+        lines.append(f"{len(lines) + 1}. Resolve the {len(by_severity['SOFT_CAP'])} "
+                     f"SOFT_CAP finding(s), or dismiss each with an ADR naming the cap. "
+                     f"A soft cap left undismissed caps the plan's score.")
+    if summary.get("expired_allowlist"):
+        lines.append(f"{len(lines) + 1}. **{len(summary['expired_allowlist'])} allowlist "
+                     f"entry(ies) EXPIRED.** The finding is back at full severity and the "
+                     f"exemption no longer applies — renew it with a new sunset, or fix it.")
+    if summary.get("languages_skipped"):
+        lines.append(f"{len(lines) + 1}. {len(summary['languages_skipped'])} language(s) "
+                     f"were NOT audited. See `skip_reasons` — a language nobody swept is "
+                     f"not a language that passed.")
+    if not lines:
+        return "_Nothing to act on: every detector ran and found nothing._"
+    return "\n".join(lines)
 
 
 def _write_markdown_report(findings: list[Finding], summary: dict, audit_path: Path, slug: str) -> None:
@@ -743,6 +946,16 @@ def _write_markdown_report(findings: list[Finding], summary: dict, audit_path: P
 ### D5 — architecture
 
 {_table(by_detector['d5_architecture'])}
+
+## Allowlist hits
+
+- Active (within sunset): {summary.get('allowlist_active', 0)}
+- Expired (re-fired at full severity): {len(summary.get('expired_allowlist', []))}
+{chr(10).join(f"  - `{k}`" for k in summary.get('expired_allowlist', [])) or ""}
+
+## Recommended actions
+
+{_recommended_actions(by_severity, summary)}
 
 ## Related
 

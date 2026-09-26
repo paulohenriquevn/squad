@@ -1,4 +1,5 @@
 # Code-Quality Golden Rule
+<!-- rule-id: SQ-GLD-01 -->
 
 Locked unbreakable contract that `/code-quality` reads to score findings, decide verdicts, and gate handoff to `/review`. **This file is the Source of Truth for the severity rubric, the allowlist mechanism, and the verdict score caps.** It mirrors the dogfood-golden-rule pattern: locked sections that require an ADR to change, and per-project sections for tuning.
 
@@ -27,8 +28,9 @@ In order of severity ceiling; first hit wins (smallest cap is the verdict).
 | Symbol fabrication (production code references undefined symbol) | `FAIL_HARD` (49) | `symbol_fabrication_{language}` |
 | Dead exported symbol with no caller and no test (unallowlisted) | `FAIL_HARD` (49) | `dead_code_unallowlisted_{language}` |
 | Allowlist entry malformed (parse error) | `FAIL_HARD` (49) | `allowlist_malformed_entry` |
+| Declared architecture rule broken by the code (detector D5) | `FAIL_HARD` (49) | `architecture_violation_{language}` |
+| Declared architecture rule names something no longer in the tree (D5) | `FAIL_HARD` (49) | `vacuous_architecture_rule_{language}` |
 | Code-quality golden rule missing (this file) | `INVALID` (0) | `code_quality_golden_rule_missing` |
-| Plan missing `## Critical paths` section (Mode 2 + D4 mutation only) | `FAIL_SOFT` (70) | `plan_missing_critical_paths_section` |
 | Orphan exported symbol (no importer, exporting from a public package) | `FAIL_SOFT` (70) | `soft_cap_orphan_export_{language}` |
 | Mutation score < 60% on declared critical paths | `FAIL_SOFT` (70) | `soft_cap_mutation_score_low_{language}` |
 | Mutation runner not configured by the project | `FAIL_SOFT` (70) | `soft_cap_mutation_unconfigured_{language}` |
@@ -36,9 +38,13 @@ In order of severity ceiling; first hit wins (smallest cap is the verdict).
 | Mutation run produced zero mutants | `FAIL_SOFT` (70) | `soft_cap_mutation_no_mutants_{language}` |
 | No declared public surface for D3 to audit | INFO | `d3_no_public_surface` |
 | Auditor unavailable (tool missing for enabled language) | `FAIL_SOFT` (70) | `auditor_unavailable_{tool}` |
+| Auditor declared by the project but not reachable by the detector | `FAIL_SOFT` (70) | `auditor_unresolved_{tool}` |
+| D1 ran only in the workspace member(s) that declare the tool | INFO | `knip_member_scope` |
 | Mutation score 60-79% on declared critical paths | `PASS_WITH_CAVEATS` (89) | `soft_floor_mutation_score_medium_{language}` |
 | Dead internal symbol (private function with no caller) | `PASS_WITH_CAVEATS` (89) | `dead_internal_symbol_{language}` |
 | Unused parameter (often refactor leftover) | `PASS_WITH_CAVEATS` (89) | `unused_parameter_{language}` |
+
+**Retired 2026-09-17: `plan_missing_critical_paths_section`.** It capped a plan with no `## Critical paths` section at 70, on the strength of that section scoping D4. The scoping was removed deliberately — neither mutmut nor Stryker accepts an arbitrary file list, so `detect_mutation_score` reads the project's own mutation config — and no code has emitted this identifier since. A declared cap nothing can trigger is a rule that reports itself as enforced.
 
 ## § 3 — Hard caps (LOCKED)
 
@@ -135,7 +141,7 @@ Detectors run in fixed order. Each detector MUST be subprocess-isolated, never m
 
 | Detector | Tool family | Languages | What it asserts |
 |---|---|---|---|
-| D1 — Dead code | vulture, knip, cargo-udeps, deadcode | Python, TS, Rust, Go | No exported symbol unreachable from a caller or a test |
+| D1 — Dead code | vulture, knip, cargo-udeps, deadcode | Python, TS, Rust, Go | No exported symbol unreachable from a caller or a test — **at the configured confidence**. `vulture.min_confidence` defaults to 80 and `vulture` scores an unused function, class or variable at 60, so the default reports the 90%-confidence class (unused imports) and not the orphan symbol this row describes. Measured 2026-09-21 on one file: 0 findings at 80, 2 at 60, both real orphans. The default stands — § 5 argues it directly, and turning D1 up before the debt is paid *"is how a gate becomes something people work around"* — and `--write-baseline` is the path for a project that decides to. Every run now reports `thresholds_applied`, so a clean D1 carries the number it was clean at |
 | D2 — Symbol fabrication | tree-sitter + registry introspection | All enabled | Every imported symbol resolves to a real definition |
 | D3 — Cross-package wiring | `detectors/_wiring.py` | All enabled | Every DECLARED export has a production consumer (soft cap) |
 | D4 — Mutation testing | mutmut, Stryker via `detectors/_mutation.py` | Python, TS (Rust+Go deferred) | Mutation score ≥ floor, scoped by the project's own runner config |

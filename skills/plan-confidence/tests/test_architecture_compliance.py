@@ -4,7 +4,11 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from check_architecture_compliance import (  # noqa: E402
+
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from check_architecture_compliance import (  # noqa: E402 — post-bootstrap import
     ComplianceReport,
     check_architecture_compliance,
 )
@@ -51,18 +55,39 @@ def test_falls_back_to_defaults_when_no_rules(tmp_path: Path) -> None:
 # Rule-reference detection
 
 def test_plan_referencing_rule_by_name_scores_higher(tmp_path: Path) -> None:
-    """Plan that mentions a rule name gets credit."""
-    plan = _write(
-        tmp_path,
-        "# Plan\n\nThis plan respects `architecture.md` and `testing.md`.\n\n"
-        "## Coverage Matrix\n\n| # | Gap | Task(s) | Resolution |\n|---|---|---|---|\n| 1 | x | T1.1 | y |\n",
-    )
-    report = check_architecture_compliance(plan)
-    # tmp_path is isolated; falls back, but with the rule names from defaults?
-    # Actually defaults/*.md includes solid.md etc, not architecture.md.
-    # Re-do this test against a real plan in the project.
-    if report.fallback_to_defaults:
-        pytest.skip("test requires real project rules to verify name-matching")
+    """A plan naming a project rule is credited above one that names none.
+
+    This test had NO assert on any path. It ended with
+    `if report.fallback_to_defaults: pytest.skip(...)`, and in an isolated `tmp_path`
+    that condition is always true — so it passed whatever the checker returned, under a
+    name promising it checked scoring. What was missing was not an assertion but the
+    fixture: the rules tree that makes the non-fallback branch reachable. It is built here.
+    """
+    rules = tmp_path / ".claude" / "rules"
+    rules.mkdir(parents=True)
+    for name in ("architecture.md", "testing.md"):
+        (rules / name).write_text(f"# {name}\n\nA project rule.\n", encoding="utf-8")
+
+    matrix = ("## Coverage Matrix\n\n| # | Gap | Task(s) | Resolution |\n"
+              "|---|---|---|---|\n| 1 | x | T1.1 | y |\n")
+    naming = _write(
+        tmp_path / ".claude",
+        "# Plan\n\nThis plan respects `architecture.md` and `testing.md`.\n\n" + matrix,
+        name="naming-plan.md")
+    silent = _write(
+        tmp_path / ".claude",
+        "# Plan\n\nNothing is cited here at all.\n\n" + matrix,
+        name="silent-plan.md")
+
+    credited = check_architecture_compliance(naming)
+    uncredited = check_architecture_compliance(silent)
+
+    assert credited.fallback_to_defaults is False, (
+        "the rules tree was not found, so the branch under test was never entered")
+    assert set(credited.rules_referenced_in_plan) >= {"architecture.md", "testing.md"}
+    assert credited.compliance_score > uncredited.compliance_score, (
+        f"naming two rules scored {credited.compliance_score}, naming none scored "
+        f"{uncredited.compliance_score} — the credit this test is named for is not given")
 
 
 def test_plan_in_project_gets_credit_for_principles_even_without_rule_names() -> None:
@@ -191,3 +216,25 @@ def test_compliance_is_deterministic(tmp_path: Path) -> None:
     r1 = check_architecture_compliance(plan)
     r2 = check_architecture_compliance(plan)
     assert r1 == r2
+
+
+def test_a_consumer_rules_tree_outside_the_kit_does_not_crash(tmp_path: Path) -> None:
+    """`rules_dir.relative_to(SKILL_ROOT.parent.parent.parent)` raised for every consumer.
+
+    The call was unguarded on the "plan cites no rule" path, and a consumer's
+    `.claude/rules/` is never under this kit's parent — so the skill this exists to serve
+    got a ValueError traceback instead of a reason string. No test reached the branch,
+    because the only test that built a rules tree ended in `pytest.skip`.
+    """
+    rules = tmp_path / ".claude" / "rules"
+    rules.mkdir(parents=True)
+    (rules / "house-style.md").write_text("# house style\n", encoding="utf-8")
+    plan = _write(tmp_path / ".claude",
+                  "# Plan\n\nCites nothing.\n\n## Coverage Matrix\n\n"
+                  "| # | Gap | Task(s) | Resolution |\n|---|---|---|---|\n| 1 | x | T1.1 | y |\n",
+                  name="quiet-plan.md")
+
+    report = check_architecture_compliance(plan)
+
+    assert report.fallback_to_defaults is False
+    assert any("does NOT reference" in r for r in report.reasons), report.reasons

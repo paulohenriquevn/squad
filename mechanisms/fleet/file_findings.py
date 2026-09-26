@@ -43,6 +43,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from typing import NamedTuple
 
 
 class TrackerUnavailable(RuntimeError):
@@ -69,13 +70,18 @@ def _overlap(a: str, b: str) -> float:
     return len(left & right) / min(len(left), len(right))
 
 
+#: How many issues one `gh issue list` asks for. Read as a WINDOW, never as the
+#: tracker: a response that fills it means the tracker is larger than this.
+_ISSUE_PAGE = 300
+
+
 def existing_issues(repo: str, *, timeout: int = 60) -> list[dict]:
     """Every issue in `repo`, open and closed. Raises rather than returning []."""
     try:
-        done = subprocess.run(  # noqa: PLW1510
+        done = subprocess.run(
             ["gh", "issue", "list", "--repo", repo, "--state", "all",
-             "--limit", "300", "--json", "number,title,body,state"],
-            capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL)
+             "--limit", str(_ISSUE_PAGE), "--json", "number,title,body,state"],
+            capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL, check=False)
     except FileNotFoundError as exc:
         raise TrackerUnavailable(
             f"`gh` is not installed, so {repo}'s issues cannot be read on this "
@@ -87,41 +93,77 @@ def existing_issues(repo: str, *, timeout: int = 60) -> list[dict]:
             f"`gh issue list --repo {repo}` exited {done.returncode}: "
             f"{(done.stderr or '').strip()[:200]}")
     try:
-        return json.loads(done.stdout or "[]")
+        issues = json.loads(done.stdout or "[]")
     except json.JSONDecodeError as exc:
         raise TrackerUnavailable(f"`gh` returned something that is not JSON: {exc}") from exc
+    # A FULL page is not a complete read. `--limit 300` is a window, and `triage()`
+    # treats whatever comes back as the whole tracker: once a repository passes 300
+    # issues the oldest fall out, the anchor and title checks stop seeing them, and
+    # `file_one` files a duplicate of an issue that already exists — silently, because
+    # nothing compared the count against the limit. Refusing is right for the same
+    # reason `TrackerUnavailable` is raised above: dedup over a partial tracker
+    # under-reports, and under-reporting here means filing noise into the tracker.
+    if len(issues) >= _ISSUE_PAGE:
+        raise TrackerUnavailable(
+            f"{repo} returned {len(issues)} issues, which is the {_ISSUE_PAGE} limit "
+            f"this reader asks for — so the tracker is at least that large and the "
+            f"oldest issues were NOT read. Deduplication over a partial tracker files "
+            f"duplicates of issues that already exist. Raise the limit or page.")
+    return issues
+
+
+class Skip(NamedTuple):
+    """One finding that was NOT filed, and everything the caller needs to act on it.
+
+    `reason` alone was all this carried, so `run()` could tell the reader a duplicate
+    existed and could do nothing about it — `comment_duplicate` and `already_commented`
+    were written, tested for existence, and called from nowhere. The 'seen again'
+    comment they implement never ran. Carrying the issue number is what lets the
+    duplicate path DO something instead of only reporting.
+
+    `related_issue` is None for the skips that are not duplicates (refuted, no
+    evidence, names no file): there is no issue to comment on, and None says so.
+    """
+
+    finding: dict
+    reason: str
+    related_issue: int | None = None
+    related_state: str | None = None
 
 
 def triage(findings: list[dict], *, existing: list[dict],
-           similarity: float = 0.6) -> tuple[list[dict], list[tuple[dict, str]]]:
-    """`(to file, [(finding, why it was skipped)])`. Pure."""
+           similarity: float = 0.6) -> tuple[list[dict], list[Skip]]:
+    """`(to file, [Skip(...)])`. Pure."""
     keep: list[dict] = []
-    skip: list[tuple[dict, str]] = []
+    skip: list[Skip] = []
     for finding in findings:
         verdict = finding.get("verdict") or {}
         if verdict.get("refuted"):
-            skip.append((finding, "an agent refuted it; a killed claim is not a defect"))
+            skip.append(Skip(finding, "an agent refuted it; a killed claim is not a defect"))
             continue
         if not (finding.get("evidence") or "").strip():
-            skip.append((finding, "no evidence — an issue without a measurement is noise"))
+            skip.append(Skip(finding, "no evidence — an issue without a measurement is noise"))
             continue
         if not (finding.get("file") or "").strip():
-            skip.append((finding, "names no file, so nobody can go and look"))
+            skip.append(Skip(finding, "names no file, so nobody can go and look"))
             continue
 
         anchor = f"{finding['file']}:{finding.get('line')}" if finding.get("line") else finding["file"]
-        duplicate = None
+        duplicate: Skip | None = None
         for issue in existing:
+            state = (issue.get("state") or "").lower() or None
             if anchor and anchor in (issue.get("body") or ""):
-                duplicate = f"#{issue['number']} already cites {anchor}"
+                duplicate = Skip(finding, f"#{issue['number']} already cites {anchor}",
+                                 issue["number"], state)
                 break
             if _overlap(finding.get("title", ""), issue.get("title", "")) >= similarity:
-                state = (issue.get("state") or "").lower()
-                duplicate = (f"#{issue['number']} says the same thing"
-                             f"{' and was closed' if state == 'closed' else ''}")
+                duplicate = Skip(finding,
+                                 f"#{issue['number']} says the same thing"
+                                 f"{' and was closed' if state == 'closed' else ''}",
+                                 issue["number"], state)
                 break
         if duplicate:
-            skip.append((finding, duplicate))
+            skip.append(duplicate)
             continue
         keep.append(finding)
     return keep, skip
@@ -169,21 +211,27 @@ def file_one(finding: dict, *, repo: str, apply: bool) -> tuple[bool, str]:
     title = finding.get("title", "").strip()[:120]
     if not apply:
         return True, f"dry-run: would file {title!r}"
-    done = subprocess.run(  # noqa: PLW1510
+    done = subprocess.run(
         ["gh", "issue", "create", "--repo", repo, "--title", title,
          "--body", body(finding, repo_hint="the Squad kit")],
-        capture_output=True, text=True, stdin=subprocess.DEVNULL)
+        capture_output=True, text=True, stdin=subprocess.DEVNULL, check=False)
     if done.returncode != 0:
         return False, f"could not file {title!r}: {(done.stderr or '').strip()[:160]}"
     return True, (done.stdout or "").strip()
 
 
 def already_commented(repo: str, issue_number: int, anchor: str = "FINDING_DUPLICATE_V1",
-                      *, timeout: int = 60) -> bool:
-    """Check if we've already left a comment with this pattern on this issue.
+                      *, timeout: int = 60) -> bool | None:
+    """Whether a comment carrying `anchor` is already on the issue. None = could not ask.
 
-    Uses an anchor string to detect if a recent comment from the bot already exists.
-    This prevents spam when the same finding is re-detected on subsequent runs.
+    TRI-STATE, and the third value is the point. This returned `False` when `gh` was
+    missing or the call raised, justified inline as "If we can't check, assume we haven't
+    (don't spam on error)" — but False is precisely the value that lets the comment
+    through. The guard failed OPEN while its comment claimed it failed closed, so the one
+    thing standing between a re-detected finding and a comment every single run stopped
+    standing there exactly when the tracker was unreachable.
+
+    A check that did not run must block the comment, not authorise it.
 
     Args:
         repo: owner/name of the tracker
@@ -201,11 +249,10 @@ def already_commented(repo: str, issue_number: int, anchor: str = "FINDING_DUPLI
                 check=False,
             capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL)
     except (FileNotFoundError, subprocess.SubprocessError):
-        # If we can't check, assume we haven't (don't spam on error)
-        return False
+        return None
 
     if done.returncode != 0:
-        return False
+        return None
 
     comments = done.stdout or ""
     return anchor in comments
@@ -232,8 +279,14 @@ def comment_duplicate(repo: str, issue_number: int, anchor: str,
     if not apply:
         return True, f"dry-run: would comment on #{issue_number}"
 
-    # Check if we've already left a comment
-    if already_commented(repo, issue_number):
+    # Check if we've already left a comment. `None` is "the tracker could not be asked",
+    # and it blocks: commenting on the strength of a check that did not run is how one
+    # unreachable tracker turns into a comment on every run.
+    seen = already_commented(repo, issue_number)
+    if seen is None:
+        return False, (f"could not ask #{issue_number} whether it already carries this "
+                       f"comment; not commenting rather than commenting blind")
+    if seen:
         return True, f"already commented on #{issue_number} (suppressed duplicate)"
 
     comment_text = (
@@ -266,7 +319,20 @@ def run(findings: list[dict], *, repo: str, apply: bool) -> tuple[list[str], lis
         return [], [f"filed nothing: {exc}"], 1
     keep, skip = triage(findings, existing=existing)
     filed: list[str] = []
-    notes = [f"{finding.get('title', '?')[:70]}: {why}" for finding, why in skip]
+    notes: list[str] = []
+    for entry in skip:
+        note = f"{entry.finding.get('title', '?')[:70]}: {entry.reason}"
+        if entry.related_issue is not None:
+            # The 'seen again' comment. This is what the pair below was written for and
+            # what nothing called: the duplicate path recorded a note and left the
+            # tracker unaware the pattern had recurred. `comment_duplicate` carries its
+            # own anti-spam guard and its own fail-closed check, so calling it here adds
+            # no policy — it only stops throwing the work away.
+            anchor = (f"{entry.finding.get('file')}:{entry.finding.get('line')}"
+                      if entry.finding.get("line") else str(entry.finding.get("file")))
+            _, said = comment_duplicate(repo, entry.related_issue, anchor, apply=apply)
+            note = f"{note} — {said}"
+        notes.append(note)
     for finding in keep:
         ok, line = file_one(finding, repo=repo, apply=apply)
         (filed if ok else notes).append(line)

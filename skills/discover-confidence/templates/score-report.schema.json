@@ -88,7 +88,10 @@
         "SHIPPABLE",
         "SHIPPABLE_WITH_CAVEATS",
         "NON_SHIPPABLE",
-        "INVALID"
+        "INVALID",
+        "NEEDS_REVISION",
+        "AWAITING_REVIEW",
+        "ITEM_IN_FLIGHT"
       ]
     },
     "calibration": {
@@ -132,6 +135,14 @@
     },
     "sub_reports": {
       "type": "object"
+    },
+    "panel": {
+      "type": "object",
+      "description": "The review panel's record, as `check_panel_approval` read it. Present on every run that did not pass --structural-only."
+    },
+    "panel_gate": {
+      "type": "string",
+      "description": "Whether the panel gate was applied, and why not when it was not \u2014 e.g. `applied`, `skipped: --structural-only`."
     }
   }
 }

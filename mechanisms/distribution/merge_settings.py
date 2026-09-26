@@ -52,9 +52,13 @@ install permission to delete it.
 """
 from __future__ import annotations
 
+import copy
 import json
 import os
+import pathlib
+import shutil
 import sys
+import tempfile
 from typing import Any
 
 #: Keys that wire the kit's own scripts. A stale copy is a gate that quietly
@@ -99,25 +103,74 @@ def _matcher_of(group: dict) -> str:
 
 def merge_hooks(
     mine: dict, kit: dict, previous: dict[str, list[str]],
-) -> tuple[dict, list[str], list[str]]:
+) -> tuple[dict, list[str], list[str], list[str]]:
     """Per-entry merge of the `hooks` key.
 
-    Returns the merged mapping, the consumer commands kept, and the kit commands
-    retired. A hook is identified by its `command`: two entries with the same
-    command are the same gate however their timeout or matcher was written.
+    Returns the merged mapping, the consumer commands kept, the kit commands
+    retired, and the kit hooks this install respected as removed by the project.
+
+    Four values rather than a flag that changes what the third one means: a
+    parameter which re-points a return position gives one function two shapes, and
+    a caller reading the third list has no way to know which it received.
+
+    A hook is identified by its `command`: two entries with the same command are
+    the same gate however their timeout or matcher was written.
+
+    `settings.json` is Claude Code's own configuration file, so a hook the project
+    deleted from it is a decision and not drift to repair. This function placed
+    "the kit's groups first, verbatim", which made a removal invisible: measured
+    2026-09-19, a project removed `UserPromptSubmit`, reinstalled, and the hook was
+    back. The file only LOOKED like configuration, and a configuration surface that
+    does not hold is why somebody ends up asking for a flag instead — which would
+    give one system two behaviours and two sets of gates.
+
+    `merge_permissions` below already holds the reasoning, for the same record one
+    directory over: a rule present in the consumer and absent from the kit is
+    "either something the kit retired or something the project added, and those
+    must never share an outcome". `.kit-hooks.json` answers the same question for
+    hooks and was read in one direction only.
+
+    With no baseline nothing is respected, so a first install wires everything —
+    the same "with no record nothing is removed" the permissions merge states, and
+    what keeps a fresh consumer from being silenced by an absent file.
+
+    A hook the kit never shipped before is NOT a removal: there is no record of the
+    project dropping it. Without that, every gate added since a consumer's last
+    install would read as something they deleted, and the kit would stop shipping
+    gates to the consumers furthest behind.
     """
     mine_hooks = mine.get("hooks") or {}
     kit_hooks = kit.get("hooks") or {}
     kit_commands = {c for commands in hook_baseline(kit).values() for c in commands}
+    mine_commands = {c for commands in hook_baseline(mine).values() for c in commands}
 
     kept: list[str] = []
     retired: list[str] = []
+    removed_by_project: list[str] = []
     merged: dict[str, list[dict]] = {}
 
+    def _project_removed(command: str | None, event: str) -> bool:
+        if command is None or not previous:
+            return False
+        return command in (previous.get(event) or []) and command not in mine_commands
+
     for event in list(kit_hooks) + [e for e in mine_hooks if e not in kit_hooks]:
-        # The kit's groups first, verbatim: refreshing them is the whole reason
-        # the installer touches this file.
-        groups: list[dict] = [dict(group) for group in (kit_hooks.get(event) or [])]
+        # The kit's groups, minus anything this project took out of its own config.
+        # Refreshing the kit's groups is why the installer touches this file at all;
+        # reinstating what somebody deleted is not refreshing, it is overruling.
+        groups = []
+        for group in kit_hooks.get(event) or []:
+            survivors = []
+            for hook in (group or {}).get("hooks", []):
+                command = _command_of(hook)
+                if _project_removed(command, event):
+                    removed_by_project.append(f"{event}: {command}")
+                    continue
+                survivors.append(hook)
+            if survivors:
+                kept_group = {k: v for k, v in (group or {}).items() if k != "hooks"}
+                kept_group["hooks"] = survivors
+                groups.append(kept_group)
         by_matcher = {_matcher_of(group): group for group in groups}
 
         for group in mine_hooks.get(event) or []:
@@ -150,7 +203,7 @@ def merge_hooks(
         if groups:
             merged[event] = groups
 
-    return merged, kept, retired
+    return merged, kept, retired, removed_by_project
 
 
 # ── permissions ───────────────────────────────────────────────────────────────
@@ -202,6 +255,25 @@ def merge_permissions(
 
 # ── the whole file ────────────────────────────────────────────────────────────
 
+def _write_atomic(target, content: str) -> None:
+    """Replace `target` in one step no reader can observe half of.
+
+    Accepts a `str` or a `Path` — this module's callers pass both, and a helper that
+    refuses one of them is a helper somebody bypasses. The temporary file is created in
+    the target's OWN directory, because `os.replace` is atomic only within a filesystem.
+    """
+    target = pathlib.Path(target)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile("w", dir=str(target.parent), delete=False,
+                                     encoding="utf-8", prefix=f".{target.name}.",
+                                     suffix=".tmp") as tmp:
+        tmp.write(content)
+        tmp.flush()
+        os.fsync(tmp.fileno())
+        tmp_path = tmp.name
+    os.replace(tmp_path, target)
+
+
 def merge_with_report(
     mine: dict, kit: dict, *,
     previous: dict[str, list[str]] | None = None,
@@ -214,13 +286,18 @@ def merge_with_report(
     are separate files and separate arguments, because a hook and a permission
     retire for different reasons and on different schedules.
     """
-    merged = dict(mine)
+    # DEEP. `dict(mine)` is shallow, so the nested `permissions` object stayed shared
+    # with the caller's input — and `merge_permissions` calls
+    # `mine.setdefault("permissions", {})` and mutates that object in place. The
+    # caller's dict was silently rewritten by a function whose name says it returns a
+    # merge, which makes "what did the consumer have before" unanswerable after the call.
+    merged = copy.deepcopy(mine)
 
     for key in KIT_OWNED_KEYS:
         if key in kit:
             merged[key] = kit[key]
 
-    hooks, kept, retired = merge_hooks(merged, kit, hook_previous or {})
+    hooks, kept, retired, project_removed = merge_hooks(merged, kit, hook_previous or {})
     if hooks:
         merged["hooks"] = hooks
 
@@ -231,22 +308,20 @@ def merge_with_report(
     return merged, {
         "hooks_kept": kept,
         "hooks_retired": retired,
+        # Reported rather than silent: an install that quietly declines to wire a
+        # gate is one nobody can audit, and "the kit stopped shipping it" and "this
+        # project removed it" must never arrive looking the same.
+        "hooks_removed_by_project": project_removed,
         "permissions_retired": permissions_retired,
     }
 
 
-def merge(
-    mine: dict, kit: dict, *,
-    previous: dict[str, list[str]] | None = None,
-    hook_previous: dict[str, list[str]] | None = None,
-    declared_retired: set[str] | None = None,
-) -> dict:
-    """`merge_with_report` without the report."""
-    merged, _ = merge_with_report(mine, kit, previous=previous,
-                                  hook_previous=hook_previous,
-                                  declared_retired=declared_retired)
-    return merged
-
+#: `merge()` lived here until 2026-09-17: a report-less wrapper around
+#: `merge_with_report` with no production caller. `main()` calls the reporting form and
+#: so does `install.sh`, while seventeen of the suite's nineteen assertions went through
+#: the wrapper — so the tested surface and the running surface were different functions,
+#: and the report every caller actually reads was covered by two assertions. The suite
+#: now exercises what runs, and the wrapper is gone rather than kept for the tests.
 
 def _load(path: str, default: Any = None) -> Any:
     try:
@@ -298,13 +373,17 @@ def main(argv: list[str] | None = None) -> int:
                            {k: v for k, v in (kit.get("permissions") or {}).items()
                             if isinstance(v, list)}),
                           (hooks_baseline, hook_baseline(kit))):
-        with open(path, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, indent=2)
-            handle.write("\n")
+        _write_atomic(path, json.dumps(payload, indent=2) + "\n")
 
-    with open(target, "w", encoding="utf-8") as handle:
-        json.dump(merged, handle, indent=2)
-        handle.write("\n")
+    # The consumer's settings.json, kept and replaced rather than truncated. `open(w)`
+    # truncates BEFORE anything is written, so an interruption, a full disk or a
+    # serialisation error between the truncate and the flush left an empty or half-written
+    # settings.json — the file carrying the consumer's own hooks and permission grants,
+    # and the one file whose loss cannot be recovered from the kit.
+    target_path = pathlib.Path(target)
+    if target_path.exists():
+        shutil.copy2(target_path, target_path.with_suffix(".json.bak"))
+    _write_atomic(target_path, json.dumps(merged, indent=2) + "\n")
 
     # Said out loud, always. A silent merge over someone else's file is how the
     # deletion this module exists to prevent went unnoticed for four days.
@@ -312,6 +391,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"    kept your hook — {kept}")
     for gone in report["hooks_retired"]:
         print(f"    removed a hook the kit retired — {gone}")
+    # Worded so the two reasons a kit hook is absent never read the same. "The kit
+    # stopped shipping it" is the kit's decision; this is the project's, and the
+    # line says how to undo it, because a gate that is off and unexplained is one
+    # somebody rediscovers by being bitten.
+    for respected in report["hooks_removed_by_project"]:
+        print(f"    left out — you removed it from settings.json — {respected}")
+    if report["hooks_removed_by_project"]:
+        print(f"    ({len(report['hooks_removed_by_project'])} kit hook(s) not wired. "
+              f"Delete the entry from .claude/.kit-hooks.json to take them back.)")
     if report["permissions_retired"]:
         print(f"    {report['permissions_retired']} permission rule(s) retired by "
               f"the kit were removed")

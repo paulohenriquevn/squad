@@ -112,33 +112,45 @@ def post_to_slack(webhook_url: str, message: str, version: str) -> tuple[bool, s
     import urllib.error
     import urllib.request
 
+    scheme = webhook_url.split(":", 1)[0].lower()
+    if scheme != "https":
+        # `urlopen` opens `file:` and custom schemes too, so a webhook variable pointing at
+        # a local path would be READ. The URL itself is a credential and is never echoed.
+        return False, f"Slack webhook refused: scheme `{scheme}` is not https"
+
     payload = json.dumps({"text": message})
-    try:
+
+    def _post() -> int:
+        """POST the payload and return the status. Called twice, written once.
+
+        The retry path below held a verbatim copy of this request — same URL, same
+        headers, same timeout — so a change to any of them had to be made in two
+        places, and the second was the one nobody would remember.
+        """
         req = urllib.request.Request(
             webhook_url,
             data=payload.encode("utf-8"),
             headers={"Content-Type": "application/json"},
             method="POST"
         )
-        with urllib.request.urlopen(req, timeout=10) as response:
-            if response.status == 200:
-                return True, f"Posted to Slack (version {version})"
-            return False, f"Slack returned status {response.status}"
+        # The scheme was refused above unless https.
+        with urllib.request.urlopen(req, timeout=10) as response:  # nosec B310
+            return response.status
+
+    try:
+        status = _post()
+        if status == 200:
+            return True, f"Posted to Slack (version {version})"
+        return False, f"Slack returned status {status}"
     except urllib.error.HTTPError as e:
         if e.code >= 500:
             # Server error: retry once
             time.sleep(1)
             try:
-                req = urllib.request.Request(
-                    webhook_url,
-                    data=payload.encode("utf-8"),
-                    headers={"Content-Type": "application/json"},
-                    method="POST"
-                )
-                with urllib.request.urlopen(req, timeout=10) as response:
-                    if response.status == 200:
-                        return True, f"Posted to Slack (retry, version {version})"
-                    return False, f"Slack retry returned status {response.status}"
+                status = _post()
+                if status == 200:
+                    return True, f"Posted to Slack (retry, version {version})"
+                return False, f"Slack retry returned status {status}"
             except (urllib.error.URLError, OSError, TimeoutError) as ex:
                 return False, f"Slack retry failed: {type(ex).__name__}"
         else:

@@ -17,8 +17,8 @@ The sweep runs in two directions because both hide a different defect:
 
 from __future__ import annotations
 
-import sys
 import re
+import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "mechanisms" / "gates"))
@@ -153,9 +153,14 @@ def test_every_verdict_run_validation_can_emit_has_a_declared_band() -> None:
     """
     source = (Path(__file__).resolve().parents[1] / "skills" / "implement" / "scripts"
               / "run_validation.py").read_text(encoding="utf-8")
-    emitted = set(re.findall(r'overall = "(\w+)" if .* else \("(\w+)" if .* else "(\w+)"\)',
-                             source))
-    emitted = {v for triple in emitted for v in triple} or {"FAIL", "PARTIAL", "PASS"}
+    # Read from `overall_status`, the one function that decides the verdict. The
+    # pattern used to match a one-line conditional; when the verdict moved into an
+    # if-chain it matched nothing and a hardcoded fallback set stood in silently, so a
+    # new verdict would have passed unread. An empty read now fails instead.
+    body = re.search(r"def overall_status\(.*?\n(?=\S)", source, re.DOTALL)
+    assert body, "run_validation.py no longer defines overall_status"
+    emitted = set(re.findall(r'return "([A-Z_]+)"', body.group(0)))
+    assert emitted, "overall_status returns no literal verdict this test can read"
     declared = {row.split("|")[0].strip()
                 for row in (Path(__file__).resolve().parents[1] / "rules"
                             / "verdict-bands.txt").read_text(encoding="utf-8").splitlines()

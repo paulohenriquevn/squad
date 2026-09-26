@@ -49,13 +49,13 @@ LANGUAGE_MANIFESTS: dict[str, tuple[str, ...]] = {
 def run_command(cmd: list[str], cwd: Path, timeout: int = 300) -> dict[str, Any]:
     """Run a command, never raise. Shared by every check in the gate."""
     try:
-        result = subprocess.run(  # noqa: PLW1510
+        result = subprocess.run(
             cmd,
             cwd=str(cwd),
             capture_output=True,
             text=True,
             timeout=timeout,
-        )
+         check=False)
         return {
             "exit_code": result.returncode,
             "stdout_tail": result.stdout[-500:] if result.stdout else "",
@@ -68,9 +68,40 @@ def run_command(cmd: list[str], cwd: Path, timeout: int = 300) -> dict[str, Any]
             "stdout_full": (result.stdout or "")[:200_000],
         }
     except subprocess.TimeoutExpired:
-        return {"exit_code": -1, "error": f"timeout after {timeout}s"}
+        # `timed_out` is the fact; `exit_code: -1` is kept for readers that predate it. A
+        # caller that reads only the exit code renders "did not finish" as "went red",
+        # which is the collapse `timed_out_check` exists to prevent.
+        return {"exit_code": -1, "error": f"timeout after {timeout}s",
+                "timed_out": True, "timeout_s": timeout}
     except FileNotFoundError as exc:
         return {"exit_code": -1, "error": f"command not found: {exc}"}
+
+
+#: A check that did not finish inside its budget. Not FAIL and not PASS: measured on a
+#: consumer 2026-09-24, `npm test` took 657.90s against a 600s budget and exits 0 with
+#: 8421 tests passed, and it was reported `FAIL`, `exit_code: -1` — a repository that
+#: could never pass the gate whatever its change did. "We could not check" and "we
+#: checked and it is broken" are the two facts `cycle-acceptance.md` keeps apart.
+STATUS_TIMEOUT = "TIMEOUT"
+
+
+def timed_out_check(name: str, result: dict[str, Any], *, runner: str | None = None,
+                    budget_source: str = "default", budget_key: str | None = None) -> dict[str, Any]:
+    """The check record for a command `run_command` reported as timed out."""
+    budget = result.get("timeout_s")
+    remedy = (f" Raise `{budget_key}` in rules/code-quality-thresholds.txt if the command "
+              f"legitimately takes longer." if budget_key else "")
+    check: dict[str, Any] = {
+        "name": name,
+        "status": STATUS_TIMEOUT,
+        "timeout_s": budget,
+        "budget_source": budget_source,
+        "reason": (f"did not finish within its {budget}s budget ({budget_source}) — not "
+                   f"validated, which is neither a pass nor a failure.{remedy}"),
+    }
+    if runner:
+        check["runner"] = runner
+    return check
 
 
 #: A line that names something that failed, across the test runners this module drives:
@@ -143,6 +174,8 @@ def check_python_tests(project_root: Path) -> dict[str, Any]:
     code = result.get("exit_code")
     output = f"{result.get('stdout_tail', '')}{result.get('stderr_tail', '')}{result.get('error', '')}"
 
+    if result.get("timed_out"):
+        return timed_out_check(name, result, runner="pytest")
     if code == 0:
         return {"name": name, "status": "PASS", "runner": "pytest"}
     if code == 5:
@@ -167,6 +200,8 @@ def check_python_tests(project_root: Path) -> dict[str, Any]:
         [sys.executable, "-m", "unittest", "discover", "-q"], project_root, timeout=900
     )
     fallback_output = f"{fallback.get('stdout_tail', '')}{fallback.get('stderr_tail', '')}"
+    if fallback.get("timed_out"):
+        return timed_out_check(name, fallback, runner="unittest")
     if fallback.get("exit_code") == 0 and "Ran 0 tests" not in fallback_output:
         return {"name": name, "status": "PASS", "runner": "unittest"}
     return {
@@ -219,10 +254,14 @@ def check_go_tests(project_root: Path) -> dict[str, Any]:
     modules = go_workspace_modules(project_root) if not (project_root / "go.mod").is_file() else []
     if modules:
         failures = []
+        timed_out: list[dict[str, Any]] = []
         for module in modules:
             outcome = run_command(["go", "test", "./..."], project_root / module, timeout=900)
             text = f"{outcome.get('stderr_tail', '')}{outcome.get('error', '')}"
             if outcome.get("exit_code") == 0:
+                continue
+            if outcome.get("timed_out"):
+                timed_out.append({"module": module, "outcome": outcome})
                 continue
             if _unavailable(text):
                 return {
@@ -236,10 +275,18 @@ def check_go_tests(project_root: Path) -> dict[str, Any]:
             return {"name": name, "status": "FAIL", "runner": "go test",
                     "modules_tested": modules, "failed_modules": [f["module"] for f in failures],
                     "stderr_tail": failures[0]["stderr_tail"]}
+        if timed_out:
+            # A red module outranks an unfinished one above; with none red, the run is
+            # unfinished rather than green.
+            return {**timed_out_check(name, timed_out[0]["outcome"], runner="go test"),
+                    "modules_tested": modules,
+                    "timed_out_modules": [t["module"] for t in timed_out]}
         return {"name": name, "status": "PASS", "runner": "go test", "modules_tested": modules}
 
     result = run_command(["go", "test", "./..."], project_root, timeout=900)
     output = f"{result.get('stderr_tail', '')}{result.get('error', '')}"
+    if result.get("timed_out"):
+        return timed_out_check(name, result, runner="go test")
     if result.get("exit_code") == 0:
         return {"name": name, "status": "PASS", "runner": "go test"}
     if _unavailable(output):
@@ -265,6 +312,8 @@ def check_rust_tests(project_root: Path) -> dict[str, Any]:
         return {"name": name, "status": "SKIP", "reason": "no Cargo.toml at the repo root"}
     result = run_command(["cargo", "test", "--quiet"], project_root, timeout=1200)
     output = f"{result.get('stderr_tail', '')}{result.get('error', '')}"
+    if result.get("timed_out"):
+        return timed_out_check(name, result, runner="cargo test")
     if result.get("exit_code") == 0:
         return {"name": name, "status": "PASS", "runner": "cargo test"}
     if _unavailable(output):
@@ -336,6 +385,41 @@ def scope_suite_to_change(outcome: dict[str, Any],
                        f"it so.")}
 
 
+#: Extensions whose presence means this repository holds code a suite could exercise.
+#: Kept to the four languages this module knows how to run, so the check never reports
+#: a precondition it could not have satisfied anyway.
+_SOURCE_SUFFIXES = (".py", ".js", ".jsx", ".ts", ".tsx", ".mjs", ".go", ".rs")
+
+#: Directories whose contents are not the repository's own code.
+_NOT_SOURCE = ("/.git/", "/node_modules/", "/vendor/", "/target/", "/dist/",
+               "/build/", "/.venv/", "/__pycache__/")
+
+
+def _source_files(project_root: Path, limit: int = 200) -> list[str]:
+    """Committed source files, as repo-relative paths. Empty for a genuine pre-code tree.
+
+    Read from `git ls-files` rather than a walk: an untracked scratch file is not this
+    repository's code, and the walk would have counted it.
+    """
+    try:
+        out = subprocess.run(["git", "ls-files"], cwd=project_root,
+                             capture_output=True, text=True, timeout=30, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if out.returncode != 0:
+        return []
+    found: list[str] = []
+    for line in out.stdout.splitlines():
+        if not line.endswith(_SOURCE_SUFFIXES):
+            continue
+        if any(part in f"/{line}" for part in _NOT_SOURCE):
+            continue
+        found.append(line)
+        if len(found) >= limit:
+            break
+    return found
+
+
 def check_test_execution(project_root: Path, suite_checks: list[dict[str, Any]]) -> dict[str, Any]:
     """Did ANY test suite actually execute?
 
@@ -345,6 +429,8 @@ def check_test_execution(project_root: Path, suite_checks: list[dict[str, Any]])
       whether the question was put to a runner.
     - A manifest exists and nothing ran → FAIL. This is the case that used to
       exit 0.
+    - A manifest exists and the only suites that started timed out → TIMEOUT: the
+      question was put and not answered, which is neither of the two above.
     """
     languages = detect_languages(project_root)
     # A runner that started and found nothing, or that was not installed at all,
@@ -360,20 +446,60 @@ def check_test_execution(project_root: Path, suite_checks: list[dict[str, Any]])
     ]
 
     if not languages:
+        # "Pre-code" was measured by the absence of a MANIFEST, and a repository can
+        # hold plenty of code without one — this kit describes itself as shipping
+        # "loose scripts". Measured 2026-09-21: with `src/thing.py` committed and no
+        # `pyproject.toml`, this returned SKIP and the validation exited 0; adding a
+        # two-line `pyproject.toml`, touching no code, turned it into FAIL. What
+        # separated proceed from refuse was a metadata file.
+        #
+        # Sources present and no suite runnable is a missing precondition, not a
+        # phase where tests do not yet apply. It is reported as such rather than as a
+        # FAIL, because the honest next step is "declare the manifest this repo needs"
+        # and not "your tests failed".
+        sources = _source_files(project_root)
+        if sources:
+            return {
+                "name": "test_execution",
+                "status": "SKIP",
+                "skip_kind": "precondition_missing",
+                "languages_detected": [],
+                "source_files_seen": sources[:5],
+                "reason": (f"no language manifest at the repo root, and {len(sources)} "
+                           f"source file(s) are committed (e.g. {sources[0]}). A repo "
+                           f"with code and no manifest is not a pre-code phase: no "
+                           f"suite could be run, so nothing here was tested"),
+            }
         return {
             "name": "test_execution",
             "status": "SKIP",
+            "skip_kind": "not_applicable",
             "languages_detected": [],
             "reason": ("no language manifest at the repo root for any suite this gate "
-                       "knows how to run — nothing to run, which is not the same as "
-                       "nothing to test"),
+                       "knows how to run, and no source file committed — nothing to "
+                       "run, which is not the same as nothing to test"),
         }
+    # A suite that started and did not finish did not answer the question either. It
+    # used to: a timed-out `npm test` was FAIL with no `code`, so this gate reported
+    # PASS — "a suite ran" — beside `npm test FAIL` about the same unfinished run.
+    timed_out = [c.get("name") for c in suite_checks if c.get("status") == STATUS_TIMEOUT]
     if executed:
         return {
             "name": "test_execution",
             "status": "PASS",
             "languages_detected": languages,
             "suites_executed": [c.get("name") for c in executed],
+            "suites_timed_out": timed_out,
+        }
+    if timed_out:
+        return {
+            "name": "test_execution",
+            "status": STATUS_TIMEOUT,
+            "languages_detected": languages,
+            "suites_executed": [],
+            "suites_timed_out": timed_out,
+            "reason": (f"{', '.join(timed_out)} started and did not finish within budget — "
+                       "whether the suite passes is unknown, so nothing here was validated"),
         }
     return {
         "name": "test_execution",
@@ -545,6 +671,9 @@ def _typed_outcome(name: str, command: list[str], project_root: Path, timeout: i
     for root in roots:
         result = run_command(command, root, timeout=timeout)
         output = f"{result.get('stderr_tail', '')}{result.get('error', '')}"
+        if result.get("timed_out"):
+            return {**timed_out_check(name, result, runner=command[0]),
+                    "roots_checked": [str(r) for r in roots]}
         if _unavailable(output):
             if tool_optional:
                 return {"name": name, "status": "SKIP", "runner": command[0],

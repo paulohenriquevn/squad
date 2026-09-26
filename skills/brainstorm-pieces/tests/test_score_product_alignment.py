@@ -13,16 +13,23 @@ for _up in _P(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _s.path.insert(0, str(_up))
         break
-import sys  # noqa: E402
-from pathlib import Path  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+import sys  # noqa: E402 — post-bootstrap import
+from pathlib import Path  # noqa: E402 — post-bootstrap import
 
-import pytest  # noqa: E402
+import pytest  # noqa: E402 — post-bootstrap import
 
-from squad.paths import write_wiki_dir  # noqa: E402
+from squad.paths import write_wiki_dir  # noqa: E402 — post-bootstrap import
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from score_product_alignment import FLOOR_PCT, score, verdict  # noqa: E402
+from score_product_alignment import (  # noqa: E402 — post-bootstrap import
+    FLOOR_PCT,
+    score,
+    verdict,
+)
 
 VISION = """# Product vision
 
@@ -96,7 +103,12 @@ def _product(root: Path, **overrides: str) -> Path:
     return d
 
 
-def _sign(product: Path, who: str = "paulo", ticked: bool = True) -> None:
+def _sign(product: Path, who: str = "human/paulo", ticked: bool = True) -> None:
+    """`human/{who}` is the kit's signature vocabulary, not this file's invention.
+
+    `score_alignment.signed_by_is_human` reads exactly this prefix at item level.
+    Signing here as a bare name was what let ANY string count as a person.
+    """
     box = "x" if ticked else " "
     (product / "alignment.md").write_text(
         "# Product alignment\n\n## Reviewer sign-off\n\n"
@@ -216,3 +228,175 @@ def test_every_document_of_the_cascade_is_required(tmp_path: Path, missing: str)
     _sign(product)
     (product / missing).unlink()
     assert verdict(score(tmp_path))[0] == "INVALID"
+
+
+# ── the signature is a person's, and the script must be able to tell ──────────
+#
+# Measured 2026-09-20, before these four tests existed: a cascade signed
+# `<!-- signed-by: iris-product-designer -->` with the four checkboxes DELETED
+# scored `PRODUCT_ALIGNED`, exit 0 — the agent that writes the documents signing
+# them under its own name, through the one gate the unattended chain rests on.
+#
+# Two independent holes produced that. `verdict()` recognised only `judge/` as a
+# non-person, so every other string read as a human; and `TICKED_RE` was defined
+# and never read, so a checklist with NO boxes satisfied "nothing is unticked".
+
+
+def test_an_agent_signature_does_not_align_the_product(tmp_path: Path) -> None:
+    """The rule is a person signed, not "a judge did not".
+
+    `judge/` was the only refused prefix, which makes the gate a denylist of one
+    against an open set of names. `score_alignment.signed_by_is_human` at item
+    level is an allowlist for this exact reason, and the two now agree.
+    """
+    product = _product(tmp_path)
+    _sign(product, who="iris-product-designer")
+    rep = score(tmp_path)
+    assert rep.pct >= FLOOR_PCT, "the cascade is structurally complete"
+    assert verdict(rep) == ("AWAITING_REVIEW", 1), "the author of the documents is not a reviewer"
+
+
+def test_deleting_the_checklist_is_not_ticking_it(tmp_path: Path) -> None:
+    """Zero boxes is zero unticked boxes, and it is not a review."""
+    product = _product(tmp_path)
+    (product / "alignment.md").write_text(
+        "# Product alignment\n\n## Reviewer sign-off\n\n<!-- signed-by: human/paulo -->\n",
+        encoding="utf-8")
+    rep = score(tmp_path)
+    assert rep.ticked == 0
+    assert verdict(rep) == ("AWAITING_REVIEW", 1)
+
+
+def test_a_signature_keeps_the_route_it_was_given(tmp_path: Path) -> None:
+    """`human/paulo (approved in session)` says more than `human/paulo`.
+
+    The first cut captured `[^\\s>]+` and stopped at the first space, dropping the
+    route — the same defect `score_alignment.py` records having fixed in its own
+    pattern, reintroduced here by a narrower character class.
+    """
+    product = _product(tmp_path)
+    _sign(product, who="human/paulo (approved in session)")
+    rep = score(tmp_path)
+    assert rep.signers == ["human/paulo (approved in session)"]
+    assert verdict(rep) == ("PRODUCT_ALIGNED", 0)
+
+
+def test_one_agent_signature_does_not_launder_a_human_one(tmp_path: Path) -> None:
+    """The WEAKEST signer decides, as it does at item level."""
+    product = _product(tmp_path)
+    (product / "alignment.md").write_text(
+        "# Product alignment\n\n## Reviewer sign-off\n\n"
+        "- [x] The problem stated is the real one  <!-- signed-by: human/paulo -->\n"
+        "- [x] These are the right objectives  <!-- signed-by: iris-product-designer -->\n",
+        encoding="utf-8")
+    rep = score(tmp_path)
+    assert verdict(rep) == ("AWAITING_REVIEW", 1)
+
+
+# ── a template is not a document ──────────────────────────────────────────────
+#
+# Measured 2026-09-20: the four shipped templates, copied into `wiki/product/`
+# and not edited, scored 100.0% (34/34) — every one of the seventeen criteria
+# green. G-B0 was written to stop `touch` from buying 35%, and it asked whether
+# the file held anything but headings. A template holds instructions, and an
+# instruction is text.
+
+
+def _templates_into(root: Path) -> Path:
+    """The shipped templates, copied verbatim, as an adopter would."""
+    import shutil
+
+    skills = Path(__file__).resolve().parents[2]
+    d = write_wiki_dir(root, "product")
+    d.mkdir(parents=True, exist_ok=True)
+    for dst, src in {
+        "product-vision.md": "brainstorm-vision/templates/product-vision.template.md",
+        "objectives.md": "brainstorm-objectives/templates/objectives.template.md",
+        "trd.md": "brainstorm-trd/templates/trd.template.md",
+        "technical-pieces.md": "brainstorm-pieces/templates/technical-pieces.template.md",
+        "alignment.md": "brainstorm-pieces/templates/alignment.template.md",
+    }.items():
+        shutil.copy(skills / src, d / dst)
+    return d
+
+
+def test_an_untouched_template_is_not_a_written_document(tmp_path: Path) -> None:
+    """The whole cascade, copied and not filled in, is INVALID rather than perfect."""
+    _templates_into(tmp_path)
+    rep = score(tmp_path)
+    assert "unfilled_template" in rep.hard_caps
+    assert sorted(rep.unfilled_docs) == ["objectives.md", "product-vision.md",
+                                         "technical-pieces.md", "trd.md"]
+    assert verdict(rep) == ("INVALID", 2), "a copied scaffold is not a 100% cascade"
+
+
+def test_a_guide_comment_is_not_a_written_section(tmp_path: Path) -> None:
+    """`_section` measured length, and a 132-char instruction is 132 characters."""
+    vision = ("# Product vision\n\n## Who it is for\n\n"
+              "<!-- Someone whose situation can be pictured. 'Developers' and 'users'\n"
+              "     are categories, and a category settles no trade-off. -->\n\n"
+              "## The problem\nReal text here that a person wrote and would defend.\n\n"
+              "## What it is\nAlso real.\n\n## What it is NOT\n- Not an alerting system.\n"
+              "- Not a log search tool.\n")
+    _product(tmp_path, **{"product-vision.md": vision})
+    rep = score(tmp_path)
+    assert next(c for c in rep.criteria if c.key == "vision_user").score == 0
+    assert "vision_without_named_user" in rep.floor_caps
+
+
+def test_a_number_inside_a_guide_comment_is_not_a_metric(tmp_path: Path) -> None:
+    """`metric: <!-- … Gate G-B2 refuses … -->` scored a metric, on the `2` in `G-B2`."""
+    objectives = ("# Objectives\n\n## OBJ-1 — Something\n"
+                  "metric: <!-- must contain a number. Gate G-B2 refuses a mood. -->\n"
+                  "horizon: <!-- a date or a quarter. -->\n"
+                  "why: it is worth doing, and here is the observation behind it.\n")
+    _product(tmp_path, **{"objectives.md": objectives})
+    rep = score(tmp_path)
+    assert next(c for c in rep.criteria if c.key == "obj_metric").score < 2
+    assert "objective_without_measurable_metric" in rep.floor_caps
+    assert "objective_without_horizon" in rep.floor_caps
+
+
+def test_an_empty_bullet_is_not_a_non_goal(tmp_path: Path) -> None:
+    """The template ships two bare `- ` lines, and both counted."""
+    vision = VISION.split("## What it is NOT")[0] + "## What it is NOT\n\n- \n- \n"
+    _product(tmp_path, **{"product-vision.md": vision})
+    rep = score(tmp_path)
+    assert next(c for c in rep.criteria if c.key == "vision_nongoals").score == 0
+    assert "vision_without_non_goal" in rep.floor_caps
+
+
+def test_a_citation_that_does_not_parse_is_not_a_citation(tmp_path: Path) -> None:
+    """`serves: OBJ-<!-- … -->` was non-empty, so it counted — and matched no id,
+    so it was not dangling either. A citation escaped G-B3 by being unreadable."""
+    trd = ("# Technical requirements\n\n## REQ-1 — Baseline is computed\n"
+           "serves: OBJ-<!-- must exist in objectives.md -->\n"
+           "statement: The baseline for any series is derived from its own history.\n"
+           "acceptance: A service added today has a usable baseline within 24h.\n")
+    _product(tmp_path, **{"trd.md": trd})
+    rep = score(tmp_path)
+    assert next(c for c in rep.criteria if c.key == "req_cites").score < 2
+    assert "requirement_serving_no_objective" in rep.floor_caps
+
+
+@pytest.mark.parametrize("marker", ["{{SCOPE}}", "<who-it-is-for>", "???"])
+def test_every_placeholder_form_is_detected(tmp_path: Path, marker: str) -> None:
+    """Three of the seven alternatives never matched: `\\b` before `<` and before `?`
+    needs a word character on one side, and `{{…}}` was not in the pattern at all."""
+    from score_product_alignment import PLACEHOLDER_RE
+
+    assert PLACEHOLDER_RE.search(f"metric: {marker} per week"), marker
+
+
+def test_the_unsigned_marker_is_not_a_signer(tmp_path: Path) -> None:
+    """`<!-- signed-by: -->` is what the template ships. It named a signer called " "."""
+    from squad.signoff import SIGNED_BY_RE  # the one reader, since 2026-09-20
+
+    assert SIGNED_BY_RE.findall("<!-- signed-by: -->") == []
+    product = _product(tmp_path)
+    (product / "alignment.md").write_text(
+        "# Product alignment\n\n## Reviewer sign-off\n\n- [x] a\n\n<!-- signed-by: -->\n",
+        encoding="utf-8")
+    rep = score(tmp_path)
+    assert rep.signers == []
+    assert verdict(rep) == ("AWAITING_REVIEW", 1)

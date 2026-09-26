@@ -23,7 +23,7 @@ MANIFEST = ".claude/.kit-manifest.txt"
 
 
 def test_install_writes_a_manifest_of_what_the_kit_brought(tmp_path: Path) -> None:
-    target = tmp_path / "consumidor"
+    target = tmp_path / "consumer"
     target.mkdir()
     (target / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
 
@@ -45,7 +45,7 @@ def test_install_writes_a_manifest_of_what_the_kit_brought(tmp_path: Path) -> No
 
 def test_a_project_skill_is_absent_from_the_manifest(tmp_path: Path) -> None:
     """The point of the file: what the project wrote does NOT appear in it."""
-    target = tmp_path / "consumidor"
+    target = tmp_path / "consumer"
     (target / ".claude" / "skills" / "minha-skill-de-dominio").mkdir(parents=True)
     (target / ".claude" / "skills" / "minha-skill-de-dominio" / "SKILL.md").write_text(
         "# minha\n", encoding="utf-8")
@@ -69,7 +69,7 @@ def test_merge_never_overwrites_an_existing_rules_txt(tmp_path: Path) -> None:
 
     The `.md` files keep being updated: they are the kit's normative contract.
     """
-    target = tmp_path / "consumidor"
+    target = tmp_path / "consumer"
     rules = target / ".claude" / "rules"
     rules.mkdir(parents=True)
     (target / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
@@ -111,7 +111,7 @@ def test_no_specialist_is_ever_installed(tmp_path: Path) -> None:
     still holds for a specialist someone writes into the source tomorrow: nothing in
     `agents/` beyond the README is the consumer's until they derive it.
     """
-    target = tmp_path / "consumidor"
+    target = tmp_path / "consumer"
     _install(target)
     agents = target / ".claude" / "agents"
     # The kit's own agents are mechanism — they name no repository and make no claim
@@ -144,7 +144,7 @@ def test_the_manifest_lists_the_agents_the_kit_installs_and_no_others(
     What must NOT appear is a specialist: the kit ships none, and an install that
     brought one would be carrying another ecosystem's domain into this project.
     """
-    target = tmp_path / "consumidor"
+    target = tmp_path / "consumer"
     _install(target)
     listed = sorted(
         line.strip() for line in (target / MANIFEST).read_text(encoding="utf-8").splitlines()
@@ -175,7 +175,7 @@ def _project_agents(target: Path) -> Path:
 
 def test_a_plain_install_never_deletes_project_agents(tmp_path: Path) -> None:
     """`rm -rf agents/` took what the project wrote along with it."""
-    target = tmp_path / "consumidor"
+    target = tmp_path / "consumer"
     _project_agents(target)
     _install(target, "--force")
     agents = target / ".claude" / "agents"
@@ -185,15 +185,15 @@ def test_a_plain_install_never_deletes_project_agents(tmp_path: Path) -> None:
 
 def test_an_existing_agents_readme_is_kept(tmp_path: Path) -> None:
     """The README lists the PROJECT's agents once someone adapts it."""
-    target = tmp_path / "consumidor"
+    target = tmp_path / "consumer"
     _project_agents(target)
     _install(target, "--merge")
     kept = (target / ".claude" / "agents" / "README.md").read_text(encoding="utf-8")
-    assert "the project wrote" in kept
+    assert "the project wrote" in kept  # prose-test: the sentence proves WHOSE file survived
 
 
 def test_the_readme_is_written_when_absent(tmp_path: Path) -> None:
-    target = tmp_path / "consumidor"
+    target = tmp_path / "consumer"
     _install(target)
     assert (target / ".claude" / "agents" / "README.md").is_file()
 
@@ -201,7 +201,7 @@ def test_the_readme_is_written_when_absent(tmp_path: Path) -> None:
 def test_the_removed_flag_is_refused_instead_of_ignored(tmp_path: Path) -> None:
     """`--with-domain-agents` left with the specialists. Accepting it silently would
     make whoever uses it believe they received something."""
-    target = tmp_path / "consumidor"
+    target = tmp_path / "consumer"
     target.mkdir(parents=True, exist_ok=True)
     (target / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
     proc = subprocess.run(
@@ -229,7 +229,7 @@ def test_merge_migrates_the_derived_routing_table_instead_of_losing_it(tmp_path:
     moment the kit is inside their repository with permission to write. A
     migration that asks the consumer to act is one the oldest tables never get.
     """
-    target = tmp_path / "consumidor"
+    target = tmp_path / "consumer"
     rules = target / ".claude" / "rules"
     rules.mkdir(parents=True)
     (target / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
@@ -242,9 +242,33 @@ def test_merge_migrates_the_derived_routing_table_instead_of_losing_it(tmp_path:
     )
     _install(target, "--merge")
 
-    migrated = (rules / "domain-routing.txt").read_text(encoding="utf-8")
+    # B-198 — the destination is RESOLVED, exactly as the installer now resolves it. This
+    # asserted `rules/domain-routing.txt` until 2026-09-21, which is where the table lived
+    # before `records-location.md` moved it to the write root; the installer kept writing
+    # there and this test kept agreeing with it, so the two were wrong together and neither
+    # could catch the other. Reading the owner is what stops that recurring: when the root
+    # moves again, this follows.
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from squad.paths import write_routing_table as _owner_destination
+
+    migrated = _owner_destination(target).read_text(encoding="utf-8")
     assert "meu-dominio" in migrated, "the consumer's derived table was lost in the move"
     assert "meu-repo" in migrated
+    # The legacy path must be ABSENT after the migration: a consumer that still has both
+    # files routes correctly by accident — `.squad/` is read first — until somebody removes
+    # the newer one, and nothing reports the copy that is about to be read.
+    #
+    # This line carried a conditional `pytest.xfail` from 2026-09-21 to 2026-09-22, back when
+    # the kit still shipped an empty `rules/domain-routing.txt` that `install.sh` copied with
+    # the rest of `rules/*`. The skip outlived the defect: the file was deleted, the installer
+    # stopped recreating it, and the test went green through the branch that says it is still
+    # broken. A skip whose condition has become false does not announce itself — it just stops
+    # being exercised — so what is pinned now is the assertion, unconditionally.
+    assert not (rules / "domain-routing.txt").exists(), (
+        "the retired path was recreated by the install"
+    )
 
     body = (rules / "cycle-backlog.md").read_text(encoding="utf-8")
     assert "## Hard gates" in body, "the rest of the rule must arrive updated from the kit"
@@ -258,16 +282,16 @@ def test_merge_migrates_the_derived_routing_table_instead_of_losing_it(tmp_path:
 # ---------------------------------------------------------------------------
 
 def _active_lines(path: Path) -> list[str]:
-    return [l for l in path.read_text(encoding="utf-8").splitlines()  # noqa: E741
-            if l.strip() and not l.lstrip().startswith("#")]
+    return [ln for ln in path.read_text(encoding="utf-8").splitlines()
+            if ln.strip() and not ln.lstrip().startswith("#")]
 
 
 def test_project_specific_config_is_installed_as_a_blank_template(tmp_path: Path) -> None:
-    target = tmp_path / "consumidor"
+    target = tmp_path / "consumer"
     _install(target)
     rules = target / ".claude" / "rules"
     assert _active_lines(rules / "code-quality-languages.txt") == [], \
-        "o consumidor nasceria com a linguagem do KIT habilitada"
+        "the consumer would be born with the KIT's language enabled"
     assert _active_lines(rules / "live-target.txt") == [], \
         "the consumer would be born probing another ecosystem's service"
 
@@ -275,7 +299,7 @@ def test_project_specific_config_is_installed_as_a_blank_template(tmp_path: Path
 def test_universal_defaults_are_still_shipped(tmp_path: Path) -> None:
     """The thresholds are kit defaults (`YOUR_ADR_REF` is a placeholder), not local
     calibration — emptying them would leave the gate with no band at all."""
-    target = tmp_path / "consumidor"
+    target = tmp_path / "consumer"
     _install(target)
     body = (target / ".claude" / "rules" / "plan-confidence-thresholds.txt").read_text()
     assert "SHIPPABLE|90" in body
@@ -291,7 +315,7 @@ def test_the_projects_own_quality_gate_never_ships(tmp_path: Path) -> None:
     routing table and the `rules/*.txt` already fixed: distributing the author's
     configuration.
     """
-    target = tmp_path / "consumidor"
+    target = tmp_path / "consumer"
     _install(target)
     hooks = target / ".claude" / "hooks"
 

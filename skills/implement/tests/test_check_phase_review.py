@@ -122,7 +122,10 @@ def test_progress_as_json_string_is_tolerated(tmp_path: Path) -> None:
 # is checkable against the repository, and `git merge-base --is-ancestor` decides whether the review
 # ran at or before the phase closed.
 
-import subprocess  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+import subprocess  # noqa: E402 — post-bootstrap import
 
 _ENV = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
         "GIT_COMMITTER_EMAIL": "t@t", "PATH": "/usr/bin:/bin"}
@@ -138,10 +141,12 @@ def _repo_with_two_commits(tmp_path: Path) -> tuple[Path, str, str]:
                                         capture_output=True, text=True, env=env)
     run("init", "-q")
     (root / "a.txt").write_text("one\n", encoding="utf-8")
-    run("add", "-A"); run("-c", "commit.gpgsign=false", "commit", "-q", "-m", "phase 1 last")  # noqa: E702
+    run("add", "-A")
+    run("-c", "commit.gpgsign=false", "commit", "-q", "-m", "phase 1 last")
     first = run("rev-parse", "HEAD").stdout.strip()
     (root / "b.txt").write_text("two\n", encoding="utf-8")
-    run("add", "-A"); run("-c", "commit.gpgsign=false", "commit", "-q", "-m", "later work")  # noqa: E702
+    run("add", "-A")
+    run("-c", "commit.gpgsign=false", "commit", "-q", "-m", "later work")
     second = run("rev-parse", "HEAD").stdout.strip()
     return root, first, second
 
@@ -169,7 +174,8 @@ PLAN_ONE_PHASE = "# Plan\n\n## Phase 1 — foundation\n\n### T1.1 — first\n###
 
 def test_a_report_recorded_after_the_phase_closed_fails(tmp_path: Path) -> None:
     root, first, second = _repo_with_two_commits(tmp_path)
-    plan = root / "plan.md"; plan.write_text(PLAN_ONE_PHASE, encoding="utf-8")  # noqa: E702
+    plan = root / "plan.md"
+    plan.write_text(PLAN_ONE_PHASE, encoding="utf-8")
     reviews = _report(root, "s", "1", second)   # recorded AFTER the phase's last commit
 
     report = check_phase_review(plan, _progress_at(first), "s", [reviews], repo_root=root)
@@ -180,7 +186,8 @@ def test_a_report_recorded_after_the_phase_closed_fails(tmp_path: Path) -> None:
 
 def test_a_report_recorded_at_the_phase_close_passes(tmp_path: Path) -> None:
     root, first, _second = _repo_with_two_commits(tmp_path)
-    plan = root / "plan.md"; plan.write_text(PLAN_ONE_PHASE, encoding="utf-8")  # noqa: E702
+    plan = root / "plan.md"
+    plan.write_text(PLAN_ONE_PHASE, encoding="utf-8")
     reviews = _report(root, "s", "1", first)
 
     report = check_phase_review(plan, _progress_at(first), "s", [reviews], repo_root=root)
@@ -191,7 +198,8 @@ def test_a_report_recorded_at_the_phase_close_passes(tmp_path: Path) -> None:
 def test_a_report_recorded_mid_phase_passes(tmp_path: Path) -> None:
     # An ANCESTOR is early, not late. Failing it would push people to re-run reviews for no reason.
     root, first, second = _repo_with_two_commits(tmp_path)
-    plan = root / "plan.md"; plan.write_text(PLAN_ONE_PHASE, encoding="utf-8")  # noqa: E702
+    plan = root / "plan.md"
+    plan.write_text(PLAN_ONE_PHASE, encoding="utf-8")
     reviews = _report(root, "s", "1", first)
 
     report = check_phase_review(plan, _progress_at(second), "s", [reviews], repo_root=root)
@@ -203,7 +211,8 @@ def test_a_report_without_a_recorded_head_is_info(tmp_path: Path) -> None:
     # Every report written before this change lacks the field. Failing them would turn the whole
     # existing audit trail red in one step, which is how a gate gets disabled.
     root, first, _second = _repo_with_two_commits(tmp_path)
-    plan = root / "plan.md"; plan.write_text(PLAN_ONE_PHASE, encoding="utf-8")  # noqa: E702
+    plan = root / "plan.md"
+    plan.write_text(PLAN_ONE_PHASE, encoding="utf-8")
     reviews = _report(root, "s", "1", None)
 
     report = check_phase_review(plan, _progress_at(first), "s", [reviews], repo_root=root)

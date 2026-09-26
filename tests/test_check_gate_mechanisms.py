@@ -54,7 +54,10 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "mechanisms" / "gates"))
 
-from check_gate_mechanisms import check_gate_mechanisms  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from check_gate_mechanisms import check_gate_mechanisms  # noqa: E402 (post-bootstrap)
 
 
 def _rules(tmp_path: Path, name: str, body: str) -> Path:
@@ -64,10 +67,20 @@ def _rules(tmp_path: Path, name: str, body: str) -> Path:
     return tmp_path
 
 
-def _with_script(root: Path, relative: str) -> Path:
+def _with_script(root: Path, relative: str, *, runnable: bool = True) -> Path:
+    """A stub standing in for a real mechanism, invocable by default.
+
+    The stub was `# stub` alone, which is a file that exists and cannot be run —
+    the exact shape `not_runnable` reports. A fixture that is unrealistic in the
+    direction a new check looks makes that check fail against ten tests about
+    something else. `runnable=False` is kept for the tests that mean it.
+    """
     path = root / relative
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("# stub\n", encoding="utf-8")
+    body = "# stub\n"
+    if runnable and path.suffix == ".py":
+        body += 'if __name__ == "__main__":\n    raise SystemExit(0)\n'
+    path.write_text(body, encoding="utf-8")
     return path
 
 
@@ -518,7 +531,7 @@ def test_the_cli_reports_the_count_it_swept(tmp_path: Path, verb: str) -> None:
 #               the work. Permanent by decision, and measured: four of them were
 #               pressure-tested across model tiers on 2026-08-28 — redundant on
 #               Opus, and one caught a fabricated justification on Haiku
-#               (`.squad/wiki/references/judgement-gates-are-insurance.md`).
+#               (`docs/wiki/references/judgement-gates-are-insurance.md`).
 #   debt        it is missing, and the line says what is missing.
 #   regression  a mechanism EXISTED and was withdrawn. This is lost coverage, not
 #               debt that was never paid, and reading it as debt hides that the
@@ -687,3 +700,137 @@ def test_this_repository_sweeps_every_cycle_rule_it_has() -> None:
     assert report.rules_swept + len(report.rules_without_gates) == len(on_disk), (
         f"swept {report.rules_swept} + {len(report.rules_without_gates)} without gates, "
         f"but {len(on_disk)} cycle rules are on disk")
+
+
+def test_a_hard_gate_table_outside_a_gate_heading_is_swept(tmp_path: Path) -> None:
+    """`_SECTION_RE` keys on a HEADING containing "gate", and two rules declare their
+    hard gates in a phase table under a heading that does not.
+
+    Measured on this repository: `cycle-plan.md` and `cycle-maintenance.md` each carry a
+    `| Phase | Input | Output | Hard gate |` table, eleven of thirteen rules were swept,
+    and both were reported as "no gate section (not swept, not a defect)" — the same
+    shape as the 2026-09-11 miss the comment above `_SECTION_RE` records. Ten declared
+    gates sat in a column the sweep could not reach, and `0 unresolved` was printed over
+    a population that excluded them.
+    """
+    import check_gate_mechanisms as cgm
+
+    rules = tmp_path / "rules"
+    rules.mkdir()
+    (rules / "cycle-thing.md").write_text(
+        "# Cycle: THING\n\n## Chain\n\n"
+        "| Phase | Input | Output | Hard gate |\n"
+        "|---|---|---|---|\n"
+        "| select | a | b | exactly one item in flight |\n"
+        "| route | c | d | the repo resolves (G1) |\n",
+        encoding="utf-8")
+
+    report = cgm.check_gate_mechanisms(tmp_path)
+
+    assert "cycle-thing.md" not in report.rules_without_gates, (
+        "a rule declaring two hard gates was reported as declaring none")
+    assert report.total_gates >= 2, f"the table's rows were not swept: {report.total_gates}"
+    assert len(report.phase_rows_without_mechanism) == 2, (
+        "the rows were swept but not counted as a population of their own")
+
+
+def test_a_rule_that_declares_no_gate_anywhere_is_still_named(tmp_path: Path) -> None:
+    """The refusal above must not turn every rule into a gate-declaring one."""
+    import check_gate_mechanisms as cgm
+
+    rules = tmp_path / "rules"
+    rules.mkdir()
+    (rules / "cycle-quiet.md").write_text("# Cycle: QUIET\n\n## Chain\n\nnothing here\n",
+                                          encoding="utf-8")
+
+    report = cgm.check_gate_mechanisms(tmp_path)
+
+    assert "cycle-quiet.md" in report.rules_without_gates
+
+
+def test_a_phase_row_is_counted_apart_from_a_declared_hard_gate(tmp_path: Path) -> None:
+    """Two different claims, and folding them would misreport both.
+
+    A row under `## Hard gates` is a gate somebody declared as such. A row in a
+    `| Phase | Input | Output | Hard gate |` table is a phase's output contract that
+    happens to use the same word. The sweep now reads both; `--strict-phase-rows` is
+    where a person decides the second kind blocks.
+    """
+    import subprocess
+    import sys as _sys
+
+    gate = (Path(__file__).resolve().parents[1] / "mechanisms" / "gates"
+            / "check_gate_mechanisms.py")
+    rules = tmp_path / "rules"
+    rules.mkdir()
+    (rules / "cycle-thing.md").write_text(
+        "# Cycle: THING\n\n## Chain\n\n"
+        "| Phase | Input | Output | Hard gate |\n"
+        "|---|---|---|---|\n"
+        "| select | a | b | exactly one item in flight |\n",
+        encoding="utf-8")
+
+    lenient = subprocess.run([_sys.executable, str(gate), "--repo", str(tmp_path)],
+                             capture_output=True, text=True, timeout=120, check=False)
+    strict = subprocess.run(
+        [_sys.executable, str(gate), "--repo", str(tmp_path), "--strict-phase-rows"],
+        capture_output=True, text=True, timeout=120, check=False)
+
+    assert lenient.returncode == 0, lenient.stdout + lenient.stderr
+    assert "phase-table row" in lenient.stdout, (
+        "the lenient run did not say what it found:\n" + lenient.stdout)
+    assert strict.returncode == 1, "the flag did not make the rows blocking"
+
+
+def test_a_rule_the_sweep_did_not_read_is_not_called_not_a_defect(tmp_path: Path) -> None:
+    """The wording decided in the reader's place that nothing was lost."""
+    import subprocess
+    import sys as _sys
+
+    gate = (Path(__file__).resolve().parents[1] / "mechanisms" / "gates"
+            / "check_gate_mechanisms.py")
+    rules = tmp_path / "rules"
+    rules.mkdir()
+    (rules / "cycle-quiet.md").write_text("# Cycle: QUIET\n\n## Chain\n\nnothing\n",
+                                          encoding="utf-8")
+
+    done = subprocess.run([_sys.executable, str(gate), "--repo", str(tmp_path)],
+                          capture_output=True, text=True, timeout=120, check=False)
+
+    assert "not a defect" not in done.stdout
+    assert "NOT READ" in done.stdout
+
+
+def test_a_gate_naming_only_a_library_is_reported(tmp_path: Path) -> None:
+    """Exists is not runnable, and the difference is what a reader hits.
+
+    Measured 2026-09-19 across the nine cycle rules: 22 mechanisms named under
+    `## Hard gates`, six of them modules with no entry point. Each was genuinely
+    enforced by a runner that imports it — so this is not a hole in coverage — but
+    a reader following the rule to the mechanism and running it got no output and
+    exit 0, which is what a passing gate looks like.
+    """
+    root = _rules(tmp_path, "cycle-demo.md",
+        "# Cycle: DEMO\n\n## Hard gates\n\n"
+        "- Corners are populated — `check_corners.py`.\n")
+    _with_script(root, "skills/demo/scripts/check_corners.py", runnable=False)
+
+    findings = check_gate_mechanisms(root).findings
+    kinds = [f.kind for f in findings]
+    assert kinds == ["not_runnable"], findings
+    assert "entry point" in findings[0].detail
+
+
+def test_naming_the_runner_beside_the_library_satisfies_it(tmp_path: Path) -> None:
+    """The fix the finding asks for, pinned so it cannot regress into a CLI per library.
+
+    Six libraries each given an entry point would be six second ways into a score
+    that is only meaningful composed. What the reader needs is the invocable name.
+    """
+    root = _rules(tmp_path, "cycle-demo.md",
+        "# Cycle: DEMO\n\n## Hard gates\n\n"
+        "- Corners are populated — `check_corners.py` (run by `run_score.py`).\n")
+    _with_script(root, "skills/demo/scripts/check_corners.py", runnable=False)
+    _with_script(root, "skills/demo/scripts/run_score.py")
+
+    assert check_gate_mechanisms(root).findings == []

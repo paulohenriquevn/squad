@@ -43,7 +43,7 @@ def _check(tmp_path: Path, item: str) -> str:
     (tmp_path / ".git").mkdir(exist_ok=True)
     return subprocess.run(
         [sys.executable, str(_SCRIPT), str(backlog), "--check", item],
-        capture_output=True, text=True, timeout=180).stdout
+        capture_output=True, text=True, timeout=180, check=False).stdout
 
 
 def test_an_unblocked_item_is_told_it_is_unblocked(tmp_path: Path) -> None:

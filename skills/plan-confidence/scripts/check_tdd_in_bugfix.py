@@ -25,14 +25,14 @@ BUGFIX_KEYWORDS = (
     "fix a bug",
     "fix the bug",
     "resolve a bug",
-    # Aligned with apply_fixes (Fix #4) for consistency
+    # Aligned with apply_plan_fixes (Fix #4) for consistency
     "fix bug",
     "parser bug",
 )
 # `"fix.+bug"` used to sit here, with a comment saying it was "not used as
 # substring; left for grep-of-the-mind". It matched nothing — no title contains
 # that literal — and it was the ONLY difference between this list and the one in
-# `apply_fixes.py`, which answers the same question about the same plan. An inert
+# `apply_plan_fixes.py`, which answers the same question about the same plan. An inert
 # regex inside a list matched by substring is a trap for whoever converts the
 # matching to regex later: on that day it starts firing, and nothing in the
 # comment says what it was meant to catch.
@@ -84,10 +84,18 @@ def _has_tdd_block(body: str) -> bool:
     tdd_match = TDD_BLOCK_RE.search(body)
     if tdd_match is None:
         return False
-    # Look for RED and GREEN keywords within ~30 lines of the TDD header
+    # A WORD, not a substring. `"RED " in upper` was true for REQUIRED, COVERED,
+    # TRIGGERED, ENTERED and ORDERED — so a bug-fix task with an empty `#### TDD`
+    # heading followed by ordinary prose counted as having TDD, `coverage_ratio`
+    # reached 1.0, and `bugfix_without_tdd` never fired. A fix shipping with no
+    # regression test, scored as one that has one.
     after = body[tdd_match.end():]
-    upper = after.upper()
-    return "RED:" in upper or "RED " in upper
+    return bool(_RED_LABEL_RE.search(after))
+
+
+#: The RED label at a word boundary: `RED:` or `RED` followed by whitespace, and
+#: not the tail of REQUIRED, COVERED, TRIGGERED, ENTERED or ORDERED.
+_RED_LABEL_RE = re.compile(r"(?<![A-Za-z])RED\b", re.IGNORECASE)
 
 
 def check_tdd_in_bugfix(plan_path: Path) -> TDDReport:

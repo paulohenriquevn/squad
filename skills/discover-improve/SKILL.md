@@ -37,7 +37,7 @@ The skill checks the caps before starting and **refuses**, naming the cap and th
 
 ## Two-phase fixing
 
-### Phase A — deterministic (`scripts/apply_fixes.py`)
+### Phase A — deterministic (`scripts/apply_opportunity_fixes.py`)
 
 Idempotent, zero LLM calls, `$0`. Scoped to `## Recommendation`:
 
@@ -55,7 +55,7 @@ Unresolvable pointers are listed and left exactly as they are.
 
 The ancestor annotated each one with `<!-- BLOCKED: path not found -->`. Measured against the current checker (2026-08-05): a marked pointer moves out of `fabricated` and into `explicitly_blocked`, and `fabricated_evidence` stops firing. That made the fixer an **automated bypass of the cycle's most important hard cap** — a script turning an INVALID opportunity into a passing one with nothing measured.
 
-`test_apply_fixes.py::test_never_writes_a_blocked_marker` locks it shut. A failure there is a hole in the gate, not a formatting regression.
+`test_apply_opportunity_fixes.py::test_never_writes_a_blocked_marker` locks it shut. A failure there is a hole in the gate, not a formatting regression.
 
 A `<!-- BLOCKED: -->` marker written by a human or by the measurement itself is respected and not re-reported. The difference is who decided.
 
@@ -75,7 +75,7 @@ Phase B obeys the same boundary: it may argue better, never claim more. Any stat
 1. **Parse arguments.** `{slug}`, optional `--target` (default `SHIPPABLE_WITH_CAVEATS`).
 2. **Score first.** Run `/discover-confidence {slug}`. If already at target, report and stop — an unnecessary loop is worse than none.
 3. **Check the caps.** Any cap from the refusal table above → stop, name the cap and the real fix.
-4. **Phase A.** Run `apply_fixes.py --json`. Exit 3 → surface the pointers and stop.
+4. **Phase A.** Run `apply_opportunity_fixes.py --json`. Exit 3 → surface the pointers and stop.
 5. **Pre-flight guard.** Verify `.claude/ralph-loop.local.md` does not have `active: true` (`rules/loop-engine-convention.md § Anti-patterns`).
 6. **Invoke ralph-loop** with `prompts/improvement-prompt.md`, `--completion-promise 'OPPORTUNITY_IMPROVED'`.
 7. **Post-promise sanity check.** Re-run the scorer in the emitting iteration. **The verdict on disk is the verdict** — a promise emitted while the score is below target is a promise integrity violation.
@@ -94,6 +94,6 @@ Phase B obeys the same boundary: it may argue better, never claim more. Any stat
 - Upstream: `/discover-confidence` (produces the score this skill lifts)
 - Re-score after: `/discover-confidence` — the verdict on disk is canonical
 - Golden rule: [`rules/discover-opportunity-golden-rule.md`](../../rules/discover-opportunity-golden-rule.md)
-- Script: `scripts/apply_fixes.py`
+- Script: `scripts/apply_opportunity_fixes.py`
 - Prompt: `prompts/improvement-prompt.md`
 - Loop engine: `ralph-loop` plugin

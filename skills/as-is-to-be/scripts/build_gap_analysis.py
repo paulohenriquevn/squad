@@ -52,16 +52,17 @@ for _up in _HERE.parents:
     if (_up / "squad" / "paths.py").is_file():
         sys.path.insert(0, str(_up))
         break
-    if (_up / "skills" / "backlog-approve" / "scripts").is_dir():
-        sys.path.insert(0, str(_up / "skills" / "backlog-approve" / "scripts"))
 
-from squad.paths import write_records_dir  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import write_records_dir  # noqa: E402 — post-bootstrap import
 
 #: Reused rather than reimplemented: the parser, the evidence verifier and the objective
 #: coverage all already exist one skill over. A second copy of the item parser is how
 #: two readers of the same registry start disagreeing about what it says.
 sys.path.insert(0, str(_HERE.parents[2] / "backlog-approve" / "scripts"))
-import build_approval_brief as brief  # noqa: E402
+import build_approval_brief as brief  # noqa: E402 — post-bootstrap import
 from check_objective_coverage import measure as measure_coverage  # noqa: E402
 
 
@@ -180,7 +181,13 @@ def main() -> int:
     parser.add_argument("--status", default="triaged",
                         help="only items at this status (default: triaged); 'any' for all")
     parser.add_argument("--out", type=Path, default=None)
-    parser.add_argument("--json", action="store_true")
+    # Both halves of the documented `[--md|--json]` pair are declared. Markdown is what
+    # you get either way when neither is passed, which is exactly why `--md` being
+    # undefined went unnoticed: the documented command exits 2 on an argument that
+    # looks like it should change nothing.
+    output = parser.add_mutually_exclusive_group()
+    output.add_argument("--md", action="store_true", help="render markdown (the default)")
+    output.add_argument("--json", action="store_true")
     parser.add_argument("--stdout", action="store_true")
     args = parser.parse_args()
 

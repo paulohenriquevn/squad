@@ -12,8 +12,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from squad.cli import run_suites  # noqa: E402
-from squad.cli.report import OK, UNMEASURED  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.cli import run_suites  # noqa: E402 — post-bootstrap import
+from squad.cli.report import OK, UNMEASURED  # noqa: E402 — post-bootstrap import
 
 
 def test_slice_discovery_matches_the_runner_that_ci_uses() -> None:

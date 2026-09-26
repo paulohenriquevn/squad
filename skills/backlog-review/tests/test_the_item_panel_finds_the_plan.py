@@ -21,7 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from board_state import _records_dir, _slug_for, item_detail  # noqa: E402
+from board_state import _records_dir, _slug_for, item_detail
 
 _PLAN = """# A plan
 

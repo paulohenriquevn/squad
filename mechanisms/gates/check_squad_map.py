@@ -88,11 +88,11 @@ def _kit_agents(root: Path) -> set[str]:
 
     import subprocess
 
-    out = subprocess.run(  # noqa: PLW1510
+    out = subprocess.run(
         ["git", "-C", str(root), "ls-files", "agents/"],
         capture_output=True,
         text=True,
-    )
+     check=False)
     if out.returncode != 0:
         return set()
     return {
@@ -113,8 +113,33 @@ def _declared_phases(root: Path) -> list[str]:
     return names
 
 
+def declared_by_project(root: Path) -> set[str]:
+    """Cycles the CONSUMER declares as its own, in `rules/auxiliary-cycles.txt`.
+
+    `squad-map.md` is the KIT's 360º view: it places the kit's chain, and it cannot know
+    what a project built alongside it. Without reading this file the checker asks a
+    consumer's own cycle for a row in a map it does not belong in — and because the map
+    is the kit's and `install.sh` overwrites it, the consumer's only way to satisfy the
+    finding is an edit the next update reverts. Measured on one consumer: `absent_from_map:
+    cycle-trajectory-review`, registered by hand, gone after the next `--merge`.
+
+    The shape is `rules/auxiliary-skills.txt`, which `check_skill_map` and `check_xrefs`
+    have read for the same reason since 2026-09-02, and it is preserved across installs by
+    the same `rules/*.txt` rule.
+    """
+    declared = root / "rules" / "auxiliary-cycles.txt"
+    if not declared.is_file():
+        return set()
+    return {
+        line.split("#", 1)[0].strip()
+        for line in declared.read_text(encoding="utf-8-sig", errors="replace").splitlines()
+        if line.split("#", 1)[0].strip()
+    }
+
+
 def _cycles(root: Path) -> set[str]:
-    return {p.stem for p in (root / "rules").glob("cycle-*.md")}
+    return ({p.stem for p in (root / "rules").glob("cycle-*.md")}
+            - declared_by_project(root))
 
 
 def _hooks(root: Path) -> set[str]:

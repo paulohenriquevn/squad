@@ -71,13 +71,20 @@ KNOWN_SITES: tuple[Site, ...] = (
 IGNORED = ("CHANGELOG.md", "pnpm-lock.yaml", "package-lock.json", "yarn.lock")
 
 
-def _tracked_files(root: Path) -> list[str]:
+def _tracked_files(root: Path) -> list[str] | None:
+    """The tracked files, or None when git could not be asked.
+
+    `[]` used to mean both. `_strays` iterates this list, so on any git failure — not a
+    repository, git missing, a corrupt index — it found no stray, `main` printed nothing
+    and the bump proceeded. The scan whose whole purpose is to refuse a bump that would
+    miss a version string reported "nothing to worry about" precisely when it had not run.
+    """
     proc = subprocess.run(
         ["git", "-C", str(root), "ls-files"],
         capture_output=True, text=True, check=False, timeout=60,
     )
     if proc.returncode != 0:
-        return []
+        return None
     return [line for line in proc.stdout.splitlines() if line]
 
 
@@ -94,11 +101,17 @@ def _sites_for(root: Path) -> tuple[Site, ...]:
     return tuple(sites)
 
 
-def _strays(root: Path, old: str, sites: tuple[Site, ...]) -> list[str]:
-    """Tracked files carrying `old` that are neither a declared site nor deliberately ignored."""
+def _strays(root: Path, old: str, sites: tuple[Site, ...]) -> list[str] | None:
+    """Tracked files carrying `old` that are neither a declared site nor deliberately ignored.
+
+    None when the tracked-file list could not be obtained — see `_tracked_files`.
+    """
+    tracked = _tracked_files(root)
+    if tracked is None:
+        return None
     declared = {s.path for s in sites}
     found: list[str] = []
-    for rel in _tracked_files(root):
+    for rel in tracked:
         if rel in declared or rel in IGNORED:
             continue
         try:
@@ -153,6 +166,12 @@ def main() -> int:
         planned.append((site, content[:start] + new + content[end:]))
 
     strays = _strays(root, old, sites)
+    if strays is None:
+        print("refused: the stray scan could not run — `git ls-files` failed, so whether "
+              "any tracked file carries the old version is UNKNOWN. A bump that proceeds "
+              "here leaves a version string behind with nothing to notice it.",
+              file=sys.stderr)
+        return 2
     if strays:
         print(
             f"refused: {len(strays)} tracked file(s) carry {old!r} and are not declared sites.\n"

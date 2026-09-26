@@ -1,3 +1,4 @@
+# rule-id: SQ-VRD-01
 # Verdicts that stop an item where it is.
 #
 # WHY THIS FILE EXISTS
@@ -23,6 +24,26 @@
 # Absent file is an error, not an empty list: an empty list makes every stream
 # conform and every item unblocked, so both readers would pass while checking
 # nothing.
+#
+# WHAT A BLOCK FORBIDS, AND WHAT IT DOES NOT
+# ------------------------------------------
+# A verdict here stops the item from ADVANCING. It does not stop the agent from
+# thinking, and the difference has to be written down or it gets decided twice, in
+# opposite directions: an agent that reads the block as total sits idle until a
+# person returns, and one that reads it as advisory starts the next phase.
+#
+# Forbidden while a block stands: emitting the next phase, writing the artifact the
+# next phase owns, selecting the item for work, and any action that would be
+# reported as progress past the gate.
+#
+# Available: reading the repository, re-reading the artifact that was refused,
+# drafting the session or halt record, preparing the agenda for whoever opens the
+# gate, and answering questions about what is blocked and why. None of those can be
+# mistaken for advancing, because none of them writes where the next phase writes.
+#
+# Imported 2026-09-20 from a cross-read of obra/superpowers `skills/brainstorming`,
+# which states the permission rather than only the prohibition: "Read-only project
+# exploration is allowed while those prerequisites remain incomplete."
 #
 # One verdict per line. `#` starts a comment.
 

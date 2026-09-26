@@ -11,9 +11,9 @@ from pathlib import Path
 
 from scripts import _registry
 from scripts._detector_contract import Finding, safe_parse_json, sanitize_symbol, to_rel_path
-from scripts.check_symbol_fab import extract_imports_and_calls
+from scripts.check_symbol_fab import extract_checked
 
-from . import BaseDetector, _arch, _mutation, _wiring
+from . import BaseDetector, _arch
 
 _DEADCODE_TIMEOUT_SEC = 180
 _ARCH_TIMEOUT_SEC = 240
@@ -91,6 +91,13 @@ class GoDetector(BaseDetector):
         Imports under `vendor/` are also skipped (vendored deps).
         """
         findings: list[Finding] = []
+        # Vacuity guard, the same one `rust.py` carries and for the same measured reason:
+        # `extract_checked` reports whether the parser RAN, and an empty symbol list from
+        # a parse that never happened reads to D2 as "this file imports nothing" — a
+        # silent false-green over an audit that did not run. Reported as unavailable,
+        # never as clean.
+        parsed_any = False
+        unparsed = 0
         own_modules = self._workspace_modules(changed_files)
         #: Imports the proxy could not answer for. Reported ONCE, at the end.
         unresolved: set[str] = set()
@@ -101,7 +108,10 @@ class GoDetector(BaseDetector):
             # Skip files under vendor/
             if "/vendor/" in rel or rel.startswith("vendor/"):
                 continue
-            for sym in extract_imports_and_calls(src_file, "go"):
+            symbols, parsed = extract_checked(src_file, "go")
+            parsed_any = parsed_any or parsed
+            unparsed += 0 if parsed else 1
+            for sym in symbols:
                 if sym.kind != "import":
                     continue
                 module = sym.module
@@ -154,6 +164,24 @@ class GoDetector(BaseDetector):
                     allowlist_key="go|.|symbol_fab|symbol_fab_unverifiable",
                 )
             )
+        if unparsed and not parsed_any:
+            return [
+                Finding(
+                    detector="d2_symbol_fab",
+                    language="go",
+                    severity="SOFT_CAP",
+                    file_path=".",
+                    symbol_or_line="tree-sitter",
+                    message=(
+                        f"D2 parsed none of the {unparsed} Go source(s) it was "
+                        f"given — the tree-sitter grammar is unavailable or failed to "
+                        f"load. The audit did not run; this is NOT evidence that no "
+                        f"symbol is fabricated."
+                    ),
+                    allowlist_key="go|.|symbol_fab|auditor_unavailable_tree-sitter",
+                )
+            ]
+
         return findings
 
     @staticmethod
@@ -217,21 +245,6 @@ class GoDetector(BaseDetector):
                 if name:
                     modules.add(name)
         return modules
-
-    def detect_orphan_exports(self, repo_root: Path) -> list[Finding]:
-        return _wiring.detect_orphan_exports(self.language, repo_root, repo_root)
-
-    def detect_mutation_score(self, manifest_dir: Path) -> list[Finding]:
-        return _mutation.detect_mutation_score(
-            self.language,
-            manifest_dir,
-            floor_low=self.threshold("mutation.score_floor_low", _mutation.DEFAULT_FLOOR_LOW),
-            floor_high=self.threshold("mutation.score_floor_high", _mutation.DEFAULT_FLOOR_HIGH),
-            timeout_minutes=self.threshold(
-                "mutation.timeout_minutes", _mutation.DEFAULT_TIMEOUT_MINUTES),
-            max_report_age_minutes=self.threshold(
-                "mutation.max_report_age_minutes", _mutation.DEFAULT_MAX_REPORT_AGE_MINUTES),
-        )
 
     # ------------------------------------------------------------------
 

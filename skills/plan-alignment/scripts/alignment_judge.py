@@ -76,12 +76,71 @@ def _evidence_paths(brief: str) -> list[str]:
 UNRECORDED_MODEL = "unrecorded"
 
 
+class NotReady(RuntimeError):
+    """The brief cannot be judged, which is exit 2 and not exit 1.
+
+    The module docstring assigns 1 to "the brief was refused; the reason is written into
+    it" and 2 to "the brief could not be read, or is not ready to be judged". Both
+    not-ready paths used `raise SystemExit("FATAL: ...")`, which exits 1 — so a brief
+    with no sign-off section, and a brief already signed, reached the chain as REFUSALS.
+    The contract says "Do not retry a refusal", so the chain halted the item over a
+    structural problem nobody had judged.
+    """
+
+
+#: The prefix `score_alignment.signed_by_is_human` reads as "a person signed this".
+#: This module may never write it: the note it appends says "not by a person" in the
+#: same file, and a judge spelling itself as a human erases the only distinction the
+#: alignment gate has. `sign_document.py` is the tool a person uses.
+_HUMAN_CLAIM = ("human", "human/")
+
+
+def _refuse_a_human_claim(judge: str) -> None:
+    cleaned = judge.strip()
+    if cleaned == "human" or cleaned.startswith("human/"):
+        raise ValueError(
+            f"`{cleaned}` claims to be a human signature, and this is the judge. "
+            f"`signed_by_is_human` would count it as a person's sign-off while the "
+            f"note this function writes says 'not by a person'. A person signs with "
+            f"`sign_document.py --as <name>`.")
+    if cleaned.startswith("peer/"):
+        # Same refusal, one category over. `peer/` means ANOTHER SESSION independently
+        # measured something about this document; a judge running its own contract over
+        # it did not become another session by spelling itself one. The distinction is
+        # the only thing a peer signature is worth.
+        raise ValueError(
+            f"`{cleaned}` claims to be a peer session, and this is the judge. A peer "
+            f"signature says another session verified something independently; running "
+            f"this contract is not that. Sign as `judge/<name>`.")
+
+
+def _judge_route(judge: str) -> str:
+    """The name as it will be signed: always under `judge/`.
+
+    A bare name used to be written verbatim, so the marker claimed neither `judge/`
+    nor `human/` and a reader grepping for `judge/` concluded no judge had signed a
+    brief the scorer called ALIGNED (#205). A bare name is unambiguous and gets the
+    prefix; a different prefix names a route this module is not, and is refused like
+    the two above rather than guessed at.
+    """
+    cleaned = judge.strip()
+    _refuse_a_human_claim(cleaned)
+    if cleaned.startswith("judge/"):
+        return cleaned
+    if "/" in cleaned:
+        raise ValueError(
+            f"`{cleaned}` names a route this is not. The judge signs as "
+            f"`judge/<name>`; a bare name is given that prefix.")
+    return f"judge/{cleaned}"
+
+
 def sign(brief_path: Path, judge: str, reason: str, model: str | None = None) -> str:
+    judge = _judge_route(judge)
     text = brief_path.read_text(encoding="utf-8")
     if not _SIGNOFF_RE.search(text):
-        raise SystemExit("FATAL: the brief has no `## Reviewer sign-off` section to sign")
+        raise NotReady("the brief has no `## Reviewer sign-off` section to sign")
     if "[ ]" not in text.split("## Reviewer sign-off", 1)[-1]:
-        raise SystemExit("FATAL: nothing is unticked — refusing to re-sign a signed brief")
+        raise NotReady("nothing is unticked — refusing to re-sign a signed brief")
 
     marker = f"  <!-- signed-by: {judge} -->"
     head, _, tail = text.partition("## Reviewer sign-off")
@@ -99,6 +158,7 @@ def sign(brief_path: Path, judge: str, reason: str, model: str | None = None) ->
 
 
 def refuse(brief_path: Path, judge: str, reason: str, model: str | None = None) -> str:
+    _refuse_a_human_claim(judge)
     text = brief_path.read_text(encoding="utf-8")
     return text.rstrip() + (
         f"\n\n**REFUSED {date.today().isoformat()} by `{judge}` "
@@ -133,7 +193,7 @@ def main(argv: list[str] | None = None) -> int:
         out = sign(args.brief, args.judge, args.reason, args.model) \
             if args.verdict == "signed" \
             else refuse(args.brief, args.judge, args.reason, args.model)
-    except OSError as exc:
+    except (OSError, NotReady) as exc:
         print(f"FATAL: {exc}", file=sys.stderr)
         return 2
 

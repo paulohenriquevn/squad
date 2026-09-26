@@ -1,4 +1,5 @@
 # Contribution conventions
+<!-- rule-id: SQ-CNV-01 -->
 
 What a commit, a pull request, an issue and a name have to carry. **The kit's contract**
 — a consumer overrides it in `rules/contribution-overrides.txt` without editing this
@@ -29,7 +30,7 @@ or **declared unenforceable** with the reason. Nothing sits in between.
 | Field | Rule |
 |---|---|
 | `type` | one of the declared set; a consumer extends it in the overrides file |
-| `scope` | optional, lowercase, kebab-case. The area, not the file |
+| `scope` | optional, lowercase, kebab-case. The area, not the file. **More than one is allowed**, comma-separated with no space — `fix(gates,board):` — because a change that genuinely touches two areas otherwise has to name one and be incomplete, invent a portmanteau nobody greps for, or drop the scope. Each segment is validated on its own, and a declared `commit_scopes` list is checked segment by segment |
 | `subject` | imperative mood, no trailing period, at most **85** characters — the p90 of this repository's own 300-subject history, not the 50 or 72 every style guide repeats. A limit that fails 44% of what a repository has always done teaches people to ignore the checker |
 | `body` | separated by a blank line. Required for `feat` and `fix` |
 
@@ -160,3 +161,24 @@ not in this file.
 **Two things cannot be overridden**, and the gate refuses an override that tries:
 the co-authorship refusal, and the secrets rule for issues. Everything else is the
 kit's default and the project's decision.
+
+### Declaring a violation nobody is allowed to fix
+
+`pushed_exemptions = <sha> <reason>` waives one finding, and the key is repeatable.
+
+It exists for the case the rest of this file cannot resolve: a commit already on the
+upstream whose header or body breaks a rule. An amend cannot reach it, only a force-push
+would, and force-pushing a shared branch is forbidden here — so the finding is real and
+no permitted action clears it. The standalone audit is meant to grade history, so
+narrowing its range would answer a different question, and weakening its assertion would
+stop it grading anything.
+
+**The safety property is what makes this safe to have:** the exemption is honoured only
+while the commit is reachable from the upstream. Declared for a commit an amend can still
+reach, the gate reports `exemption_is_fixable` and **keeps the original finding** — so
+this can record a rule that was broken and can never excuse breaking one.
+
+A reason is mandatory. A bare sha records that somebody waived a finding, not why, and
+the reason is the only part a later reader can weigh. Waived findings are printed under
+`DECLARED` on every run: an exemption nobody can see is indistinguishable from a rule
+nobody checks.

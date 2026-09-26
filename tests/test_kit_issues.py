@@ -9,6 +9,7 @@ fleet. The capture half of self-evolution worked; nothing consumed what it caugh
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -111,16 +112,40 @@ def test_a_label_this_kit_has_never_seen_does_not_hold_the_issue(monkeypatch) ->
     assert [i.number for i in work] == [12]
 
 
-def test_the_kits_real_registry_answers(monkeypatch) -> None:
+@pytest.mark.skipif(
+    not os.environ.get("SQUAD_LIVE_TRACKER"),
+    reason="live-tracker contract test; set SQUAD_LIVE_TRACKER=1 to run it",
+)
+def test_the_kits_real_registry_answers() -> None:
     """Not mocked: the shape above must match what `gh` actually returns.
 
-    Skipped where `gh` cannot reach it, because a network-dependent failure in
-    the suite teaches nothing about this code.
+    OPT-IN, and that is the correction. It used to run by default and
+    `pytest.skip` on `Unavailable` — so on any machine without `gh`, without
+    credentials, or without the network, it skipped, and a skip in a green run
+    reads as coverage. The suite's result then depended on whether a remote
+    service answered, which is a property of the room and not of this code.
+
+    It is still worth having: the mocked tests above pin a SHAPE, and only a real
+    call can say the shape is the one `gh` returns. Run it deliberately —
+    `SQUAD_LIVE_TRACKER=1 pytest tests/test_kit_issues.py` — where a failure
+    means the contract moved rather than that the wifi did.
     """
-    try:
-        work, held = fleet_work("paulohenriquevn/squad", timeout=30)
-    except Unavailable as exc:
-        pytest.skip(f"registry unreachable here: {exc}")
+    work, held = fleet_work("paulohenriquevn/squad", timeout=30)
 
     for issue in work + held:
         assert issue.number > 0 and issue.title, "every row parsed into a real item"
+
+
+def test_an_unreachable_tracker_raises_rather_than_returning_nothing(monkeypatch) -> None:
+    """What the live test above used to swallow into a skip, asserted offline.
+
+    `Unavailable` is the whole point of this module's contract: an unreadable
+    tracker is not an empty one, and the caller must be able to tell.
+    """
+    def _boom(*_a: object, **_k: object) -> object:
+        raise FileNotFoundError("gh: command not found")
+
+    monkeypatch.setattr(kit_issues.subprocess, "run", _boom)
+
+    with pytest.raises(Unavailable):
+        fleet_work("o/r", timeout=1)

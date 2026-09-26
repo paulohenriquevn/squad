@@ -3,7 +3,8 @@
 #
 # WHY isolated (one pytest process per slice) instead of a single wide
 # `pytest skills/` run:
-#   The 31 slices are deliberately import-isolated (package-by-feature). Several
+#   The slices under `skills/*/tests` are deliberately import-isolated
+#   (package-by-feature). Several
 #   slices ship modules with the SAME top-level basename but DIFFERENT content
 #   (e.g. check_research_coverage.py, apply_fixes.py, check_reference_citations.py).
 #   In production each skill runs alone with only its own scripts/ on sys.path, so
@@ -42,6 +43,17 @@ JOBS="${SLICE_TEST_JOBS:-$(_detect_jobs)}"
 
 LOG_DIR="$(mktemp -d)"
 trap 'rm -rf "$LOG_DIR"' EXIT
+
+# Git reads no config this machine happens to have. The first CI run in eleven days
+# (2026-09-25) failed seven tests that passed here, for two reasons git config hid:
+# annotated tags need an identity the runner does not have, and a global `insteadOf`
+# rewriting HTTPS remotes to SSH made a parser that could not read HTTPS look correct.
+# A suite that depends on its host's git config is measuring the host. The identity is
+# fixed and fake; a test that sets its own with `-c` or repo-local config still wins.
+export GIT_CONFIG_NOSYSTEM=1
+export GIT_CONFIG_GLOBAL="$LOG_DIR/gitconfig"
+printf '[user]\n\tname = squad-tests\n\temail = squad-tests@example.invalid\n' \
+  > "$GIT_CONFIG_GLOBAL"
 
 # Fixed order: root suite first, then the slices in directory order.
 #
@@ -120,6 +132,26 @@ run_suite() {
 }
 export -f run_suite
 
+# WHICH TREE, and whether it stayed still.
+#
+# The banner below says WHERE these suites ran. It could not say whether the files moved
+# WHILE they ran, and a suite that read a tree changing under it reports about no tree at
+# all. Measured 2026-09-22 in this repository: a run started, three modules were edited
+# during it, and the root bundle came back `1 failed` — a true sentence about a state that
+# never existed on disk as a whole. `/review` already refuses that shape for its reviewers
+# (`consolidate_findings.check_tree_contamination`); the runner those same sessions use to
+# check their work did not.
+#
+# `--untracked-files=all` for the reason that function states: with the default, git
+# collapses an entirely-untracked directory into one line, so a new file and a probe
+# beside it share a line and excluding one hides the other.
+_tree_state() {
+    printf '%s %s' \
+        "$(git rev-parse HEAD 2>/dev/null || echo 'no-head')" \
+        "$(git status --porcelain --untracked-files=all 2>/dev/null | sha256sum | cut -d' ' -f1)"
+}
+_state_before="$(_tree_state)"
+
 # `-P $JOBS` with one index per suite: the index is what allows the output order
 # to be reconstructed afterwards, since completion order is arbitrary.
 for i in "${!SUITES[@]}"; do
@@ -141,20 +173,39 @@ for i in "${!SUITES[@]}"; do
     rc="$(cat "$LOG_DIR/$i.rc" 2>/dev/null || echo "2")"
     echo "::group::pytest $path"
     cat "$out" 2>/dev/null
-    if [ "$rc" = "0" ]; then
+    # Absent rather than zero when pytest did not say: a 0 that means "not reported"
+    # and a 0 that means "none" are different facts, and summing them silently is how
+    # a total becomes fiction.
+    passed="$(grep -oE '[0-9]+ passed' "$out" 2>/dev/null | tail -1 | grep -oE '[0-9]+' || true)"
+    failed="$(grep -oE '[0-9]+ failed' "$out" 2>/dev/null | tail -1 | grep -oE '[0-9]+' || true)"
+    skipped="$(grep -oE '[0-9]+ skipped' "$out" 2>/dev/null | tail -1 | grep -oE '[0-9]+' || true)"
+    collected="$(grep -oE 'collected [0-9]+' "$out" 2>/dev/null | tail -1 | grep -oE '[0-9]+' || true)"
+
+    # EMPTY is not PASS. pytest exits 0 when it runs NOTHING — a `-k` that matches no name
+    # deselects everything, a path typo collects nothing, a wrong project selector selects
+    # nothing, and all three exit 0. Measured here: `pytest tests/ -k <no-match>` prints
+    # "3141 deselected / 0 selected" and exits 0. A consumer was misled by this twice in one
+    # day and named it as one of four complaints about the kit.
+    #
+    # The principle was already written four lines above and applied only to the TRAILER:
+    # a 0 that means "not reported" and a 0 that means "none" are different facts. The
+    # verdict never consulted them.
+    #
+    # Failing is safe: across the 31 slices the smallest legitimately runs 11 tests, so no
+    # slice here is expected to run zero. `skipped` is counted separately, so a slice that is
+    # skipped in full is not called empty.
+    _ran=$(( ${passed:-0} + ${failed:-0} + ${skipped:-0} ))
+    if [ "$rc" = "0" ] && [ "$_ran" = "0" ]; then
+        echo "EMPTY $path — pytest exited 0 having run NO test. A filter that matches nothing,"
+        echo "      a path that collects nothing and a selector that selects nothing all do this."
+        failures+=("$path (ran nothing)")
+    elif [ "$rc" = "0" ]; then
         echo "PASS  $path"
     else
         echo "FAIL  $path"
         failures+=("$path")
     fi
     echo "::endgroup::"
-
-    # Absent rather than zero when pytest did not say: a 0 that means "not reported"
-    # and a 0 that means "none" are different facts, and summing them silently is how
-    # a total becomes fiction.
-    passed="$(grep -oE '[0-9]+ passed' "$out" 2>/dev/null | tail -1 | grep -oE '[0-9]+' || true)"
-    failed="$(grep -oE '[0-9]+ failed' "$out" 2>/dev/null | tail -1 | grep -oE '[0-9]+' || true)"
-    collected="$(grep -oE 'collected [0-9]+' "$out" 2>/dev/null | tail -1 | grep -oE '[0-9]+' || true)"
     trailer+=("$(printf 'SUITE\t%s\t%s\t%s\t%s\t%s' \
         "$path" "$rc" "${passed:--}" "${failed:--}" "${collected:--}")")
 done
@@ -172,15 +223,25 @@ done
 # the installer overwrites with live configuration, a records root that is one directory
 # upstream and two once installed. The kit's own suite could not see any of them by
 # construction, and a consumer's push gate found all three.
-# The kit root is where `skills/` sits beside `mechanisms/`, found by walking UP.
-# A fixed `/..` was wrong on the first attempt — this file is at `mechanisms/cycle/`, so
-# one level up is `mechanisms/`, and the `*/.claude` test could never match. Counting
-# levels breaks the moment a file moves; asking what a directory CONTAINS does not.
-_kit_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-while [ "$_kit_dir" != "/" ]; do
-    if [ -d "$_kit_dir/skills" ] && [ -d "$_kit_dir/mechanisms" ]; then break; fi
-    _kit_dir="$(dirname "$_kit_dir")"
-done
+# The kit root is `REPO_ROOT`, and `REPO_ROOT` is a fixed two levels up from this file
+# (line 29). Counting levels DOES break the moment a file moves — this comment used to
+# argue against counting while the line below it counted, which told a reader relocating
+# the script that the resolution would follow them. It will not: move this file and
+# line 29 is what has to change.
+# `REPO_ROOT`, which line 29 already computed and line 30 already `cd`-ed into. This
+# re-resolved `BASH_SOURCE[0]` here instead, and that path is RELATIVE when the script is
+# invoked by a relative path — so after the `cd` it resolved against the wrong directory,
+# the subshell `cd` failed, `pwd` never ran, and `_kit_dir` came out empty. `dirname ""`
+# is `.`, which is how the banner printed "the kit's own repository at ." from inside an
+# install: the one thing the banner exists to distinguish, reported backwards.
+#
+# Shipped 2026-09-16 and caught the same day by running it from a consumer with a
+# relative path. Both invocations resolve correctly in isolation; only the ORDER breaks
+# it, which is why it survived the test that checks the resolution.
+#
+# A second resolution of a question the script had already answered — today's class,
+# from this hand, in the fix for today's class.
+_kit_dir="$REPO_ROOT"
 case "$_kit_dir" in
     */.claude) _tree="INSTALLED at $_kit_dir — these suites are running against a
   consumer tree. A failure here that passes upstream is a defect in the kit's TESTS,
@@ -188,10 +249,75 @@ case "$_kit_dir" in
     *) _tree="the kit's own repository at $_kit_dir" ;;
 esac
 
+_state_after="$(_tree_state)"
+if [ "$_state_before" != "$_state_after" ]; then
+    trailer+=("$(printf 'TREE_MOVED\t%s\t%s' "$_state_before" "$_state_after")")
+fi
+
+# THE RUN LEAVES A RECORD, because printing is not remembering.
+#
+# This script printed its verdict and exited. Nothing on disk said the suite had ever
+# run, on which commit, or with what result — so the only way to answer "is it green?"
+# was to run it again, for fifteen minutes. Measured 2026-09-22: one session ran it four
+# times in one day to answer that question, and two of the four answered about a tree
+# that had moved.
+#
+# Written even on failure, and even when the tree moved: a record that only exists for
+# clean runs answers "was it ever green" and never "what happened last time", and the
+# second question is the one asked at 2am.
+_record_dir="$(python3 - <<'PYEOF' 2>/dev/null
+import sys
+from pathlib import Path
+for up in Path.cwd().resolve().parents:
+    if (up / "squad" / "paths.py").is_file():
+        sys.path.insert(0, str(up)); break
+else:
+    sys.path.insert(0, str(Path.cwd()))
+try:
+    from squad.paths import write_records_dir
+    print(write_records_dir(Path.cwd(), "verification"))
+except Exception:
+    pass
+PYEOF
+)"
+if [ -n "$_record_dir" ]; then
+    mkdir -p "$_record_dir" 2>/dev/null && {
+        _passed=0; _failed=0
+        for _t in "${trailer[@]}"; do
+            case "$_t" in
+                SUITE*) _p=$(printf '%s' "$_t" | cut -f4); _f=$(printf '%s' "$_t" | cut -f5)
+                        [ "$_p" != "-" ] && _passed=$((_passed + _p))
+                        [ "$_f" != "-" ] && _failed=$((_failed + _f)) ;;
+            esac
+        done
+        printf '{"at":"%s","head":"%s","suites":%d,"failed_suites":%d,"passed":%d,"failed":%d,"tree_moved":%s,"tree":"%s"}\n' \
+            "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            "${_state_before%% *}" \
+            "${#SUITES[@]}" "${#failures[@]}" "$_passed" "$_failed" \
+            "$([ "$_state_before" != "$_state_after" ] && echo true || echo false)" \
+            "$_kit_dir" > "$_record_dir/last-run.json"
+        echo "record: $_record_dir/last-run.json"
+    }
+fi
+
 echo
 printf '%s\n' "${trailer[@]}"
 echo
 echo "TREE: $_tree"
+if [ "$_state_before" != "$_state_after" ]; then
+    # ABOVE the verdict, for the reason the review report puts contamination above its
+    # findings: a reader who learns this afterwards has already believed what came first.
+    #
+    # It does NOT change the exit code. A run over a tree that moved is not wrong on its
+    # face — it is unattributable, which is a judgement its caller makes with the
+    # `TREE_MOVED` line above. Failing here would turn every legitimate concurrent edit
+    # into a red suite; passing silently is what produced the measurement in the comment
+    # at the top of this file.
+    echo "TREE MOVED DURING THE RUN — HEAD or the working tree changed between the first"
+    echo "  suite starting and the last one finishing. Whatever follows is a result about"
+    echo "  no single state of this repository. Re-run against a still tree before acting"
+    echo "  on it, and before reporting it to anyone."
+fi
 if [ "${#failures[@]}" -eq 0 ]; then
     echo "ALL SUITES GREEN"
     exit 0

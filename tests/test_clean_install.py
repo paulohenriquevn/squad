@@ -42,11 +42,11 @@ CACHE_DIRS = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache"}
 def installed(versioned_kit: Path, tmp_path_factory: pytest.TempPathFactory):
     """A real installation, from the versioned kit, into an empty target."""
     target = tmp_path_factory.mktemp("consumer")
-    proc = subprocess.run(  # noqa: PLW1510
+    proc = subprocess.run(
         ["bash", str(versioned_kit / "mechanisms" / "distribution" / "install.sh"), str(target)],
         capture_output=True,
         text=True,
-    )
+     check=False)
     return target, proc
 
 
@@ -63,12 +63,12 @@ def test_strict_xrefs_passes_on_a_fresh_install(installed):
     `Overall: PASS` com exit 0 (ver `test_ci_contract.py`).
     """
     target, _ = installed
-    proc = subprocess.run(  # noqa: PLW1510
+    proc = subprocess.run(
         ["python3", str(target / ".claude" / "mechanisms" / "gates" / "check_xrefs.py"), "--strict"],
         cwd=target,
         capture_output=True,
         text=True,
-    )
+     check=False)
     assert proc.returncode == 0, (
         "A freshly made installation does not pass its own validator:\n"
         f"{proc.stdout}\n{proc.stderr}"
@@ -78,7 +78,7 @@ def test_strict_xrefs_passes_on_a_fresh_install(installed):
 def test_routing_mechanism_reaches_the_consumer(installed):
     """`agents/README.md` describes the routing MECHANISM, not a domain.
 
-    O instalador o copia incondicionalmente e `rules/cycle-maintenance.md` o
+    The installer copies it unconditionally and `rules/cycle-maintenance.md`
     cites it. If it is not versioned, it arrives empty in every consumer.
     """
     target, _ = installed
@@ -115,7 +115,7 @@ def test_no_tool_cache_reaches_the_consumer(versioned_kit, tmp_path):
 
     It installs from a tree that HAS caches — like the maintainer's — and demands
     that none crosses over. Installing from `versioned_kit` would prove nothing:
-    o git nunca carregou um `.pyc`.
+    git never carried a `.pyc`.
     """
     dirty = tmp_path / "dirty-kit"
     subprocess.run(["cp", "-r", str(versioned_kit), str(dirty)], check=True)
@@ -128,18 +128,18 @@ def test_no_tool_cache_reaches_the_consumer(versioned_kit, tmp_path):
 
     target = tmp_path / "consumer"
     target.mkdir()
-    proc = subprocess.run(  # noqa: PLW1510
+    proc = subprocess.run(
         ["bash", str(dirty / "mechanisms" / "distribution" / "install.sh"), str(target)],
         capture_output=True,
         text=True,
-    )
+     check=False)
     assert proc.returncode == 0, proc.stderr
 
     eco = target / ".claude"
     leaked_dirs = [p for p in eco.rglob("*") if p.is_dir() and p.name in CACHE_DIRS]
     leaked_pyc = list(eco.rglob("*.pyc"))
-    assert not leaked_dirs, f"cache propagado ao consumidor: {[str(p) for p in leaked_dirs]}"
-    assert not leaked_pyc, f".pyc propagado ao consumidor: {[str(p) for p in leaked_pyc]}"
+    assert not leaked_dirs, f"cache propagado ao consumer: {[str(p) for p in leaked_dirs]}"
+    assert not leaked_pyc, f".pyc propagado ao consumer: {[str(p) for p in leaked_pyc]}"
 
 
 def test_installed_payload_is_not_dominated_by_noise(installed, versioned_kit):
@@ -187,11 +187,11 @@ def test_the_routing_contract_survives_the_command_the_kit_prescribes(installed)
     for text in invariants:
         assert rule.read_text(encoding="utf-8").count(text) == 1, f"after install: {text}"
 
-    subprocess.run(  # noqa: PLW1510
+    subprocess.run(
         [sys.executable, ".claude/skills/backlog-init/scripts/detect_domains.py",
          "--root", ".", "--write", ".claude/rules/cycle-backlog.md"],
         cwd=target, capture_output=True, text=True,
-    )
+     check=False)
     for text in invariants:
         assert rule.read_text(encoding="utf-8").count(text) == 1, f"after --write: {text}"
 
@@ -222,11 +222,11 @@ def test_reinstalling_never_empties_the_derived_routing_table(
 
     install = [str(versioned_kit / "mechanisms" / "distribution" / "install.sh"), str(target)]
     subprocess.run(["bash", *install], capture_output=True, check=True)
-    subprocess.run(  # noqa: PLW1510
+    subprocess.run(
         [sys.executable, ".claude/skills/backlog-init/scripts/detect_domains.py",
          "--root", ".", "--write", ".claude/rules/domain-routing.txt"],
         cwd=target, capture_output=True, text=True,
-    )
+     check=False)
     rule = target / ".claude" / "rules" / "domain-routing.txt"
     assert "svc-a" in rule.read_text(encoding="utf-8"), "fixture did not derive a table"
 
@@ -390,7 +390,15 @@ def test_a_consumer_with_a_markdown_table_is_migrated_once(
 
     subprocess.run(["bash", *install, "--force"], capture_output=True, check=True)
 
-    migrated = (rules / "domain-routing.txt").read_text(encoding="utf-8")
+    # The destination is RESOLVED, not composed — `squad/paths.py` owns it, and B-198
+    # moved it out of `rules/`. This test read the old path until 2026-09-21 and failed
+    # on the placeholder the install recreates there, reporting a lost table when the
+    # table was written correctly one directory away. The install's own message said
+    # `rules/domain-routing.txt` too, which is what made the wrong path look right.
+    sys.path.insert(0, str(REPO))
+    from squad.paths import write_routing_table
+
+    migrated = write_routing_table(target).read_text(encoding="utf-8")
     assert "api" in migrated and "svc-a" in migrated and "svc-b" in migrated, (
         "the consumer's derived table did not survive the migration"
     )
@@ -467,7 +475,12 @@ def test_a_project_specialist_survives_a_reinstall(versioned_kit, tmp_path):
 #: `discover-confidence` because the other two did: a conftest resolving the project by
 #: walking up to `.git` (the kit here, the CONSUMER'S project there) and a fixture
 #: writing panel records under that root, into a live registry.
-_SUITES_FROM_THE_INSTALL = ("squad/tests", "skills/discover-confidence/tests")
+#: Every slice, plus the hook library. It was two suites, and on 2026-09-26 the theo
+#: consumer found two defects in a slice this never ran from an install: a test importing
+#: from the kit's root `tests/` (which does not ship) and a citation resolver that could
+#: not see the installed kit's `rules/` — both green here, red in every consumer. All
+#: thirty slices from an install measured 126 s serially; less than one defect's cost.
+_ALWAYS_FROM_THE_INSTALL = ("squad/tests",)
 
 
 def test_the_suite_passes_from_the_install_too(installed):
@@ -491,14 +504,17 @@ def test_the_suite_passes_from_the_install_too(installed):
     kit = target / ".claude"
 
     failures = []
-    for suite in _SUITES_FROM_THE_INSTALL:
+    suites = [*_ALWAYS_FROM_THE_INSTALL,
+              *(str(d.relative_to(kit)) for d in sorted((kit / "skills").glob("*/tests")))]
+    assert len(suites) > 20, f"the install holds {len(suites)} suites; this measured nothing"
+    for suite in suites:
         if not (kit / suite).is_dir():
             failures.append(f"{suite}: absent from the install")
             continue
-        run = subprocess.run(  # noqa: PLW1510
+        run = subprocess.run(
             [sys.executable, "-m", "pytest", suite, "-q", "-p", "no:randomly"],
             cwd=str(kit), capture_output=True, text=True, timeout=900,
-        )
+         check=False)
         if run.returncode != 0:
             tail = "\n".join(run.stdout.strip().splitlines()[-12:])
             failures.append(f"{suite}:\n{tail}")
@@ -507,3 +523,43 @@ def test_the_suite_passes_from_the_install_too(installed):
         "these pass in the kit's repository and fail from an install, which means they "
         "are asking about the tree they sit in rather than about the kit:\n\n"
         + "\n\n".join(failures))
+
+
+def test_a_broken_install_exits_non_zero(versioned_kit, tmp_path_factory) -> None:
+    """Both validators ran with `> /dev/null 2>&1` and neither set a status.
+
+    The reason a check failed was destroyed, and the script printed
+    "Installation complete." and exited 0 whether they passed or failed. An installer
+    that reports success over a broken install is worse than one that does not check.
+    """
+    target = tmp_path_factory.mktemp("broken-install")
+    subprocess.run(["git", "init", "-q", "."], cwd=target, check=True)
+    install = [str(versioned_kit / "mechanisms" / "distribution" / "install.sh"), str(target)]
+    subprocess.run(["bash", *install], capture_output=True, check=True)
+
+    # Break something the installer PRESERVES: `rules/*.txt` are project-tunable and a
+    # reinstall keeps them, so the corruption survives into the validation. `--merge`
+    # rather than `--force` for the same reason — force replaces what it ships.
+    (target / ".claude" / "rules" / "review-panel.txt").write_text(
+        "this line has no | and parses as no seat at all\n", encoding="utf-8")
+
+    done = subprocess.run(["bash", *install, "--merge"], capture_output=True, text=True,
+                          check=False)
+
+    assert done.returncode != 0, (
+        "a validation failure over the installer's own files exited 0:\n" + done.stdout[-1500:])
+    assert "validation log:" in done.stdout, "the log path was not printed"
+
+
+def test_the_validation_log_survives_the_run(versioned_kit, tmp_path_factory) -> None:
+    """The output that says WHAT is wrong was sent to /dev/null."""
+    target = tmp_path_factory.mktemp("validation-log")
+    subprocess.run(["git", "init", "-q", "."], cwd=target, check=True)
+    subprocess.run(
+        ["bash", str(versioned_kit / "mechanisms" / "distribution" / "install.sh"), str(target)],
+        capture_output=True, check=True)
+
+    logs = list((target / ".claude" / ".install-backups").glob("validation-*.log"))
+
+    assert logs, "no validation log was kept"
+    assert logs[0].read_text(encoding="utf-8").strip(), "the log is empty"

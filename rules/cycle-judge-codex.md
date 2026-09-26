@@ -1,4 +1,5 @@
 # Cycle: JUDGE-CODEX (orthogonal LLM jury)
+<!-- rule-id: SQ-CYC-10 -->
 
 Source of Truth for the orthogonal-LLM judge cycle. **Optional but recommended** addition to the canonical pipeline that breaks the Claude-only monoculture in `cycle-review`.
 
@@ -13,7 +14,7 @@ This cycle is delivered by an external plugin — `judge-codex-plugin-cc` (https
 ## Pre-conditions
 
 - Codex CLI installed (`npm install -g @openai/codex`) and authenticated (`codex login`).
-- judge-codex plugin installed in Claude Code (`/plugin marketplace add usetheodev/judge-codex-plugin-cc` then `/plugin install judge-codex@judge-codex`).
+- judge-codex plugin installed in Claude Code (`/plugin marketplace add usetheodev/judge-codex` then `/plugin install judge-codex@judge-codex`).
 - At least one `plan` cycle artifact persisted (opportunity, plan, implementation log, or review report).
 
 Do NOT invoke when:
@@ -42,11 +43,11 @@ Each stage is **idempotent** and **independent** — running `plan` later does n
 
 | Phase | Input | Output | Hard gate |
 |---|---|---|---|
-| `:discover` | opportunity at `records/discoveries/opportunities/{slug}-opportunity.md` | `records/judge-codex/{slug}-discover-judge-{date}.json` | ≥2-source evidence rule enforced; `fabricated_citation` caps to INVALID |
-| `:plan` | plan at `records/plans/{slug}-plan.md` + optional plan-confidence output | `records/judge-codex/{slug}-plan-judge-{date}.json` | semantic completeness above `plan-confidence` M3 structural check; Goal SMART; Risks; fabricated citations beyond Evidence-block scope |
-| `:implementation` | implementation log + `git log` of slice commits | `records/judge-codex/{slug}-implementation-judge-{date}.json` | wiring triad pillar (a) caller present; TDD RED commit precedes GREEN; no symbol fabrication |
-| `:final` | consolidated review report + raw agent finding files | `records/judge-codex/{slug}-final-judge-{date}.json` | review-of-review: aggregator did not silently drop agent files; verdict consistent with findings |
-| `:auto` | (orchestrates all 4 above) | `records/judge-codex/{slug}-auto-judge-{date}.json` | smallest-cap-wins aggregation; halts at first disagreement when `--stop-on-disagreement` is set |
+| `:discover` | opportunity at `.squad/records/discoveries/opportunities/{slug}-opportunity.md` | `.squad/records/judge-codex/{slug}-discover-judge-{date}.json` | ≥2-source evidence rule enforced; `fabricated_citation` caps to INVALID |
+| `:plan` | plan at `.squad/records/plans/{slug}-plan.md` + optional plan-confidence output | `.squad/records/judge-codex/{slug}-plan-judge-{date}.json` | semantic completeness above `plan-confidence` M3 structural check; Goal SMART; Risks; fabricated citations beyond Evidence-block scope |
+| `:implementation` | implementation log + `git log` of slice commits | `.squad/records/judge-codex/{slug}-implementation-judge-{date}.json` | wiring triad pillar (a) caller present; TDD RED commit precedes GREEN; no symbol fabrication |
+| `:final` | consolidated review report + raw agent finding files | `.squad/records/judge-codex/{slug}-final-judge-{date}.json` | review-of-review: aggregator did not silently drop agent files; verdict consistent with findings |
+| `:auto` | (orchestrates all 4 above) | `.squad/records/judge-codex/{slug}-auto-judge-{date}.json` | smallest-cap-wins aggregation; halts at first disagreement when `--stop-on-disagreement` is set |
 
 ## Verdicts
 
@@ -68,7 +69,7 @@ Plus meta-verdicts at the `:final` stage:
 
 When `judge-codex:*` and the Claude-side equivalent gate (`/discover-confidence`, `/plan-confidence`, `/review`, etc.) reach **different verdicts** on the same artifact:
 
-1. The disagreement is persisted at `records/judge-codex/{slug}-{stage}-disagreement-{date}.json`.
+1. The disagreement is persisted at `.squad/records/judge-codex/{slug}-{stage}-disagreement-{date}.json`.
 2. The downstream pipeline is **paused** at the disagreeing stage.
 3. **Human adjudication is required** — neither LLM is automatically trusted.
 
@@ -85,6 +86,64 @@ The plugin's per-stage hard caps mirror the canonical golden rules. **None of th
 | `:implementation` | `rules/cycle-implement.md` + `rules/code-quality-golden-rule.md` | |
 | `:final` | `rules/cycle-review.md` | |
 
+## Where the artifacts are, and why the plugin has to ask
+
+**FIXED IN THE PLUGIN ON 2026-09-22 (`85e55b5`), and this section is the record of
+what it was.** It was written in the present tense with the measurement date further
+down, so a reader took the date as *when the defect was found* rather than as *how
+far this sentence is still true*. It was believed, correctly, for three days after
+it stopped being so — and a stale MECHANISM that answers is worse than an absent
+one, while a stale DOCUMENT that asserts is worse than both, because nothing in it
+fails. Verified here by reading the installed plugin rather than by taking the
+report: `scripts/codex-companion-judge.mjs:39` now carries
+`RECORD_ROOTS = [".squad/records", ".claude/records", "records",
+".claude/knowledge-base", "knowledge-base"]` — the current root first, the old one
+last — and `:discover` accepts BOTH names rather than choosing, `-opportunity.md`
+and `-blueprint.md` alike.
+
+What follows is the state until that commit, kept because the reasoning is what
+makes the fix legible and because deleting it would erase why the seam exists.
+
+Measured on a consumer 2026-09-18: the plugin hard-coded
+`knowledge-base/discoveries/blueprints/<slug>-blueprint.md` for `:discover`, and
+the analogous `knowledge-base/...` path for its other three stages. This kit
+writes `.squad/records/discoveries/opportunities/<slug>-opportunity.md`.
+
+Two independent renames are stacked in that one string. `records-location.md`
+moved the root in 2026-08, keeping `knowledge-base` only as the **last** read-only
+fallback for an unmigrated project. `cycle-discover.md` renamed blueprint to
+opportunity, deliberately. Neither had reached the plugin, so every seat of every
+panel answered "artifact not found", every panel came back incomplete, and the
+contract reads an incomplete panel as abstention and never as agreement — so no
+item could leave DISCOVER, PLAN or DESIGN.
+
+**The plugin was not careless; this kit gave it nothing to call.** So it hard-coded
+a path, and froze the names that were current when it did.
+
+`panel_brief.py --locate` is the answer, and it is the same table the kit's own
+panels read — no second copy, so the next rename moves one string and every
+reader follows:
+
+```
+python3 <kit>/mechanisms/cycle/panel_brief.py --locate \
+    --phase discover --slug <slug> --project <root> --json
+```
+
+```
+0   the JSON carries `artifacts`, `present`, `missing`, `contract`
+2   this kit declares no artifact path for that phase; stderr names the ones it does
+```
+
+Locating never fails on absence — `--slug`/`--phase` without `--locate` refuses a
+missing artifact, which is right for convening a panel and backwards for finding a
+file. A caller answered with a refusal for not having found the file has no option
+left but to guess, which is how this started.
+
+The table holds `design`, `discover` and `plan`. The plugin's `implementation` and
+`final` stages exit 2 rather than receiving a path composed from the pattern of the
+others — a convention invented on a caller's behalf is exactly what went wrong here
+the first time. Tracked as issue #2 in the plugin's own tracker.
+
 A `FAIL_HARD` or `INVALID` verdict at any stage **blocks downstream cycles** until either the underlying issue is fixed OR an explicit ADR dismisses it with a sunset window.
 
 ## Anti-patterns
@@ -96,9 +155,9 @@ A `FAIL_HARD` or `INVALID` verdict at any stage **blocks downstream cycles** unt
 
 ## Output
 
-- `records/judge-codex/{slug}-{stage}-judge-{date}.json` per stage.
-- `records/judge-codex/{slug}-auto-judge-{date}.json` for `:auto` runs.
-- `records/judge-codex/{slug}-{stage}-disagreement-{date}.json` when Claude vs Codex differ.
+- `.squad/records/judge-codex/{slug}-{stage}-judge-{date}.json` per stage.
+- `.squad/records/judge-codex/{slug}-auto-judge-{date}.json` for `:auto` runs.
+- `.squad/records/judge-codex/{slug}-{stage}-disagreement-{date}.json` when Claude vs Codex differ.
 
 Install/setup commands live in the plugin repo README (and the Pre-conditions
 above); a dated record of the proof-of-value integration run is in the project

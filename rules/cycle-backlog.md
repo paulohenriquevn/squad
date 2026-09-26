@@ -1,4 +1,5 @@
 # Cycle: BACKLOG
+<!-- rule-id: SQ-CYC-03 -->
 
 Source of Truth for the intake cycle. Skills consume this; do not duplicate content into SKILL.md.
 
@@ -82,7 +83,26 @@ the autonomy conditional on somebody being awake.
 person deciding what a person asked for is the case the gate was built for.
 
 **`approved_by` is the field that keeps the two apart**, for the same reason
-`signed-by: human/…` and `signed-by: judge/…` are different claims in a brief:
+`signed-by: human/…`, `signed-by: peer/…` and `signed-by: judge/…` are three different
+claims in a brief:
+
+| `signed-by` | Means | Accountable by |
+|---|---|---|
+| `human/<name>` | a person read it and committed to it | being a person |
+| `peer/<session> (what it verified)` | ANOTHER session measured something about it independently | the measurement named in the parentheses |
+| `judge/<name>` | a judge ran its contract over it | the contract it ran |
+
+**A peer signature must say what it verified, and is refused without it.** A person is
+accountable by being a person and a judge is named by the contract it ran against; a peer
+is another agent with no contract binding it to this document, so the measurement beside
+the name is the entire value of the signature. `squad/signoff.py` reports an unqualified
+peer separately rather than dropping it — a correctable mistake a reader cannot correct if
+they never see it.
+
+**A peer is not a human and does not become one.** `human_signed` stays false while a peer
+signer is present, because the weakest signer decides. Decided 2026-09-22, after three
+sessions spent a day measuring defects in each other's work with nowhere to record that it
+had happened.
 
 | `approved_by` | Means |
 |---|---|
@@ -108,7 +128,21 @@ the number is in front of whoever starts the next run.
 
 ## Item schema
 
-Every item is one `## B-NNN` block. Ids are monotonic, never reused, never renumbered — a killed item keeps its number so the audit trail survives.
+Every item is one `## B-NNN` block. Ids are monotonic, never reused, never renumbered — a killed item keeps its number so the audit trail survives. **The order the blocks sit in the file is not part of this**: newest-first and oldest-first both satisfy it, because the rule is about the values assigned over time. A checker sees one snapshot and cannot observe renumbering at all, so what is enforced is the observable half — no id appears twice (`duplicate_id`).
+
+**The header, exactly.** `## B-NNN — Title`, where the separator may be an em dash, an
+en dash or a plain hyphen — all three are accepted, because six readers each carried
+their own pattern and three of them refused the hyphen. An item written that way entered
+the approval brief and was invisible to `backlog_status.py`, the only module allowed to
+write its status; worse, a header no parser recognises does not OPEN a block, so the
+unseen item's fields were read as the previous item's and produced three false blockers
+on its neighbour. `squad/backlog.py` is the one parser now.
+
+**The id carries at least three digits.** `B-015`, not `B-15`. The block parses either
+way on purpose — a header skipped takes the next item's fields with it — but a shorter
+id is unreachable: `blocked_by: B-15` names no edge, and the writer refuses it on the
+command line. `check_backlog_structure.py` reports `malformed_id`, and the fix is
+zero-padding, which is the same number written correctly rather than a renumbering.
 
 ```markdown
 ## B-014 — Reduce the trace explorer p95   [ ]
@@ -130,10 +164,11 @@ dod:
 | `domain` | yes | routes to the specialist; must be a registered domain (G1) |
 | `repo` | yes | must exist in the umbrella inventory (G1) |
 | `suggested_mode` | yes | **a suggestion, not a decision** — DISCOVER may reclassify |
-| `source` | yes | `human` \| `discover-review` \| `discover-live-test` \| `discover-bug` \| `discover-evolve` \| `live-incident` |
+| `source` | yes | `human` \| `discover-review` \| `discover-live-test` \| `discover-bug` \| `discover-evolve` \| `live-incident` \| `external-blocker` — the last one is not work, see § An impediment nobody here can clear **`live-incident` also puts the item in SELECT's obligation band** (`select_backlog_item.is_obligation`): it is ordered ahead of everything else because it is costing while it waits, not merely waiting. That band covers this value and nothing else — a security finding or a legal obligation belongs there by the same argument and the registry has no field that identifies one, so the claim stops where the schema does |
 | `evidence` | yes | `none-yet` at intake; a pointer once DISCOVER measures |
 | `why_now` | yes | what changed **in our system**; subject to G5 |
 | `approved_by` | when `status` is `approved` or past it | `human/<name>` or `system/autonomous-sweep`. Who made the commitment. A bare `approved` with no attribution predates this field; it is not evidence that a person decided |
+| `subject` | no, and `product` is assumed | `product` \| `kit` — which system this item CHANGES, which is a different question from what kind of work it is. **`subject: kit` in a project that consumes the kit is a blocker** (`check_backlog_structure`): the item cannot close there, because a `.claude/` is not versioned, so a fix written in it protects one machine and the next install overwrites it — file it in the kit's own tracker and kill this one naming where it went. In the kit's OWN repository the same value is correct, and `squad.layout.has_kit` is what tells the two apart. Optional because 159 items predated it on the registry that motivated it, and a required field that fires on every existing block is a gate somebody switches off. An item that declares nothing and whose evidence names only kit paths gets an ADVISORY finding, never a failure |
 | `traces_to` | when the project declares objectives | the `OBJ-N` ids this item serves, comma-separated. Required once `.squad/wiki/product/objectives.md` exists; absent and unenforced before that, because a project that never ran `/brainstorm-objectives` has nothing to trace to |
 | `status` | yes | `raw` \| `triaged` \| `approved` \| `planned` \| `shipped` \| `killed` |
 | `dod` | yes | ≥ 1 verifiable criterion (G4) |
@@ -255,6 +290,39 @@ called seven honest impediments malformed.
 | `the sponsor must decide` | none | a human clears the line |
 | `none` (or an absent line) | none | already unblocked |
 
+#### An impediment nobody here can clear
+
+Row three is the common case and the weak one. Measured: **seven of the eight items
+carrying `blocked_by` named a sponsor decision, a ratification, or a revocation in a
+hosting panel** — none of them an id. `parse_blocked_by` says what that costs in its own
+words: *"nothing in this repository can tell you whether a sponsor has decided."* Such an
+impediment resolves only when somebody remembers to delete the line, is invisible to G6
+and G7 because there is no edge to verify, and appears in no report as a thing that is
+itself pending.
+
+**File the constraint as an item.** `source: external-blocker` registers it as an
+ordinary `B-NNN`, so `blocked_by: B-900` is a verifiable edge and closing the stub frees
+every item naming it **with no second edit** — the property prose could never have.
+
+| | An external blocker |
+|---|---|
+| What it is | a constraint outside this repository: a sponsor decision, a ratification, a vendor fix, a regulatory hold |
+| What closes it | somebody outside acting. Then it goes `shipped` (they did it) or `killed` (they will not) |
+| Selected as work | **never.** `select_backlog_item.py` skips it, and asking for it by name returns `ITEM_EXTERNALLY_BLOCKED` |
+| `suggested_mode` | not required — it never reaches DISCOVER |
+| `traces_to` | not required — it is not work, so it serves no objective |
+| Everything else | an ordinary item: an id, a `why_now`, a `dod` naming what would close it, and a place in the index |
+
+The shape is adapted from [`gringolito/github-backlog-management`](https://github.com/gringolito/github-backlog-management-skill)
+(cross-read 2026-09-20), whose `/add-external-blocker` files the constraint as a stub
+issue — on the board, never milestoned, skipped by execution — and registers it as a real
+dependency. The mechanism here is ours, because the registry is a file rather than the
+GitHub API.
+
+**A stub still closes honestly.** `shipped` means the outside thing happened; `killed`
+means it will not, and the items it held need another way through. Leaving it open
+forever is the same lie as prose, with a number attached.
+
 An item may not ship while an impediment is live. `backlog_status.py` refuses it, and
 `check_backlog_structure.py` reports the ones that got in by hand.
 
@@ -294,8 +362,9 @@ knowingly and doing it because nobody looked.
 ## Domain routing
 
 `domain` is what assigns an item to a specialist. The table itself is **not in
-this file** — it lives in `rules/domain-routing.txt`, and that separation is the
-point.
+this file** — it lives at `.squad/domain-routing.txt`, resolved by
+`squad.paths.write_routing_table` rather than spelled by each reader, and that
+separation is the point.
 
 This file is the kit's contract: fifteen sections describing what the intake
 cycle produces and which gates block it, identical in every install. The routing
@@ -347,20 +416,24 @@ Both paragraphs were inside the span once. Running the command this very file pr
 | `ITEM_REGISTERED` | Item written to `BACKLOG.md` as `raw` | Available for `cycle-discover` |
 | `ITEM_MERGED` | Dedup gate matched an open item; the new context was folded into it | No new id; the existing `B-NNN` proceeds |
 | `ITEM_REJECTED` | Outside the ecosystem, or G5 refused it | Nothing written; the reason is surfaced to the human |
+| `ITEM_EXTERNALLY_BLOCKED` | The id asked for records a constraint nobody here can clear (`source: external-blocker`) | Nothing to do here. It closes when whoever owns it acts, and every item naming it is freed with no second edit |
 
 There is no "with caveats" band: an item is either in the registry or it is not.
 
 ## Hard gates
+
+- **An open item's cited pointers must resolve** — `mechanisms/gates/check_evidence_freshness.py`. Evidence AGE is reported and never fails: a measurement taken a while ago about something nobody has touched is still true, and failing on age trains people to re-measure on a calendar rather than on a reason. A cited path that resolves nowhere is a different fact — the next reader follows it, finds nothing, and cannot tell whether the finding moved or was never real. Scoped to `triaged` and `approved`, the items about to be planned against; a settled item's pointers are history and may name a tree that has since moved.
+
 
 | # | Gate | Blocks on |
 |---|---|---|
 | G1 | **Domain + repo resolve** (run by `skills/backlog-item/scripts/check_intake_gates.py`, which delegates to `mechanisms/cycle/route_domain.py`) | `domain` not in the registered set, or `repo` not in the umbrella inventory. An item nobody owns is an item nobody does. |
 | G2 | **Dedup search ran** (`check_intake_gates.py`; running it IS the evidence) | No search of `BACKLOG.md` performed before writing. A collision on an open item forces `ITEM_MERGED`. |
 | G3 | **Single domain** _(not mechanized: judgement — deciding that a description spans two domains is not something a regex settles, and the evals cover it instead)_ | The description spans two domains. Split it; one item, one specialist. |
-| G4 | **Verifiable DoD** _(not mechanized: judgement — `check_criterion_executability.py` does the equivalent one phase later, against a plan; at intake an item is a hypothesis and a strict falsifiability check would silence the hunch)_ | Zero `dod` bullets, or every bullet unfalsifiable ("melhorar a performance"). Without a closing criterion the item never closes. |
+| G4 | **Verifiable DoD** _(not mechanized: judgement — `check_criterion_executability.py` (run by `run_structural.py`) does the equivalent one phase later, against a plan; at intake an item is a hypothesis and a strict falsifiability check would silence the hunch)_ | Zero `dod` bullets, or every bullet unfalsifiable ("melhorar a performance"). Without a closing criterion the item never closes. |
 | G6 | **Impediment edges resolve** (`check_backlog_structure.py`) | `blocked_by` names an id no block defines, or an item names itself. An edge pointing at nothing never resolves. |
 | G7 | **No impediment cycle** (`check_backlog_structure.py`) | A ring of `blocked_by` edges. Every item in it waits for another in it, so none can ever ship. This gate did not exist while items were independent; `blocked_by` gave them edges and brought it back. |
-| G5 | **No prior-art justification, and no fabricated local one** _(not mechanized: judgement — the keyword heuristic raises the question and the human decides; automating the refusal would reject an item that merely mentions another project)_ | `why_now` justifies the item by what another project does rather than by something that changed in our system. This is the Squad signature rule (Unbreakable Rule: evidence is ours or it is not evidence). Reject and ask for the local reason. **The second half was measured on 2026-08-28 and is the harder case:** given this item under time pressure, a smaller model refused the prior-art justification and then wrote a local one it had invented — *"shutdown is scattered, error propagation is unclear, testing is brittle"*, none of it observed. A fabricated local problem passes review more easily than a cited blog post, so refusing the appeal to authority is not enough: the replacement must name something someone measured, or the item becomes a spike that measures it. See `.squad/wiki/references/judgement-gates-are-insurance.md`. |
+| G5 | **No prior-art justification, and no fabricated local one** _(not mechanized: judgement — the keyword heuristic raises the question and the human decides; automating the refusal would reject an item that merely mentions another project)_ | `why_now` justifies the item by what another project does rather than by something that changed in our system. This is the Squad signature rule (Unbreakable Rule: evidence is ours or it is not evidence). Reject and ask for the local reason. **The second half was measured on 2026-08-28 and is the harder case:** given this item under time pressure, a smaller model refused the prior-art justification and then wrote a local one it had invented — *"shutdown is scattered, error propagation is unclear, testing is brittle"*, none of it observed. A fabricated local problem passes review more easily than a cited blog post, so refusing the appeal to authority is not enough: the replacement must name something someone measured, or the item becomes a spike that measures it. See `docs/wiki/references/judgement-gates-are-insurance.md`. |
 
 G1, G2, G6 and G7 are mechanizable and are now mechanized; G3, G4 and G5 are judgement and stay conversational, covered by the skill's eval battery — automating them would produce verdicts about language, not about the work.
 
@@ -389,13 +462,29 @@ item — one row each, linked to its own detail block — grouped into three buc
 
 | Bucket | Statuses | The question it answers |
 |---|---|---|
-| **Open** | `raw`, `triaged` | registered, measured or not, but nothing is being built |
-| **In flight** | `planned` | a plan exists; work is under way |
+| **Open** | `raw`, `triaged` | registered, measured or not, and nobody has committed |
+| **Committed** | `approved`, `planned` | somebody committed to it |
 | **Closed** | `shipped`, `killed` | the chain ended — and `killed` is a *successful* ending |
 
-`triaged` sits under **Open** deliberately. Measurement has run, but no plan exists, so nothing is
-in flight; folding it into the in-flight count would make that number answer a different question
-than the one people ask of it.
+`triaged` sits under **Open** deliberately. Measurement has run and nobody has committed, so
+folding it in with the commitments would make that number answer a different question than the one
+people ask of it.
+
+`approved` sits under **Committed**, and this table covered five of the six statuses until
+2026-09-24 — `approved` was in no bucket at all while the generator put it here, with the argument
+that stands: against `raw`, the intake pool where nobody has decided, a commitment does not belong
+in the same count as a hunch nobody has read. The per-row `status` column still shows which of the
+two an item holds.
+
+**The bucket is NOT called "in flight", and that is a rule and not a wording preference.** Work in
+flight is an OPEN EVENT — an item that entered a phase and has not left it — and this index reads
+zero events. `board_state._wip` computes it from the stream and says so in its own docstring: *WIP
+is not a card count*. Measured on a consumer 2026-09-24: an index labelled `In flight (6)` over
+five commitments never started and one item merged waiting for a tag, with zero phases open. Its
+reader asked whether work was happening in a batch, which the label had told them. A bucket fed by
+status cannot know activity, and `cycle-maintenance.md` makes a hard gate out of the phrase — so
+under the old label nobody could tell a violated invariant from a mislabelled bucket without
+opening the generator.
 
 **The index is generated, never written.** `skills/backlog-review/scripts/backlog_index.py --write`
 derives it from the blocks; `--check` exits 1 when it has drifted. `check_backlog_structure.py`
@@ -412,7 +501,7 @@ index and the items to move together, so the gate is what keeps them honest.
 ## Output
 
 - `BACKLOG.md` at the umbrella root — the single registry, spanning all repos in the inventory.
-- `records/backlog/{slug}-intake.md` — the intake grill log (one entry per answered question, with the G5 decision recorded).
+- `.squad/records/backlog/{slug}-intake.md` — the intake grill log (one entry per answered question, with the G5 decision recorded).
 
 The registry lives at the root of the governed SCOPE and not scattered below it, because a maintenance team asking "what is pending?" must have exactly one place to look. Per-directory backlogs inside one scope re-create the orphaned-findings problem the single-registry rule exists to solve.
 

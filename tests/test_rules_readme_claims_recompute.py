@@ -33,7 +33,8 @@ _SCHEMA = _ROOT / "rules" / "cycle-rule-schema.md"
 
 _NUMBER_WORDS = {
     "forty-eight": 48, "forty-nine": 49, "fifty": 50, "fifty-one": 51, "fifty-two": 52,
-    "fifty-three": 53, "fifty-four": 54, "fifty-five": 55, "fifty-six": 56, "fifty-seven": 57, "fifty-eight": 58, "sixty": 60, "sixty-two": 62, "sixty-one": 61, "fifty-nine": 59,
+    "fifty-three": 53, "fifty-four": 54, "fifty-five": 55, "fifty-six": 56, "fifty-seven": 57, "fifty-eight": 58, "sixty": 60, "sixty-one": 61, "sixty-two": 62, "sixty-three": 63,
+    "sixty-four": 64, "sixty-five": 65, "fifty-nine": 59,
 }
 
 
@@ -67,9 +68,9 @@ def test_the_golden_rule_protocol_sends_adrs_somewhere_that_travels() -> None:
     required = re.search(r"^1\.\s+An ADR in `([^`]+)`", protocol, re.MULTILINE)
     assert required, "step 1 no longer names an ADR destination"
     path = required.group(1)
-    ignored = subprocess.run(  # noqa: PLW1510
+    ignored = subprocess.run(
         ["git", "check-ignore", "-q", f"{path.rstrip('/')}/probe.md"], cwd=_ROOT
-    ).returncode == 0
+    , check=False).returncode == 0
     assert not ignored, (
         f"the Golden Rule Change Protocol requires an ADR in `{path}`, which git "
         "ignores — the justification for changing a LOCKED rule would not reach anyone "

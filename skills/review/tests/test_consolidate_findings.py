@@ -51,6 +51,25 @@ def _upstream_ok(findings_dir: Path, slug: str = "fixture") -> None:
     upstream green and go on measuring what they came to measure — the gate itself
     has its own suite in `test_check_upstream_gate.py`.
     """
+    # And the auditor registry, for the same reason one gate over.
+    #
+    # These passed for a while because the registry could not be READ:
+    # `_project_root_for` returned the write root, `registry_path` looked inside it, and
+    # the coverage gate answered "none required" for every fixture. Once the root
+    # resolved correctly the gate read the kit's own registry — `always |
+    # loop-code-review` — and blocked on audits these fixtures never run.
+    #
+    # An EMPTY registry, which is the gate's documented visible opt-out. Declaring none
+    # is true here: these tests measure the CONSOLIDATOR and assert nothing about
+    # independent audits, which have their own suite.
+    root = findings_dir.parent
+    (root / "rules").mkdir(parents=True, exist_ok=True)
+    registry = root / "rules" / "review-auditors.txt"
+    if not registry.exists():
+        registry.write_text(
+            "# These fixtures measure the consolidator and declare no auditor.\n",
+            encoding="utf-8")
+
     audits = findings_dir.parent / "records" / "audits"
     audits.mkdir(parents=True, exist_ok=True)
     audit = audits / f"{slug}-code-quality-2026-08-26.md"
@@ -640,7 +659,7 @@ def test_a_rename_with_one_end_outside_the_findings_dir_is_reported(tmp_path: Pa
 # ---------------------------------------------------------------------------
 
 def test_without_an_upstream_audit_there_is_no_merge_verdict(tmp_path: Path) -> None:
-    """`cycle-review.md § Pre-conditions` exige o audit; nada o cobrava.
+    """`cycle-review.md § Pre-conditions` requires the audit; nothing enforced it.
 
     `/review` running without `/code-quality` inherits everything the audit would
     have caught — dead code, fabricated symbol, orphan export — and returns

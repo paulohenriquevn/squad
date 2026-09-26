@@ -1,4 +1,5 @@
 # Cycle: BRAINSTORM
+<!-- rule-id: SQ-CYC-04 -->
 
 Source of Truth for the product-alignment cycle. Skills consume this; do not duplicate content into SKILL.md.
 
@@ -94,12 +95,23 @@ score_product_alignment.py               ← 90% floor + a human signature
      ├── PRODUCT_ALIGNED   → /backlog-init, then the chain runs unattended
      ├── AWAITING_REVIEW   → structure done, nobody signed. Ask for the review
      ├── NEEDS_REVISION    → below the floor; re-enter at the weakest phase
-     └── INVALID           → a document is missing, or a citation resolves to nothing
+     └── INVALID           → a document is missing, empty or still the template,
+                               or a citation resolves to nothing
 ```
 
 Each phase is invoked separately and on purpose. A single sitting that produces all four
 documents produces its best thinking in the first and its most tired in the last — and the
 last is the one every later phase reads.
+
+**One phase, one pair of events.** `rules/cycle-phases.txt` declares `brainstorm` once,
+so the stream carries one start — emitted by `/brainstorm-vision` — and one end, emitted
+by `/brainstorm-pieces` with the gate's verdict. The two middle phases hand off; they do
+not close. Four skills each emitting an end against one start is what
+`tests/test_a_phase_that_ends_also_began.py` measured across the whole stream (37 ends,
+1 start) and named: an end says something finished, and without its start nothing can
+say when it began, how long it took, or whether a session is open right now. A cascade
+abandoned after phase 2 is supposed to leave an open start — that is WIP, and the board
+exists to show it.
 
 ## Phase contracts
 
@@ -118,7 +130,7 @@ last is the one every later phase reads.
 |---|---|---|
 | `PRODUCT_ALIGNED` | Four documents complete, score ≥ 90%, signed by a person | `/backlog-init` may run; the chain below it may run unattended |
 | `NEEDS_REVISION` | Below the 90% floor | Re-enter at the phase the report names as weakest |
-| `INVALID` | A document of the cascade is absent, or an id cites something that does not exist | Re-run that phase. No editing fixes a citation with no referent |
+| `INVALID` | A document of the cascade is absent or empty, one is still the unfilled template, or an id cites something that does not exist | Re-run that phase. No editing fixes a citation with no referent, and a scaffold is not a draft |
 | `AWAITING_REVIEW` | Structure complete, nobody has signed | **Orthogonal to the three above.** Not a failure and not a pass — the machine finished and the person has not started |
 
 `AWAITING_REVIEW` is the token `cycle-plan` already uses for the same state, and it is
@@ -126,15 +138,26 @@ already in `rules/blocking-verdicts.txt`, so an artifact resting on it is held e
 by the same list. Introducing a synonym would have created a second name for one state
 and a second thing to keep in step.
 
+**What the wait forbids, and what it leaves open.** Blocked: `/backlog-init` and every
+phase below it, and any edit to the four documents that would need re-signing without the
+signer knowing. Open: reading the repository, drafting the session record, and preparing
+what the reviewer will need — the agenda, the list of what changed since they last looked.
+The general form of this distinction lives in `rules/blocking-verdicts.txt § WHAT A BLOCK
+FORBIDS`. It is written down because an agent that reads the block as total waits idle for
+a person who may be days away, and one that reads it as advisory starts the chain the
+signature exists to hold.
+
 ## Hard gates
 
 | # | Gate | Blocks on |
 |---|---|---|
 | G-B1 | **The vision names a user, a problem and a non-goal** (`score_product_alignment.py`) | A vision with no named user describes a system; a vision with no non-goal has not been decided, only wished. The non-goal is the half that is always omitted and the half that settles arguments later |
 | G-B2 | **Every objective carries a metric and a horizon** (`score_product_alignment.py`) | "Be faster" is not an objective, it is a mood. Without a number, nothing can ever report the objective as met, and nothing downstream can trace to it |
+| G-B0 | **Each of the four documents holds something** (`score_product_alignment.py`) | A file present and empty was read as present, so `touch` turned `INVALID` into `NEEDS_REVISION`. Measured 2026-09-19 with four one-heading files: 35.3%, no hard cap, and a report asking somebody to revise what nobody had written. Reported as `empty_document`, never as `missing_document` — one sends a person to create a file and the other to open one they have |
+| G-B0b | **A copied template is not a written document** (`score_product_alignment.py`) | The four shipped templates, copied into `wiki/product/` and not edited, scored **100.0%, 34/34 — every criterion green** (measured 2026-09-20). G-B0 asked whether the file held anything but headings, and a template holds instructions: a guide comment is 132 characters of text to a length check, `metric:` found its number in the words "Gate G-B2", and two bare `- ` bullets were two non-goals. Guide comments are now stripped before anything is scored, and a surviving `{{SCOPE}}` is its own cap, `unfilled_template` — `NEEDS_REVISION` would send somebody to improve a document nobody has started |
 | G-B3 | **Every citation resolves** (`score_product_alignment.py`) | A `REQ-N` citing an `OBJ-N` that does not exist, or a `PIECE-N` citing a missing `REQ-N`. This is the same rule the kit applies to a `file:line` — a pointer that does not resolve caps the artifact at `INVALID` |
-| G-B4 | **90% floor on the rubric** (`score_product_alignment.py`) | The figure and its reasoning are `skills/_kit-rules/alignment-threshold.md`; this cycle reuses them rather than choosing a second number for the same purpose |
-| G-B5 | **A human signature** (`score_product_alignment.py`) | The `## Sign-off` section unticked. **`alignment_judge.py` may NOT sign here** — see below |
+| G-B4 | **90% floor on the rubric** (`score_product_alignment.py`) | The REASONING is `skills/_kit-rules/alignment-threshold.md` and the FIGURE is `squad.rubric.ALIGNMENT_FLOOR_PCT`, which the item-level scorer reads too. This line claimed the reuse before it existed: until 2026-09-19 there were three statements of the bar and no reading — prose, `THRESHOLD = 0.90`, `FLOOR_PCT = 90.0` — agreeing by coincidence and in two different types |
+| G-B5 | **A human signature** (`score_product_alignment.py`) | The sign-off unticked, deleted, or given by anything other than a person. Three conditions, because each was a hole measured on 2026-09-20: the boxes must be TICKED (a section whose boxes were DELETED has nothing unticked in it), a signer must be present, and every signer must read `human/{who}` — an ALLOWLIST, the same one `score_alignment.py` applies at item level. Refusing only `judge/` accepted every other name, and `<!-- signed-by: iris-product-designer -->` — the agent that writes these documents — returned `PRODUCT_ALIGNED`, exit 0. **`alignment_judge.py` may NOT sign here** — see below |
 
 ### Why the judge may not sign this one
 
@@ -153,6 +176,29 @@ same reason. At item level the judge signs **because nobody is coming**. At prod
 the person signs **because this is the one place they come**. Remove that signature and the
 kit has no human input at all — every downstream gate would be measuring conformance to a
 document nobody agreed to.
+
+## Red flags — the thought, and what is actually true
+
+The anti-patterns below name the ERROR. This table names the **thought that produces
+it**, because that is what the reader is holding at the moment the gate is about to be
+skipped, and an error they have not made yet is easy to agree with and easy to walk
+past.
+
+The form is imported from [`obra/superpowers`](https://github.com/obra/superpowers)
+`skills/brainstorming` (cross-read 2026-09-20), whose Red Flags table is written in the
+voice of the rationalisation — *"I'll call it bounded and skip the spec" → "Reaching for
+a label to skip work IS the doubt"*. The rows are this cycle's own.
+
+| Thought | Reality |
+|---|---|
+| "The vision is obvious — everyone here already knows it" | Then writing it costs a paragraph. And if two people write it separately, you find out today that they disagreed, instead of finding out during the first re-scope |
+| "I'll add the non-goals once we know more" | The section exists to be uncomfortable NOW. Later is after the code exists, when the argument costs a re-scope rather than a sentence |
+| "This objective is qualitative — no metric fits" | Then it is a value, and values belong in the vision, where nothing traces to them. An objective no measurement could ever report as unmet is one nobody can be wrong about |
+| "They're busy — I'll sign and they'll confirm next week" | A signature is the claim that somebody read it. Confirmation afterwards approves what already passed, which is not a review. `human/{who}` is the only signer this gate accepts, and no flag changes that |
+| "94% — that's basically aligned" | The score measures structure. `AWAITING_REVIEW` at 94% and at 100% are the same state: the machine finished, the person has not started |
+| "They approved the vision, so the objectives follow from it" | Each artifact carries its own approval. An approval quoted from a conversation about a different document is a signature nobody gave — `alignment-threshold.md § A reply approves the artifact it was shown` |
+| "Re-running the cascade is safer than editing one objective" | The cascade is the order things are FIRST decided. Re-running it to move a horizon produces three tired documents and one edited line |
+| "This scope can reuse the vision from the other repo" | An inherited vision is an inherited routing table wearing prose. `agents/README.md` records what that cost when it was measured |
 
 ## Anti-patterns
 
@@ -186,7 +232,7 @@ document nobody agreed to.
 - `wiki/product/objectives.md` — `OBJ-N`, each with a metric and a horizon
 - `wiki/product/trd.md` — `REQ-N`, each citing the objective it serves
 - `wiki/product/technical-pieces.md` — `PIECE-N`, each citing the requirements it realises
-- `records/brainstorms/{date}-session.md` — the trail: what was discussed, what was
+- `.squad/records/brainstorms/{date}-session.md` — the trail: what was discussed, what was
   discarded, and why
 
 The split follows `rules/records-location.md`. The four documents are **knowledge**: they

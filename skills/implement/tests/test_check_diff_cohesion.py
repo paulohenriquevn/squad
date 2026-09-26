@@ -193,3 +193,29 @@ def test_the_message_names_the_files_it_could_not_check(tmp_path: Path) -> None:
     # Capped, matching `scope_drift`'s existing sample size — a 40-file phase must not bury the
     # sentence that matters.
     assert message.count("src/file") <= 5
+
+
+def test_a_bold_new_annotation_still_declares_its_file(tmp_path: Path) -> None:
+    """`plan-write` tells authors to mark a file that does not exist yet with (NEW), and
+    authors write it bold. The tail after the path could not start with `*`, so a phase
+    with three `**(NEW)**` bullets parsed as `declared_files: 0`, raised HIGH
+    `no_declared_scope`, and one phase later reported declared files as drift.
+    Measured on a consumer 2026-09-24: 5 bullets across 4 of 34 plans."""
+    plan_body = (
+        "## Phase 1\n"
+        "### T1.1 — Foo\n"
+        "#### Files to edit\n"
+        "- `src/foo.ts` **(NEW)** — the new module\n"
+        "- `src/foo.test.ts` **(NEW)**\n"
+        "#### TDD\nRED: test_foo\n"
+    )
+    progress = _write_progress(tmp_path, [
+        {"id": "T1.1", "phase": "1", "status": "committed",
+         "files": ["src/foo.ts", "src/foo.test.ts"]},
+    ])
+    plan = _write_plan(tmp_path, plan_body)
+
+    report = check_diff_cohesion(plan, progress, "1")
+
+    assert report.drift_files == ()
+    assert "no_declared_scope" not in {f.code for f in report.findings}

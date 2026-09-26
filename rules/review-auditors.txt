@@ -1,3 +1,4 @@
+# rule-id: SQ-PNL-01
 # Independent auditors — which plugin audits which domain at REVIEW
 #
 # WHY THIS FILE EXISTS
@@ -54,12 +55,36 @@
 #               machine. A mapped plugin that is NOT installed is a coverage gap, not
 #               a silence — `check_auditor_coverage.py` reports it and blocks.
 #               The report's location is NOT declared here. It is derived —
-#               `<project>/.squad/records/audits/<plugin>/` — and passed as
+#               `<project>/.squad/records/audits/<slug>/<plugin>/`, one per item
+#               because the plugins' databases persist across runs — and passed as
 #               `--output-dir`. Each plugin's own default (`security-output/`,
 #               `code-review-output/`) would put a third party's output at the project
 #               root, outside the one write root, on this kit's instruction. A tool the
 #               kit tells where to write is a tool the kit is responsible for.
 # [report glob] only where a plugin does not write `final_report.md`.
+
+# THE COST CEILING
+# ----------------
+# Every `loop-*` plugin ships its own default global-iteration cap — 60 for the
+# `always` auditor, 80 for most, 200 for `loop-performance-audit` — and their stop-hooks
+# end the loop on `max_global_iterations` read from the state file. Until 2026-09-21 the
+# assignment passed `--output-dir` and the scope and nothing else, so a change touching
+# `security` and `testing` commissioned three auditors at up to 220 halt-loop iterations
+# for ONE backlog item, at a depth nobody in this chain chose.
+#
+# One number, declared once, applied to every commissioned auditor. A per-domain ceiling
+# would be a judgement about each domain's depth, and there is no measurement here to
+# make it with.
+#
+# THIS VALUE IS A CHOSEN FLOOR, NOT A MEASURED ONE. Nothing here has measured how many
+# iterations a diff-scoped audit actually needs; 40 sits below the lowest plugin default
+# so the ceiling is EFFECTIVE rather than decorative. An auditor that halts on it reports
+# what it did not finish in `## What Was NOT Analyzed`, which is the section the coverage
+# gate carries out verbatim — so a truncated audit is visible, never silent. Raise it
+# when a report says the ceiling is what stopped it.
+#
+# Delete the line to hand each plugin back its own default.
+max_iterations = 40
 
 auditor = always         | loop-code-review        | analysis-scoped 
 auditor = security       | loop-security-audit     | analysis-scoped 
@@ -84,5 +109,31 @@ auditor = cli-tooling    | loop-surface-closure    | report-filtered
 # `loop-architecture-review`, `loop-deadcode-audit`, `loop-duplication-audit`,
 # `loop-doc-audit`, `loop-refactor-plan`, `loop-license-audit` and
 # `loop-reference-compare` are absent because no domain here derives them from a
-# change. They are worth running, and the honest place for them is a deliberate sweep
-# rather than a per-item gate whose cost nobody chose.
+# change. They are worth running, and they are not a per-item gate whose cost nobody
+# chose. Nothing in the kit runs them on any other path either, and nothing converts
+# their findings into registry items: a person runs one and files what it found by
+# hand. This file used to name "a deliberate sweep" as their home, and no sweep reads a
+# `loop-*` report — a home that exists only in prose is the unreachable claim this file
+# refuses elsewhere (#183).
+#
+# ONE OF THEM WAS ALSO UNMAPPABLE, AND THAT HAS BEEN FIXED. Measured 2026-09-21:
+# `loop-license-audit` rejected the invocation this file's own contract produces —
+# `ERROR: unknown option: --output-dir` — so the row somebody added would have broken
+# on its first run rather than at review time. It now accepts `--output-dir` and
+# `--max-iterations` like its sixteen siblings. What still keeps it out of the table is
+# the honest reason above and only that: `detect_domain.py` derives no licensing or
+# dependency domain, and inventing one to justify a mapping would be the choice this
+# file refuses to let an agent make.
+#
+# `loop-system-cartography` is absent for a reason of its own: it MAPS a system rather
+# than auditing a change, and its output is an OKF bundle written into the repository. A
+# per-item REVIEW would redraw the whole map on every item — expensive, and the map does
+# not depend on the change. It is not wired into any other phase either: `cycle-design`
+# asks the same question by another route, and neither its skill nor its gates read the
+# cartography bundle. Naming it here rather than leaving it out silently, because this
+# file is a record of decisions and an absence with no reason reads as an absence
+# somebody chose — and naming a home it does not have would be worse than either (#183).
+#
+# `loop-deadcode-audit` overlaps the D1 detector of `/code-quality`, which already runs
+# vulture / knip / cargo-udeps on the same question. Mapping it here would commission a
+# second answer to a question the chain already asks, one phase earlier.

@@ -78,8 +78,15 @@ from review_panel import (
 APPROVED, NOT_APPROVED, UNCHECKED, DID_NOT_CONVENE = 0, 1, 2, 3
 
 
-def default_panel_path() -> Path:
-    return repo_root() / "rules" / "review-panel.txt"
+def default_panel_path(project_dir: Path | None = None) -> Path:
+    """Delegated: see `squad.layout.roster_path` for why this is not `repo_root()`.
+
+    This function used to answer for itself and answered wrong, while a function of
+    the same name two directories away had the fix written into its docstring.
+    """
+    from squad.layout import roster_path
+
+    return roster_path(project_dir)
 
 
 def record_path(project: Path, slug: str, phase: str) -> Path:
@@ -123,7 +130,11 @@ def check(
     panel_path: Path | None = None,
 ) -> tuple[int, dict]:
     project = project or repo_root()
-    panel_path = panel_path or default_panel_path()
+    # Resolved against the project the CALLER named, not the process cwd. They are
+    # usually the same and the gate is run from elsewhere often enough — by the
+    # installer's post-install validation, among others — that the difference is
+    # the roster being found or reported missing.
+    panel_path = panel_path or default_panel_path(project)
     phase = phase.lower()
 
     try:
@@ -210,12 +221,13 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--slug", required=True)
     ap.add_argument("--phase", required=True)
-    ap.add_argument("--project", type=Path, default=None)
+    ap.add_argument(
+        "--root", "--project", dest="root", type=Path, default=None)
     ap.add_argument("--panel", type=Path, default=None)
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
 
-    code, result = check(args.slug, args.phase, project=args.project,
+    code, result = check(args.slug, args.phase, project=args.root,
                          panel_path=args.panel)
     if args.json:
         print(json.dumps(result, indent=2))

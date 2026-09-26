@@ -22,11 +22,16 @@ it is *detected*.
 `cycle-backlog.md` declares five statuses. A reader asking "what is pending?" wants three:
 
     open        raw, triaged      registered and measured, but nothing is being built
-    in-flight   planned           a plan exists; work is under way
+    committed   approved·planned  somebody committed to it
     closed      shipped, killed   the chain ended — killed is a SUCCESSFUL ending
 
 `triaged` sits in `open` on purpose. Measurement has run, but no plan exists, so nothing is in
-flight; calling it in-flight would make the in-flight count answer a different question than the
+committed; calling it committed makes this count answer the question people ask of it, which is
+what has been decided rather than what is running. WORK IN FLIGHT IS AN OPEN EVENT and this file
+reads zero events: `board_state._wip` computes it from the stream, and a consumer's panel said six
+items were in flight with zero phases open — five commitments never started and one merged waiting
+for a tag. The word belongs to the reader that has the stream. The other half of the old sentence
+survives below: the
 one people ask of it ("what is someone building right now?").
 """
 from __future__ import annotations
@@ -43,7 +48,10 @@ if str(_HERE) not in sys.path:
 # One definition of "an item", shared with the structural gate. A second parser here would drift
 # from it in silence, and the two would disagree about what the registry contains — which is the
 # precise defect this index exists to make visible.
-from check_backlog_structure import (  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from check_backlog_structure import (  # noqa: E402 — post-bootstrap import
     _ID_IN_TEXT_RE,
     BLOCK_RE,
     LINEAGE_EDGES,
@@ -60,26 +68,26 @@ END = "<!-- BACKLOG-INDEX:END -->"
 #: status -> bucket. Statuses absent here are reported rather than silently bucketed: an unknown
 #: status means the contract changed and this file did not.
 #:
-#: `approved` is in-flight rather than open, and the reason is the line the status
+#: `approved` is COMMITTED rather than open, and the reason is the line the status
 #: was added to draw. The buckets answer "is this being pursued?" — `open` is the
-#: intake pool where nobody has decided yet, `in-flight` is what somebody committed
+#: intake pool where nobody has decided yet, `committed` is what somebody committed
 #: to. An approved item has no plan, so it is tempting to file it with the
 #: hypotheses; but that is exactly the conflation that let a registry hold 174
 #: items and 2 `planned`, and it puts a commitment in the same count as a hunch
 #: nobody has read. The per-row `status` column still shows which of the two
-#: in-flight statuses an item holds, so the grouping loses nothing.
+#: committed statuses an item holds, so the grouping loses nothing.
 BUCKETS: dict[str, str] = {
     "raw": "open",
     "triaged": "open",
-    "approved": "in-flight",
-    "planned": "in-flight",
+    "approved": "committed",
+    "planned": "committed",
     "shipped": "closed",
     "killed": "closed",
 }
-BUCKET_ORDER = ("open", "in-flight", "closed")
+BUCKET_ORDER = ("open", "committed", "closed")
 BUCKET_LABEL = {
     "open": "Open",
-    "in-flight": "In flight",
+    "committed": "Committed",
     "closed": "Closed",
 }
 
@@ -260,6 +268,47 @@ def render_index(content: str, items: list[Item]) -> str:
     return "\n".join(out)
 
 
+#: The statuses whose items are CLOSED. Imported rather than spelled: the meaning of a status
+#: belongs to the contract, and a second copy here would drift exactly the way the checkbox did.
+_TERMINAL = frozenset({"shipped", "killed"})
+
+
+def derive_checkboxes(content: str) -> str:
+    """Make each heading's `[x]`/`[ ]` agree with its own `status:` line (B-200).
+
+    The box is a RENDERING of the status. Nothing reads it — measured across the kit 2026-09-19,
+    a grep over every `.py`/`.sh`/`.ts` returns only alignment-brief sign-off boxes — so it
+    drifted: 46 of 95 headings disagreed on a consumer 2026-09-21.
+
+    A heading with NO box is left alone. This derives the marker where one exists; it does not
+    impose one, because the schema that mandates it is a locked contract and adding it here would
+    be deciding that question in a generator.
+
+    Idempotent by construction: it writes the value the status implies, so a second pass writes
+    the same thing.
+    """
+    def status_of(body: str) -> str | None:
+        m = re.search(r"^status:\s*(\S+)", body, re.M)
+        return m.group(1) if m else None
+
+    parts = re.split(r"(?m)^(?=## B-\d+ )", content)
+    out = []
+    for part in parts:
+        head_end = part.find("\n")
+        if head_end == -1 or not part.startswith("## B-"):
+            out.append(part)
+            continue
+        head, body = part[:head_end], part[head_end:]
+        box = re.search(r"\[( |x)\]\s*$", head)
+        status = status_of(body)
+        if box is None or status is None:
+            out.append(part)
+            continue
+        want = "x" if status in _TERMINAL else " "
+        out.append(head[: box.start()] + f"[{want}]" + body)
+    return "".join(out)
+
+
 def apply_index(content: str, index_block: str) -> str:
     """Replace the existing block, or insert one immediately before the item registry.
 
@@ -316,11 +365,20 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if current else 1
 
     if args.write:
-        if current:
-            print(f"{args.backlog}: index already current — not rewritten")
+        # B-200 — the index AND the headings' boxes are both renderings of the blocks below them,
+        # and they go stale INDEPENDENTLY. The first version of this put the derivation inside the
+        # `not current` branch, where a registry whose index was already fresh skipped it entirely:
+        # measured on a consumer, `index already current — not rewritten` while 46 of 95 boxes
+        # disagreed with their own status. Each rendering is decided on its own.
+        rendered = derive_checkboxes(content if current else apply_index(content, expected))
+        if rendered == content:
+            print(f"{args.backlog}: index and checkboxes already current — not rewritten")
             return 0
-        args.backlog.write_text(apply_index(content, expected), encoding="utf-8")
-        print(f"{args.backlog}: index written")
+        args.backlog.write_text(rendered, encoding="utf-8")
+        boxes = sum(1 for a, b in zip(content.splitlines(), rendered.splitlines()) if a != b
+                    and a.startswith("## B-"))
+        what = "index written" if not current else "checkboxes derived"
+        print(f"{args.backlog}: {what}" + (f" — {boxes} checkbox(es) corrected" if boxes else ""))
         return 0
 
     print(expected)

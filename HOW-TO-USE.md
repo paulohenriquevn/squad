@@ -9,13 +9,22 @@ BRAINSTORM → DESIGN → BACKLOG → DISCOVER → PLAN → IMPLEMENT → CODE-Q
  a person's  (hunch)    OUR code           tests       fabrication/  tighter  PR + semver
  signature                  ↓                          wiring
     ↑                  ITEM_KILLED ✔
- the ONLY phase        (chain ends — a successful outcome)
- a human attends
+ the only phase        (chain ends — a successful outcome)
+ that WAITS for
+ a human
 ```
 
-Each arrow is an **unbreakable chain** — you do not skip a phase, and you do not advance past an INVALID verdict. Unlike a roadmap pipeline, this one has no end state: `cycle-maintenance` loops for as long as the ecosystem is maintained.
+Each arrow is an **unbreakable chain** — you do not advance past an INVALID verdict, and you do not skip a phase except by one of the three transitions named below. Unlike a roadmap pipeline, this one has no end state: `cycle-maintenance` loops for as long as the ecosystem is maintained.
 
-**Two registries, two axes.** `BACKLOG.md` holds `B-NNN` items — *what should we look at next* — and is created by `/backlog-init`. `ROADMAP.md` holds `M<N>` milestones — *what did we promise a user* — and is **hand-authored; no skill generates it** (see [`rules/cycle-acceptance.md`](rules/cycle-acceptance.md) § The ROADMAP.md contract). Only a milestone has a checkbox, so only a milestone reaches ACCEPTANCE. A `B-NNN` released without a milestone ends at `RELEASED`, and that is correct.
+**The three conditional transitions.** They are part of the chain, not exceptions to it: a chain called unbreakable while three documented paths go around it teaches its readers that the word is decorative, and the next shortcut gets taken without one.
+
+| Transition | When it is taken | What it costs |
+|---|---|---|
+| **DESIGN skipped** | the system is already drawn — a `.squad/wiki/` map exists and the item fits it | nothing, when the premise holds. An item filed against a system nobody drew is an item nobody can scope, so the premise is the gate |
+| **Enter at DISCOVER** | `--mode bug` with a test that already fails on the current state | nothing: a failing test IS a measurement plan, and a stronger one than a document describing one. BRAINSTORM and DESIGN answer *what should exist*, which a reproduced bug has already answered |
+| **No ACCEPTANCE** | the item declares no `milestone_id` | the product question goes unasked, and correctly — nobody promised a user anything. The SHIPPING question is asked for every item by `check_release_reachable.py` (`cycle-release.md § Hard gates`) |
+
+**Two registries, two axes.** `BACKLOG.md` holds `B-NNN` items — *what should we look at next* — and is created by `/backlog-init`. `ROADMAP.md` holds `M<N>` milestones — *what did we promise a user* — and is **hand-authored; no skill generates it** (see [`rules/cycle-acceptance.md`](rules/cycle-acceptance.md) § The ROADMAP.md contract). Only a milestone has a checkbox, so only a milestone reaches ACCEPTANCE. A `B-NNN` released without a milestone ends at `RELEASED`, and that is correct for the PRODUCT question — nobody promised a user anything, so there is no promise to exercise. The SHIPPING question is separate and is asked for every item: `check_release_reachable.py` confirms the published release exists and is not a draft (`rules/cycle-release.md` § Hard gates).
 
 ## Which phase, when
 
@@ -30,18 +39,15 @@ Each arrow is an **unbreakable chain** — you do not skip a phase, and you do n
 | "Sweep a domain for things nobody filed" | `cycle-discover` | `/discover-execute --sweep {domain}` |
 | "Advance the next item end-to-end autonomously" | `cycle-maintenance` → `cycle-idea-to-release` | `/idea-to-release` (no arg) or `/idea-to-release B-NNN` |
 | "The measurement holds — design the fix" | `cycle-plan` | `/plan-write B-NNN` |
-| "Requirements are still vague" | `cycle-plan` phase 0 | `/plan-grill {slug}` |
 | "Build it per the plan" | `cycle-implement` | `/implement {plan-slug}` |
 | "Audit dead code + fabricated APIs post-implement" | `cycle-code-quality` | `/code-quality` |
 | "Review before merge" | `cycle-review` | `/review {plan-slug}` |
 | "Cut a release (develop → main + tag)" | `cycle-release` | `/release [bump-level]` |
 | "Check the released thing works for its user" | `cycle-acceptance` | `/acceptance M<N>` (milestones only — see below) |
-| "Hold the session to the process until acceptance is green" | `cycle-acceptance` | `/session-goal M<N> [M<N> ...]` |
 | "What has rotted in the registry?" | auxiliary | `/backlog-review` |
 | "Which specialist owns this repo?" | auxiliary | `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/route_domain.py" {repo}` |
 | "Just locate something in the code" | (no cycle) | Glob/Grep, or `/ast-grep` for structural queries |
 | "Boundaries: does this repo have any, and do they still fire?" | auxiliary | `/arch-check` |
-| "Are we on the right trajectory? (benchmarks, complexity, scalability)" | `cycle-trajectory-review` | `/trajectory-review [plan-slug]` |
 | "Block code smells automatically on every Write/Edit" | (setup, once) | `/quality-init TARGET` |
 | "Can we call this production-ready?" | auxiliary | `/honesty-gate audit` |
 | "Can the squad even run in this project?" | auxiliary | `/squad-fit` — which domains have no specialist, which skills lack an SOP, whether a panel can form |
@@ -63,8 +69,15 @@ them. The map is never drawn first: drawn first it looks like design happened an
 forces no choice.
 
 It refuses to close while a `PIECE-N` from the brainstorm has no place in the map, and
-ends at `AWAITING_REVIEW` until a person signs. **Skip it only if the system is already
+ends at `AWAITING_REVIEW` until it is signed. **Skip it only if the system is already
 drawn** — an item filed against a system nobody drew is an item nobody can scope.
+
+**"Signed" does not mean "signed by a human", and the difference is the whole reason
+an unattended run finishes.** `skills/_kit-rules/alignment-threshold.md` § 80 lets
+`alignment_judge.py` sign when no person is coming; `score_alignment.py` turns on
+`reviewer_signed_off` and reports `signed_by_is_human` beside it, so a judge's approval
+reads as the weaker claim it is. Read literally, "until a person signs" re-freezes every
+unattended run at `AWAITING_REVIEW` — the halt that amendment exists to end.
 
 The mermaid it writes IS the drawing: the gate reads it, git versions it, and an agent
 reads it back later. To look at one as a picture — optional, and nothing depends on it:
@@ -135,15 +148,90 @@ Chains plan → implement → code-quality → review → release, pausing at ea
 
 **Mode is reclassifiable.** `suggested_mode` is the filer's guess. If measurement shows a different shape, switch and record why.
 
+## `sq` — one entry point for the artifacts
+
+Measured 2026-09-23: **143 scripts** under `skills/*/scripts` and **38 gates** under
+`mechanisms/gates`, each with its own flags. The count is not the cost. The cost is that a
+contract — the exact heading a checker looks for — lives only inside that checker's source, so
+an author learns it one failed run at a time. A consumer found **six exact heading literals by
+trial and error in a single day**, and every one of those six turned out to be a defect on the
+kit's side.
+
+`sq` exists so the seventh is a question you ask instead of a run you fail.
+
+```bash
+SQ='python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/sq.py"'
+
+$SQ contract plan          # what the checkers for a plan require
+$SQ check <path>           # run every checker that applies to it
+$SQ show <path>            # the same, read as state
+$SQ new alignment my-slug  # scaffold from the template
+```
+
+The prefix is what every other instruction in this kit uses, and for a measured reason:
+`.claude/skills` exists in an install and not in the kit's own checkout, so a bare
+`mechanisms/sq.py` resolves in one layout and not the other. `tests/test_skill_invocations_resolve_in_both_layouts.py`
+refused the first draft of this section for exactly that, which is the check earning its keep on
+the document that introduces a new command.
+
+For the short spelling, alias it in your own shell — the kit installs nothing outside
+`.claude/`, on purpose:
+
+```bash
+alias sq='python3 "$([ -d .claude/mechanisms ] && echo .claude || echo .)/mechanisms/sq.py"'
+```
+
+### `contract` is the one that saves the day
+
+```
+$ $SQ contract plan
+plan — written to <records>/plans/, named `<slug>-plan.md`
+  template: skills/plan-write/templates/plan-template.md
+
+  check_criterion_executability requires: (SECTION_HEADER_RE)
+      ^#{2,4}\s+(?:Global\s+)?(Acceptance\s+Criteria|DoD|Definition\s+of\s+Done)…
+  check_baseline_context requires: (REQUIRED_SUBSECTIONS)
+      Architecture boundaries affected
+      Current callers / dependents
+      Domain glossary
+      Files that will be touched
+
+  These apply and DO NOT DECLARE what they require, so this cannot print it:
+      check_drawbacks_section
+      check_adr_completeness
+```
+
+**It derives, it never restates.** The requirements come from the constants each checker
+exposes, not from a table inside `sq` — a table would be one more place the headings drift, and
+this kit has a day's worth of measurements on what that costs.
+
+**It names its own blind spot.** Four of seventeen checkers declare what they require; the rest
+are printed as not declaring it. Printing nothing would read as *nothing required*, which is
+exactly how six literals came to be found by trial and error.
+
+### `check` never guesses a kind
+
+The kind is read from the file name — `-plan.md`, `-alignment.md`, `-opportunity.md`,
+`-measurement-plan.md` — and a name that announces none is refused:
+
+```
+$ $SQ check CHANGELOG.md
+cannot tell the kind of `CHANGELOG.md`. A kind is read from the file name, never guessed —
+guessing is how a report says something confident about the wrong contract.
+```
+
+Exit codes: `0` the verb answered · `1` the artifact has findings · `2` the request could not be
+served.
+
 ## Where things live
 
 | Path | What |
 |---|---|
 | `BACKLOG.md` | The single registry, at the umbrella root |
-| `records/discoveries/plans/` | Measurement plans |
-| `records/discoveries/opportunities/` | Opportunities (the terminal artifact) |
-| `records/maintenance-runs/` | One record per macro-loop run |
-| `records/reviews/` | Edge-case reports |
+| `.squad/records/discoveries/plans/` | Measurement plans |
+| `.squad/records/discoveries/opportunities/` | Opportunities (the terminal artifact) |
+| `.squad/records/` | Everything the cycle writes about itself — `squad/paths.py` owns the root and every writer resolves it from there |
+| `.squad/wiki/` | Durable knowledge, as an OKF v0.2 bundle |
 | `rules/cycle-*.md` | The contracts. Source of truth for every phase |
 | `agents/*.md` | The domain specialists you derive (the kit ships only the README) |
 
@@ -171,6 +259,16 @@ The table is derived from your project — `detect_domains.py --write` reads the
 
 ## Common questions
 
+### "The kit talks too much. How do I turn a part of it off?"
+
+Edit `.claude/settings.json` and delete the hook you do not want. That file is Claude Code's own configuration, not the kit's, and the kit has no second switch of its own — no flag, no environment variable, no mode. There is one place a hook is on or off, and it is the place Claude Code already reads.
+
+The noisiest entry is `UserPromptSubmit` (the parsimony ladder, in front of every prompt). `SessionStart` is the chain summary, once. `Stop` carries the advisory warnings AND the changelog and secret blockers, so removing it removes both.
+
+A deletion sticks. `.kit-hooks.json` records what the kit shipped, so the next install can tell "you removed this" from "the kit never shipped it", and the install prints `left out — you removed it from settings.json` for each one rather than re-wiring it in silence. To take a hook back, delete its entry from `.kit-hooks.json` and reinstall.
+
+There is no exemption for the guards. Removing `PreToolUse` removes the refusal to write into the installed kit and the dangerous-git-command check, and nothing will put them back for you. One mechanism means one meaning — the alternative is a file whose lines behave differently depending on which one you edited, with nothing on the page saying which.
+
 ### "The item is a one-line fix. Do I still file it?"
 
 Yes. Squad's ancestor refused hotfixes and refactors at intake and routed them elsewhere; those are the core workload of a maintenance team, and the door is open for them here.
@@ -193,7 +291,11 @@ No. `BACKLOG_EMPTY` means nobody has looked recently. Run `/discover-execute --s
 
 ### "How do I adapt this to another ecosystem?"
 
-Derive the domain routing table into `rules/cycle-backlog.md` (`detect_domains.py --write`), write one specialist per domain in `agents/`, and declare your live environments in `rules/live-target.txt`. All three ship empty on purpose: the phases, gates and evidence contracts are ecosystem-agnostic; a routing table, a specialist and a live target never are.
+Derive the domain routing table with `detect_domains.py --write` — the flag resolves
+its own destination, which is why no document repeats it. The table is written to
+`.squad/domain-routing.txt` — the project's write root, the same in every layout since
+`records-location.md` removed the layout exception. Write one specialist per domain in
+`agents/`, and declare your live environments in `rules/live-target.txt`. All three ship empty on purpose: the phases, gates and evidence contracts are ecosystem-agnostic; a routing table, a specialist and a live target never are.
 
 ## Maintenance notes
 

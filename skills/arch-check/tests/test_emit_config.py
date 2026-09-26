@@ -13,8 +13,15 @@ _SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
-import pytest  # noqa: E402
-from emit_config import _component, go_arch_lint, split_by_module  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+import pytest  # noqa: E402 — post-bootstrap import
+from emit_config import (  # noqa: E402 — post-bootstrap import
+    _component,
+    go_arch_lint,
+    split_by_module,
+)
 
 _PROPOSAL = {
     "status": "proposed",

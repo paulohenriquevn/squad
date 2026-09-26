@@ -1,3 +1,4 @@
+# rule-id: SQ-THR-05
 # Plan-Confidence Score Thresholds Allowlist (TEMPLATE)
 #
 # Copy this file to `.claude/rules/plan-confidence-thresholds.txt` in your project.

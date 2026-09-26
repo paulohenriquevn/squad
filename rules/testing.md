@@ -1,4 +1,5 @@
 # Testing
+<!-- rule-id: SQ-TST-01 -->
 
 Source of Truth for test discipline. Stack-agnostic.
 
@@ -58,6 +59,57 @@ Two distinct lenses. Cover **both** — not just whichever is easier to imagine.
 - **Edge cases test boundaries; negative cases test error handling.** They fail differently: an unhandled edge produces a *wrong answer*; an unhandled negative produces a *crash or a silent swallow*.
 - Negative cases are where **Error Handling** is proven (fail-fast, fail-clear, **typed errors**, validate at the boundary). A negative-case test asserts the *specific typed error and message* — not merely "it throws".
 - For every input boundary, ask both questions: "what is the largest/smallest **valid** value?" (edge) **and** "what is the first **invalid** value past it?" (negative).
+
+### When you are FIXING, the lens you skip is the one you just moved
+
+Measured over four rounds on `hooks/validate-command.py`, 2026-09-21/22. The guard was
+refusing prose that merely CITED a forbidden git command — `echo "…git checkout main"`,
+a heredoc carrying the phrase, a `grep` searching for it. The fix worked: seven false
+blocks became zero. It also opened **six bypasses of an unbreakable rule**, and then
+three more, and then five more, because each round was measured only in the direction
+being corrected.
+
+Every one was found by a second session running the same payloads in BOTH directions.
+Not because that reviewer was more careful — because it had not just built the thing.
+
+    round 1   7 false blocks fixed      6 bypasses opened     found by the reviewer
+    round 2   6 bypasses fixed          3 bypasses left       found by the reviewer
+    round 3   3 bypasses fixed          5 remaining           found by the reviewer
+    round 4   0 / 0, 54 payloads, both directions
+
+The rule above already said to cover both lenses, and both sessions knew it. Knowing it
+was not what was missing. **A fix changes a boundary, and the half of that boundary you
+were not looking at is the half you moved.** So the discipline is not "remember § 4.1";
+it is: when a change is a FIX, the must-not-regress set is written before the fix and run
+after it, in the same command, or the fix ships with a hole the author cannot see.
+
+The corollary is about review, not testing: external verification is worth more than
+rereading your own work, and the reason is structural rather than a matter of diligence.
+
+### And the rule you just wrote does not apply to you automatically
+
+The section above says the builder cannot see the boundary they moved. There is a sharper
+version, measured three times on 2026-09-22/23 across two sessions, and it is worse because
+the knowledge was not merely present — it was *fresh*.
+
+| The rule, written | The same rule, broken |
+|---|---|
+| a session held an item out of `shipped` for the four minutes between the tag and the registry, and wrote in three places that integration is not availability | hours later it marked its own item `shipped` on a commit that was still only on its disk |
+| a session built `TREE_MOVED` so a suite run would declare when the tree changed under it, and told a peer that swapping a kit mid-run produces a verdict about no tree | it then committed twice during its own full run, and read `43 failed` about a state that never existed on disk |
+| a session wrote that unverifiable is not verified, and that a measurement must say which tree it is about | it then ran its own checker against a peer's files and reported the result as the state of the peer's system |
+
+The common moment is not carelessness and not forgetting. It is the switch from verifying
+somebody else's work to verifying your own: outward, the rule is a lens you hold up;
+inward, it is a thing you already believe you satisfy. Nothing in writing a rule installs
+the habit of applying it, and writing it recently makes the belief stronger rather than
+weaker — *I just thought about this* reads as *I have handled this*.
+
+**So the check is mechanical or it does not happen.** In all three cases the answer existed
+and cost seconds: `git status --porcelain` before starting the run, `git log origin/…` before
+marking the status, naming which tree a measurement was taken on. None of the three needed
+judgement; each needed a step nobody had made unskippable. The second of them is now
+`TREE_MOVED` in `run_slice_tests.sh`, which is why that one cannot recur silently — and the
+other two are still disciplines, which is to say still open.
 
 ## § 5 — Test pairing convention
 

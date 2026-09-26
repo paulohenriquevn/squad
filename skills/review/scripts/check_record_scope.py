@@ -46,7 +46,7 @@ from pathlib import Path
 try:
     import yaml
 except ImportError:  # pragma: no cover - the kit declares pyyaml
-    yaml = None  # type: ignore[assignment]
+    yaml = None  # type: ignore[assignment] — module-or-None sentinel; callers test it before use
 
 
 class ScopeVerdict(enum.Enum):

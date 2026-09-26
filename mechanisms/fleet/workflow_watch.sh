@@ -29,7 +29,12 @@
 
 set -uo pipefail
 
-_root="${CLAUDE_PROJECT_DIR:-$HOME/.claude/projects}"
+# The CLI's transcript store, which is where `wf_*` run directories live. This was
+# `${CLAUDE_PROJECT_DIR:-$HOME/.claude/projects}` — two roots that are never the same
+# tree, one the project and one the store. Inside a Claude Code session the variable
+# IS set, which is the documented use, so every such invocation searched the project
+# and exited 1 with "no workflow run found" while the runs sat in the other tree.
+_root="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects"
 _runs="$(find "$_root" -maxdepth 6 -type d -name 'wf_*' 2>/dev/null | sort)"
 
 RUN=""; FOLLOW=0

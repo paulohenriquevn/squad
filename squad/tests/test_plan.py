@@ -19,7 +19,14 @@ def _pointer(project):
     p = active_plan_pointer(project)
     p.parent.mkdir(parents=True, exist_ok=True)
     return p
-from squad.plan import attestation, goal_line, resolve  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.plan import (  # noqa: E402 — post-bootstrap import
+    attestation,
+    goal_line,
+    resolve,
+)
 
 
 def _plan(eco: Path, slug: str, body: str = "# Plan\n") -> Path:

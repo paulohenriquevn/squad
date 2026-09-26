@@ -62,11 +62,11 @@ def test_writes_to_file_when_invoked_via_main(tmp_path: Path) -> None:
     plan_path.write_text("---\nslug: foo\n---\n\n# Plan\n", encoding="utf-8")
 
     script = Path(__file__).parent.parent / "scripts" / "inject_milestone_id.py"
-    result = subprocess.run(  # noqa: PLW1510
+    result = subprocess.run(
         ["python3", str(script), "--plan", str(plan_path), "--milestone-id", "M7"],
         capture_output=True,
         text=True,
-    )
+     check=False)
     assert result.returncode == 0, result.stderr
     assert "injected" in result.stdout
     assert _split_meta(plan_path.read_text(encoding="utf-8"))["milestone_id"] == "M7"

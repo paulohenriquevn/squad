@@ -33,19 +33,21 @@ import subprocess
 import sys
 from pathlib import Path
 
-_SEMVER = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)$")
+for _up in Path(__file__).resolve().parents:
+    if (_up / "squad" / "semver.py").is_file():
+        sys.path.insert(0, str(_up))
+        break
+# Below the bootstrap: `squad` is importable only after sys.path is extended.
+from squad.semver import (  # noqa: E402 — post-bootstrap import
+    Version,
+    highest,
+    parse as _parse,
+)
 
-
-def _parse(version: str) -> tuple[int, int, int] | None:
-    """A tuple of INTS, never the string.
-
-    As strings `"0.9.0" > "0.10.0"` is true, which is how a naive fix ships a release below the last
-    one for the first time the minor reaches double digits.
-    """
-    match = _SEMVER.match(version.strip())
-    if not match:
-        return None
-    return (int(match.group(1)), int(match.group(2)), int(match.group(3)))
+#: How a version this kit cannot order is described to a reader. NOT "not semver":
+#: `0.3.0-beta.1` is valid semver, and saying otherwise sent people looking for a typo
+#: in a tag that was spelled correctly.
+_UNORDERABLE = "not a version this kit cuts (X.Y.Z or X.Y.Z-rc.N)"
 
 
 def _toplevel(start: Path) -> Path:
@@ -63,18 +65,20 @@ def _toplevel(start: Path) -> Path:
     return Path(result.stdout.strip()) if result.returncode == 0 else start
 
 
-def _tags(repo_root: Path) -> tuple[list[tuple[int, int, int]], int]:
+def _tags(repo_root: Path) -> tuple[list[Version], int]:
     """Every parseable tag, plus a COUNT of the ones skipped.
 
-    Skipped tags are counted rather than silently dropped: a repository whose tags are all
-    pre-release would otherwise report "no tags" and look like a fresh project.
+    Pre-releases are NOT skipped — `-rc.N` is a version this chain cuts by default, and
+    reading it is the whole point of `squad.semver`. What is skipped is a pre-release
+    identifier the kit cannot order (`-beta.1`, `-alpha`), counted rather than dropped so
+    a repository made entirely of them cannot look like a fresh project.
     """
     result = subprocess.run(
         ["git", "tag"], cwd=repo_root, capture_output=True, text=True, check=False
     )
     if result.returncode != 0:
         return [], 0
-    parsed: list[tuple[int, int, int]] = []
+    parsed: list[Version] = []
     skipped = 0
     for line in result.stdout.split():
         version = _parse(line)
@@ -85,12 +89,12 @@ def _tags(repo_root: Path) -> tuple[list[tuple[int, int, int]], int]:
     return parsed, skipped
 
 
-def _manifest_versions(repo_root: Path) -> list[tuple[str, tuple[int, int, int]]]:
+def _manifest_versions(repo_root: Path) -> list[tuple[str, Version]]:
     """Read version-bearing manifests for TypeScript, Python, and Rust.
 
     Go modules have no manifest version and therefore use semver tags as their source of truth.
     """
-    versions: list[tuple[str, tuple[int, int, int]]] = []
+    versions: list[tuple[str, Version]] = []
     package_json = repo_root / "package.json"
     if package_json.exists():
         try:
@@ -138,11 +142,12 @@ def detect_current_version(repo_root: Path) -> str:
         # already computed and then dropped on the floor.
         raise SystemExit(
             "detect_current_version: no semver tag and no manifest version"
-            + (f" ({skipped} tag(s) skipped as non-semver)" if skipped else "")
+            + (f" ({skipped} tag(s) skipped: {_UNORDERABLE})" if skipped else "")
             + " — pass --current explicitly rather than releasing from a guessed base"
         )
 
-    best = max(candidates)
+    best = highest(candidates)
+    assert best is not None  # `candidates` was checked non-empty above
 
     # F-1 — "a base that is too high is safe" was MY claim, and review disproved it. There is no
     # upper bound on `git tag`: it lists whatever any `git fetch --tags` ever brought in. Measured —
@@ -159,31 +164,34 @@ def detect_current_version(repo_root: Path) -> str:
     # versions B-050 found with no tag at all. ACROSS majors it is not normal, so it refuses and
     # names both rather than guessing which is real.
     if manifests and tags:
-        highest_tag = max(tags)
-        disagreeing = [(name, version) for name, version in manifests if highest_tag[0] != version[0]]
+        highest_tag = highest(tags)
+        disagreeing = [(name, v) for name, v in manifests if highest_tag.major != v.major]
         if disagreeing:
             raise SystemExit(
                 "detect_current_version: highest tag "
-                f"{highest_tag[0]}.{highest_tag[1]}.{highest_tag[2]} and manifest version "
-                + ", ".join(
-                    f"{name}={version[0]}.{version[1]}.{version[2]}"
-                    for name, version in disagreeing
-                )
+                f"{highest_tag} and manifest version "
+                + ", ".join(f"{name}={version}" for name, version in disagreeing)
                 + " disagree on the MAJOR component. "
                 "One of them is wrong — a stray tag or an edited manifest — and releasing from "
                 "either would be irreversible. Pass --current explicitly."
             )
 
-    return f"{best[0]}.{best[1]}.{best[2]}"
+    return str(best)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
+    # The release step assigns this command's stdout to CURRENT_VERSION and feeds it
+    # straight to `bump_version.py --from`. Under `--quiet` the note about skipped tags
+    # is suppressed rather than merely redirected: a caller capturing both streams gets
+    # the version and nothing else, which is the whole reason the flag is documented.
+    parser.add_argument("--quiet", action="store_true",
+                        help="print the version alone; suppress the non-semver-tag note")
     args = parser.parse_args()
     _, skipped = _tags(args.repo_root)
-    if skipped:
-        print(f"note: {skipped} tag(s) not semver, skipped", file=sys.stderr)
+    if skipped and not args.quiet:
+        print(f"note: {skipped} tag(s) skipped: {_UNORDERABLE}", file=sys.stderr)
     print(detect_current_version(args.repo_root))
     return 0
 

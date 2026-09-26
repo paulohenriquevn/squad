@@ -27,7 +27,26 @@ _SKILL_ROOT = Path(__file__).resolve().parents[1]
 if str(_SKILL_ROOT) not in sys.path:
     sys.path.insert(0, str(_SKILL_ROOT))
 
-from scripts.utils import parse_skill_md  # noqa: E402
+# Loaded BY PATH, not by package name, and that is the whole point.
+#
+# `from scripts.utils import …` resolves through whatever `sys.modules["scripts"]`
+# already holds, and nine other slices ship a directory called `scripts` — eight of
+# them with an `__init__.py`. Whichever one is imported first in a wide process owns
+# the name, and this import then dies on `ModuleNotFoundError: No module named
+# 'scripts.utils'` while the file sits right beside this one.
+#
+# Measured 2026-09-20 on the root suite: every eval battery failed both of its tests
+# this way — 12 failures — while `pytest tests/test_eval_batteries_are_runnable.py`
+# alone was green. A test that passes alone and fails in company is reporting the
+# import order, not the batteries, and `run_slice_tests.sh` exists because this kit
+# has met that collision before.
+import importlib.util as _importlib_util  # noqa: E402 — post-bootstrap import
+
+_utils_spec = _importlib_util.spec_from_file_location(
+    "squad_skill_creator_utils", _SKILL_ROOT / "scripts" / "utils.py")
+_utils = _importlib_util.module_from_spec(_utils_spec)
+_utils_spec.loader.exec_module(_utils)
+parse_skill_md = _utils.parse_skill_md
 
 
 def find_project_root() -> Path:
@@ -161,8 +180,14 @@ def run_single_query(
     timeout: int,
     project_root: str,
     model: str | None = None,
-) -> bool:
-    """Run a single query and return whether the skill was triggered.
+) -> bool | None:
+    """Run a single query. True = triggered, False = not triggered, None = not observed.
+
+    The annotation said `bool` and the final statement returns None, deliberately — the
+    comment on the timeout path calls it "evidence nothing was observed" and asks the
+    caller to keep it apart from a query that ran and did not trigger. A signature that
+    contradicts its own body teaches every reader the wrong contract, and the one thing
+    this function exists to preserve is the difference between the three.
 
     Creates a command file in .claude/commands/ so it appears in Claude's
     available_skills list, then runs `claude -p` with the raw query.
@@ -377,7 +402,7 @@ def run_eval(
                 query_triggers[query] = []
             try:
                 query_triggers[query].append(future.result())
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:  # noqa: BLE001 — one failed query must not end the sweep; the None below records the inability
                 # An exception is also an inability, not an observation.
                 print(f"Warning: query failed: {e}", file=sys.stderr)
                 query_triggers[query].append(None)
@@ -403,7 +428,7 @@ def run_eval(
     }
 
 
-def _normalise_eval_set(raw) -> list[dict]:
+def _normalise_eval_set(raw: object) -> list[dict]:
     """Accept the kit's own battery shape, not only upstream's.
 
     THE DEFECT THIS CLOSES
@@ -450,7 +475,7 @@ def _normalise_eval_set(raw) -> list[dict]:
     return out
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(description="Run trigger evaluation for a skill description")
     parser.add_argument("--eval-set", required=True, help="Path to eval set JSON file")
     parser.add_argument("--skill-path", required=True, help="Path to skill directory")

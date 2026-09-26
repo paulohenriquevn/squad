@@ -78,7 +78,21 @@ def _is_definition_only(path: Path, symbol: str) -> bool:
     definition_lines: set[int] = set()
     for dre in def_res:
         for match in dre.finditer(text):
-            line_idx = text.count("\n", 0, match.start())
+            # Counted from where the SYMBOL is, not from where the match begins.
+            #
+            # Every pattern opens `^\s*` under MULTILINE and `\s` includes the newline,
+            # so on `import x` / blank / `export function foo` the match starts at the
+            # newline ENDING the blank line. `count("\n", 0, match.start())` then lands
+            # one line short, the declaration's own line never enters this set, and the
+            # `export function foo` line counts as an ordinary occurrence — so the file
+            # that DECLARES the symbol is credited as a caller of it, and pillar (a)
+            # reports PASS on a symbol nobody calls. Which is the exact false PASS this
+            # function's docstring says it exists to prevent.
+            #
+            # `lstrip()` rather than a changed pattern: `^\s*` is there for indented
+            # declarations and they have to keep matching.
+            leading = len(match.group(0)) - len(match.group(0).lstrip())
+            line_idx = text.count("\n", 0, match.start() + leading)
             definition_lines.add(line_idx)
 
     return occurrence_lines.issubset(definition_lines)
@@ -159,7 +173,7 @@ def _grep_symbol(project_root: Path, symbol: str, include_globs: list[str], excl
         cmd.extend(["--exclude-dir", exc])
     cmd.extend([pattern, str(project_root)])
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)  # noqa: PLW1510
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, check=False)
     except (subprocess.SubprocessError, FileNotFoundError):
         return []
     if result.returncode > 1:  # 0 = match, 1 = no match, >1 = real error
@@ -179,6 +193,15 @@ def _grep_symbol(project_root: Path, symbol: str, include_globs: list[str], excl
     ]
 
 
+def production_search_roots(project_root: Path) -> list[Path]:
+    """Where pillar (a) looks for callers: the `PRODUCTION_DIR_NAMES` that exist, else the
+    whole tree. Public so a report can NAME the scope — a consumer whose source lives in
+    `apps/` or `scripts/` otherwise reads "unresolved" with no way to see why."""
+    production_roots = [project_root / name for name in PRODUCTION_DIR_NAMES
+                        if (project_root / name).is_dir()]
+    return production_roots or [project_root]
+
+
 def check_pillar_a_static_caller(project_root: Path, symbol: str) -> dict[str, Any]:
     """Find at least 1 production caller (non-test) under src/, lib/, or packages/.
 
@@ -193,10 +216,8 @@ def check_pillar_a_static_caller(project_root: Path, symbol: str) -> dict[str, A
     source. Narrowing unconditionally would be worse than the bug: a repo that keeps
     its source at the root would report every symbol as unwired.
     """
-    production_roots = [project_root / name for name in PRODUCTION_DIR_NAMES
-                        if (project_root / name).is_dir()]
     matches: list[Path] = []
-    for search_root in (production_roots or [project_root]):
+    for search_root in production_search_roots(project_root):
         matches.extend(_grep_symbol(
         search_root,
         symbol,

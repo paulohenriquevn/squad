@@ -24,17 +24,32 @@ sys.path.insert(0, str(Path(__file__).parent))
 import sys as _sys_bootstrap
 from pathlib import Path as _Path_bootstrap
 
-from _rubric_loader import load_rubric  # noqa: F401
-from check_corner_coverage import check_corner_coverage
-from check_evidence_pointers import check_evidence_pointers
-from check_opportunity_completeness import check_opportunity_completeness
+from _rubric_loader import load_rubric
+from check_corners_populated import (
+    CORNER_FORMS,
+    MIN_CONTENT_CHARS,
+    UNKNOWN_CORNERS,
+    check_corners_populated,
+)
+from check_evidence_pointers import (
+    CODE_POINTER_FORM,
+    RUNTIME_OBS_FORM,
+    check_evidence_pointers,
+)
+from check_opportunity_completeness import (
+    SECTION_FORMS,
+    check_opportunity_completeness,
+)
 from check_spec_smells import check_spec_smells
 
 for _up in _Path_bootstrap(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _sys_bootstrap.path.insert(0, str(_up))
         break
-from squad.paths import write_records_dir  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import write_records_dir  # noqa: E402 — post-bootstrap import
 
 SKILL_ROOT = Path(__file__).parent.parent
 
@@ -65,9 +80,17 @@ def _resolve_rubric(arg: Path | None) -> Path:
     return SKILL_ROOT / "templates" / "rubric-opportunity.md"
 
 
-def _resolve_thresholds(arg: Path | None, opportunity_path: Path) -> Path:
+def _resolve_thresholds(arg: Path | None, opportunity_path: Path) -> tuple[Path, str]:
+    """`(path, origin)` — which bands the verdict was computed against, and from where.
+
+    `origin` exists because nothing recorded it. Four sources answer this question and
+    the report named none of them, so a project that recalibrated its bands and kept a
+    layout this resolver checks second was scored against the SHIPPED example — and
+    told a confident verdict with no way to see which cutoffs produced it. The scorer's
+    whole subject is whether a claim is grounded; its own grounding was not reported.
+    """
     if arg and arg.exists():
-        return arg
+        return arg, "given on the command line"
     project_root = _find_project_root(opportunity_path)
     # Both layouts, deliberately: `rules/` is standalone, `.claude/rules/` is plugin.
     # Checking only one made the project's own bands lose silently in the other, and a
@@ -77,8 +100,9 @@ def _resolve_thresholds(arg: Path | None, opportunity_path: Path) -> Path:
         project_root / ".claude" / "rules" / "discover-opportunity-thresholds.txt",
     ):
         if candidate.exists():
-            return candidate
-    return SKILL_ROOT / "templates" / "discover-opportunity-thresholds.example.txt"
+            return candidate, "this project's own"
+    return (SKILL_ROOT / "templates" / "discover-opportunity-thresholds.example.txt",
+            "the kit's shipped EXAMPLE — this project declares no thresholds of its own")
 
 
 def _parse_thresholds(path: Path) -> dict[str, int]:
@@ -133,6 +157,43 @@ def _panel_state(project_root: Path, slug: str) -> dict:
     return result
 
 
+def accepted_shape(cap: str, completeness: dict) -> str:
+    """What would have cleared `cap`, as the literal form the checkers accept (#139).
+
+    Measured over a 20-hour consumer session: `discover-confidence` was read at the source
+    ten times to learn what a refusal wanted, because a cap id like `no_evidence_cited`
+    names the failure and not the pointer shape that would have counted. Built from the
+    checkers' own constants; a test holds each printed example to the pattern that reads it.
+    """
+    if cap.startswith("empty_corner_"):
+        corner = cap.removeprefix("empty_corner_")
+        unknown = (" — or `<!-- UNKNOWN: <reason> -->`, accepted for this corner only"
+                   if corner in UNKNOWN_CORNERS else "")
+        return (f"`{CORNER_FORMS.get(corner, corner)}` with at least {MIN_CONTENT_CHARS} "
+                f"characters of content under it{unknown}")
+    shapes = {
+        "fabricated_evidence": (f"every `{CODE_POINTER_FORM}` pointer resolves to a file "
+                                "with that many lines, or carries "
+                                "`<!-- BLOCKED: <reason> -->` on the same line"),
+        "no_evidence_cited": (f"at least one code pointer `{CODE_POINTER_FORM}` or runtime "
+                              f"observation `{RUNTIME_OBS_FORM}`"),
+        "mandatory_section_missing": "; ".join(
+            f"`{SECTION_FORMS[name]}`"
+            for name in completeness.get("missing_mandatory", ())) or "every mandatory section",
+        "mode_contract_unmet": ("`**Failing test:** path/to/test_file.py::test_name`, naming "
+                                "a test file that exists"),
+        "item_not_registered": ("the `**Item:** B-001` this opportunity declares, present "
+                                "as an item in the project's BACKLOG.md"),
+        "no_adr_on_cross_repo_change": ("a decision recorded as `### D1 — <decision>` "
+                                        "(the blast radius reaches another repository)"),
+        "soft_floor_smell_density_high": ("fewer than 20 spec smells — vague terms and "
+                                          "unquantified claims — across the document"),
+        "soft_floor_evidence_density_low": ("at least 1 code pointer or runtime observation "
+                                            "per 200 words"),
+    }
+    return shapes.get(cap, "")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run M2 structural opportunity-confidence scoring.")
     parser.add_argument("opportunity", help="opportunity slug or .md path")
@@ -152,9 +213,15 @@ def main() -> int:
         return 2
 
     rubric_path = _resolve_rubric(args.rubric)
-    bands = _parse_thresholds(_resolve_thresholds(args.thresholds, opportunity_path))
+    # Validate the rubric parses before any dimension is scored — `run_structural` does
+    # the same. Until this line the loader was imported here and never called, so a
+    # malformed rubric reached `check_spec_smells` and produced a score from nothing.
+    load_rubric(rubric_path)
+    thresholds_path, thresholds_origin = _resolve_thresholds(
+        args.thresholds, opportunity_path)
+    bands = _parse_thresholds(thresholds_path)
 
-    coverage = check_corner_coverage(opportunity_path)
+    coverage = check_corners_populated(opportunity_path)
     evidence = check_evidence_pointers(opportunity_path)
     # Resolved from the artifact, the same walk `_resolve_thresholds` performs:
     # cross-repo detection reads the project's routing table, and a scorer run from
@@ -180,15 +247,34 @@ def main() -> int:
     # which technique / where in the system", and that answer can be written entirely
     # as prose about an external technique, with no pointer anywhere.
     #
-    # The runtime-only case is deliberately left at 100.0: an HTTP observation is not
-    # re-verifiable on disk (see check_evidence_pointers' module docstring), so no code
-    # pointer could have failed. That is a real distinction, not a loophole.
+    # THE RUNTIME-ONLY CASE IS NOT SCORED, because there is nothing to score.
+    #
+    # It was 100.0, on the reasoning that an HTTP observation is not re-verifiable on
+    # disk so no code pointer could have failed. The reasoning is sound and the number
+    # is not: 100.0 in a dimension called `evidence_pointers` reads as "every pointer
+    # resolved". Measured 2026-09-21 — an opportunity whose whole Corner 1 was three
+    # HTTP calls nobody made scored `evidence_pointers_score: 100.0`, `weighted_avg:
+    # 100.0`, `hard_caps_triggered: []`.
+    #
+    # A dimension with an empty denominator reports itself UNMEASURED and drops out of
+    # the weighted average, which is what `active_dimensions` and
+    # `weight_normalization_factor` were shaped for — both were hardcoded and neither
+    # ever varied. The observations are still reported, and still counted as evidence
+    # for `no_evidence_cited`: recorded-but-not-verifiable is a third state, and saying
+    # so is the honest half of what this checker can do.
+    #
+    # `blocked` is in the denominator. A pointer marked `<!-- BLOCKED: … -->` is a
+    # declared gap rather than a fabrication — it does not trip the cardinal cap — but
+    # it is not a verification either, and leaving it out of the count let an author
+    # clear their own unresolvable pointers with a comment.
+    ep_measurable = evidence["total"] + evidence["explicitly_blocked"]
+    ep_score: float | None
     if evidence["evidence_total"] == 0:
         ep_score = 0.0
-    elif evidence["total"] == 0:
-        ep_score = 100.0
+    elif ep_measurable == 0:
+        ep_score = None
     else:
-        ep_score = 100.0 * evidence["verified"] / evidence["total"]
+        ep_score = 100.0 * evidence["verified"] / ep_measurable
 
     oc_score = 100.0 * completeness["found"] / completeness["total_required"]
     sr_score = max(0.0, 100.0 + smells.total_penalty)  # penalty is negative
@@ -199,12 +285,21 @@ def main() -> int:
         "opportunity_completeness": 0.25,
         "structural_risk": 0.15,
     }
-    weighted = (
-        weights["corner_coverage"] * cc_score
-        + weights["evidence_pointers"] * ep_score
-        + weights["opportunity_completeness"] * oc_score
-        + weights["structural_risk"] * sr_score
-    )
+    scores = {
+        "corner_coverage": cc_score,
+        "evidence_pointers": ep_score,
+        "opportunity_completeness": oc_score,
+        "structural_risk": sr_score,
+    }
+    # A dimension that measured nothing does not vote. Renormalising over the rest is
+    # the only alternative to inventing a number for it, and the two fields that report
+    # this were emitted hardcoded — `active_dimensions` listed all four unconditionally
+    # and `weight_normalization_factor` was the literal 1.0, so a reader could not tell
+    # a full score from a partial one.
+    active_dimensions = [name for name, value in scores.items() if value is not None]
+    active_weight = sum(weights[name] for name in active_dimensions)
+    normalization = (1.0 / active_weight) if active_weight else 0.0
+    weighted = normalization * sum(weights[n] * scores[n] for n in active_dimensions)
 
     hard_caps_triggered: list[str] = []
     cap_value: float = 100.0
@@ -227,6 +322,24 @@ def main() -> int:
     if completeness["missing_mandatory"]:
         hard_caps_triggered.append("mandatory_section_missing")
         cap_value = min(cap_value, 70.0)
+
+    # G-M, which the gate table has always named and nothing enforced. `bug` is the one
+    # mode whose contract names an artifact that is on disk or is not — "no failing
+    # test, no bug" — and an opportunity declaring the mode without naming one scored
+    # 100.0 across the board (measured 2026-09-21).
+    if completeness.get("mode_contract_unmet"):
+        hard_caps_triggered.append("mode_contract_unmet")
+        cap_value = min(cap_value, 49.0)
+
+    # The opportunity exists and the item it is about does not. For a `--sweep` finding
+    # that is the orphaned-finding failure by definition: the measurement was made, the
+    # document written, and nothing reached the registry anybody reads.
+    #
+    # `item_registered is False` and not `not item_registered`: `None` means no registry
+    # was reachable, which is unanswered rather than violated.
+    if completeness.get("item_registered") is False:
+        hard_caps_triggered.append("item_not_registered")
+        cap_value = min(cap_value, 49.0)
 
     # ADR is required only when the blast radius reaches beyond the opportunity's own
     # repo. A repo-local fix carries no cap; a cross-repo change without a recorded
@@ -320,20 +433,29 @@ def main() -> int:
     out = {
         "opportunity_slug": opportunity_path.stem.replace("-opportunity", ""),
         "opportunity_path": str(opportunity_path),
+        # Which bands produced the verdict below, and from where. A scorer whose
+        # own cutoffs are unreported is a verdict nobody can check.
+        "thresholds_path": str(thresholds_path),
+        "thresholds_origin": thresholds_origin,
         "scored_at": datetime.now(timezone.utc).isoformat(),
         "corner_coverage_score": round(cc_score, 1),
-        "evidence_pointers_score": round(ep_score, 1),
+        "evidence_pointers_score": None if ep_score is None else round(ep_score, 1),
         "opportunity_completeness_score": round(oc_score, 1),
         "structural_risk_score": round(sr_score, 1),
-        "active_dimensions": [
-            "corner_coverage",
-            "evidence_pointers",
-            "opportunity_completeness",
-            "structural_risk",
-        ],
-        "weight_normalization_factor": 1.0,
+        "active_dimensions": active_dimensions,
+        "weight_normalization_factor": round(normalization, 4),
         "weighted_avg": round(weighted, 1),
+        "registry_check": (
+            "not checked — no BACKLOG.md at the project root, so whether this finding "
+            "reached the registry is unanswered"
+            if not completeness.get("item_registration_checked")
+            else f"{completeness.get('declared_item')} is in the registry"
+            if completeness.get("item_registered")
+            else f"{completeness.get('declared_item')} is NOT in the registry"),
         "hard_caps_triggered": hard_caps_triggered,
+        # What would clear each cap above, beside it (#139).
+        "accepted_shapes": {cap: accepted_shape(cap, completeness)
+                            for cap in hard_caps_triggered},
         "final_score_after_caps": round(final_score, 1),
         "panel": panel,
         "panel_gate": panel_gate,
@@ -357,11 +479,17 @@ def main() -> int:
             file=sys.stderr,
         )
 
-    if verdict == "INVALID":
-        return 1
-    if verdict == "NON_SHIPPABLE":
-        return 3
-    return 0
+    # Every verdict this scorer can reach has a code. NEEDS_REVISION, AWAITING_REVIEW and
+    # ITEM_IN_FLIGHT used to fall through to 0, so a caller reading the exit code — which
+    # is what a chain does — could not tell an opportunity nobody had reviewed from one
+    # that passed. The verdict was in the JSON the whole time; the code said SHIPPABLE.
+    return {
+        "INVALID": 1,
+        "NON_SHIPPABLE": 3,
+        "NEEDS_REVISION": 4,
+        "AWAITING_REVIEW": 5,
+        "ITEM_IN_FLIGHT": 6,
+    }.get(verdict, 0)
 
 
 if __name__ == "__main__":

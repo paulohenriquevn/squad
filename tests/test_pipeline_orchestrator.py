@@ -187,6 +187,9 @@ def test_the_chain_is_the_seven_stages_the_cycle_declares() -> None:
 # `status:` field at all, so an item parked in a lane still read `triaged` on disk —
 # and the disk is the only copy that outlives the session.
 
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
 from pipeline_orchestrator import (  # noqa: E402 — imported here, beside the behaviour it covers; the comment above says which
     StatusWrite,
     apply_writes,
@@ -394,7 +397,7 @@ def test_one_refusal_does_not_abort_the_others(tmp_path):
 # nothing consumed one. A restarted session rebuilt its queue from a literal list and
 # scheduled an item the registry already said could not move.
 
-from pipeline_orchestrator import from_selection  # noqa: E402
+from pipeline_orchestrator import from_selection  # noqa: E402 — post-bootstrap import
 
 
 def test_a_blocked_item_is_never_scheduled():
@@ -566,9 +569,9 @@ def test_every_status_in_a_registry_reaches_the_scheduler_at_a_stage(tmp_path: P
     was correct every time — it was handed a selection that did not contain the item.
     Testing the two ends separately is what let one seam break three times.
     """
-    import json  # noqa: PLC0415
-    import subprocess  # noqa: PLC0415
-    import sys as _sys  # noqa: PLC0415
+    import json
+    import subprocess
+    import sys as _sys
 
     registry = tmp_path / "BACKLOG.md"
     registry.write_text(
@@ -612,3 +615,25 @@ def test_an_item_at_planned_without_a_record_enters_at_implement(tmp_path: Path)
         "in_flight": ["B-010", "B-011"], "in_flight_implemented": ["B-010"], "walls": {}})
     stages = {item.slug: item.stage for item in pipeline.items}
     assert stages == {"B-010": "REVIEW", "B-011": "IMPLEMENT"}
+
+
+def test_an_unknown_slug_is_named_rather_than_ending_a_sequence() -> None:
+    """`Pipeline.item()` used a bare `next()` with no default.
+
+    `complete`, `fail`, `park`, `unpark`, `block`, `send_back` and `force_stage` all
+    route through it, so a slug that is not in `self.items` — a typo, an item dropped by
+    a re-read of SELECT, a stage brief naming yesterday's id — surfaced as
+    StopIteration: a exception that names neither the slug nor the pipeline, and which a
+    `for` loop one frame up reads as "the sequence ended".
+    """
+    from pipeline_orchestrator import Item, Pipeline
+
+    pipeline = Pipeline(items=[Item(slug="B-001"), Item(slug="B-002")])
+
+    with pytest.raises(KeyError) as exc:
+        pipeline.item("B-999")
+
+    message = str(exc.value)
+    assert "B-999" in message
+    assert "B-001" in message and "B-002" in message, (
+        f"the error does not say what the pipeline does know: {message}")

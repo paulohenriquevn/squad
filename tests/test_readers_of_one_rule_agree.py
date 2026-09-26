@@ -25,8 +25,11 @@ _ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_ROOT / "skills" / "backlog-review" / "scripts"))
 sys.path.insert(0, str(_ROOT / "mechanisms" / "fleet"))
 
-from board_state import blocking_verdicts  # noqa: E402
-from squad_lead import Lead  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from board_state import blocking_verdicts  # noqa: E402 — post-bootstrap import
+from squad_lead import Lead  # noqa: E402 — post-bootstrap import
 
 _RULE = """\
 # A comment line, discarded entirely
@@ -58,10 +61,14 @@ def test_the_two_readers_answer_the_same(tmp_path: Path) -> None:
 
 
 def test_they_agree_on_an_absent_file(tmp_path: Path) -> None:
-    """The case where one could plausibly return everything and the other nothing."""
+    """The case where one could plausibly return everything and the other nothing.
+
+    Both say None — "I could not read the rule" — and neither says `frozenset()`, which
+    would make every verdict non-blocking and let a held item start.
+    """
     tmp_path.mkdir(parents=True, exist_ok=True)
     board, lead = _both(tmp_path)
-    assert board == lead == frozenset()
+    assert board is None and lead is None, f"board={board} lead={lead}"
 
 
 def test_they_agree_on_the_claude_rules_location(tmp_path: Path) -> None:

@@ -69,8 +69,8 @@ class Harness:
                "CLAUDE_PROJECT_DIR": str(self.root), **env_extra}
         payload = ('{"hook_event_name":"PostToolUse","tool_name":"Edit",'
                    f'"tool_input":{{"file_path":"{rel}"}}}}')
-        subprocess.run(cmd, input=payload, capture_output=True, text=True,  # noqa: PLW1510
-                       cwd=self.root, env=env)
+        subprocess.run(cmd, input=payload, capture_output=True, text=True,
+                       cwd=self.root, env=env, check=False)
         return self.log.read_text(encoding="utf-8")
 
 

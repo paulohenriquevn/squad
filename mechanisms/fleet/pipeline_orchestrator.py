@@ -30,9 +30,19 @@ repository's index, so the findings are pinned here — where they cannot go mis
 """
 from __future__ import annotations
 
+import json
 import os
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+
+for _up in Path(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        sys.path.insert(0, str(_up))
+        break
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+from squad import shared_file  # noqa: E402 — post-bootstrap import
 
 #: The chain `cycle-idea-to-release` declares. Seven, not five.
 STAGES: tuple[str, ...] = (
@@ -197,7 +207,20 @@ class Pipeline:
 
     # ── queries ────────────────────────────────────────────────────────────
     def item(self, slug: str) -> Item:
-        return next(i for i in self.items if i.slug == slug)
+        """The item with this slug, or a KeyError NAMING it and what is known.
+
+        A bare `next()` with no default raises StopIteration, and `complete`, `fail`,
+        `park`, `unpark`, `block`, `send_back` and `force_stage` all route through here.
+        A slug that is not in `self.items` — a typo, an item dropped by a re-read of
+        SELECT, a stage brief naming yesterday's id — surfaced as StopIteration, which
+        says nothing about which slug or which pipeline, and which a `for` loop one frame
+        up silently reads as "the sequence ended".
+        """
+        for candidate in self.items:
+            if candidate.slug == slug:
+                return candidate
+        known = ", ".join(i.slug for i in self.items) or "none"
+        raise KeyError(f"{slug!r} is not in this pipeline. Known: {known}")
 
     def _eligible(self) -> list[Item]:
         """Work that can start, FURTHEST ALONG FIRST.
@@ -436,17 +459,104 @@ def apply_writes(backlog: Path, writes: list[StatusWrite]) -> list[str]:
     record two — the third comes back as a line for a human to read, which is the
     honest outcome when the writer and the registry disagree about what is legal.
     """
+    # `mechanisms/cycle/` on the path first. This was a bare `import backlog_status`,
+    # which resolved only because the two test files that called `apply_writes` had
+    # already put that directory on `sys.path` themselves — so the function worked in
+    # the suite and raised ModuleNotFoundError the first time it was called from
+    # anywhere else. Found by giving this module the CLI it never had.
+    _cycle = Path(__file__).resolve().parents[1] / "cycle"
+    if str(_cycle) not in sys.path:
+        sys.path.insert(0, str(_cycle))
     import backlog_status as bs
 
-    content = backlog.read_text(encoding="utf-8")
+    # One transaction over the shared registry. This read the file, folded every pending
+    # write into the string and put the whole thing back — no lock across the span and no
+    # atomic replace at the end — while `mechanisms/cycle/backlog_status.py` does the same
+    # from its own CLI and the briefs this orchestrator dispatches tell every lane to run
+    # it. Two writers that read the same bytes lost one set of transitions silently, and
+    # a writer interrupted mid-write left a truncated registry the next reader parses as
+    # a shorter one. `squad/shared_file.py` carries the measurement.
     refusals: list[str] = []
-    for write in writes:
-        try:
-            if write.block_on or write.note:
-                content = bs.block(content, write.slug.upper(), write.block_on, write.note)
-            if write.status:
-                content = bs.advance(content, write.slug.upper(), write.status)
-        except bs.Refused as exc:
-            refusals.append(f"{write.slug}: {exc}")
-    backlog.write_text(content, encoding="utf-8")
+
+    def fold(content: str) -> str:
+        for write in writes:
+            try:
+                if write.block_on or write.note:
+                    content = bs.block(content, write.slug.upper(), write.block_on, write.note)
+                if write.status:
+                    content = bs.advance(content, write.slug.upper(), write.status)
+            except bs.Refused as exc:
+                refusals.append(f"{write.slug}: {exc}")
+        return content
+
+    shared_file.update(backlog, fold)
     return refusals
+
+
+def main(argv: list[str] | None = None) -> int:
+    """The entry point this module did not have.
+
+    `schedule`, `take_batch`, `complete`, `fail`, `park`, `unpark`, `block`,
+    `send_back`, `force_stage`, `drain_writes`, `from_selection` and `apply_writes`
+    were reachable from exactly two places in the tree, both of them test files.
+    `skills/pipeline/SKILL.md` names `from_selection()` in prose and gives no command
+    that reaches it, and `StatusWrite`'s own docstring says its writes are "to be
+    applied by mechanisms/cycle/backlog_status.py" — by a runner that does not exist.
+
+    So the registry write-back, the scheduler and the whole stage machinery were a
+    library nothing outside the suite could call. This is the door: SELECT's JSON in,
+    the schedule out, and `--apply` to drain the pending writes into the registry the
+    way the docstring always said they would be.
+    """
+    import argparse
+
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--selection", type=Path, required=True,
+                    help="SELECT's JSON (`select_backlog_item.py --json`)")
+    ap.add_argument("--backlog", type=Path, default=Path("BACKLOG.md"))
+    ap.add_argument("--lanes", type=int, default=None)
+    ap.add_argument("--stage", default="", help="print the batch waiting at this stage")
+    ap.add_argument("--apply", action="store_true",
+                    help="drain the pending status writes into the registry")
+    ap.add_argument("--json", action="store_true")
+    args = ap.parse_args(argv)
+
+    try:
+        selection = json.loads(args.selection.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"could not read {args.selection}: {exc}", file=sys.stderr)
+        return 2
+
+    pipeline = from_selection(selection, lanes=args.lanes)
+    running = pipeline.schedule()
+    batch = pipeline.take_batch(args.stage) if args.stage else []
+
+    refusals: list[str] = []
+    if args.apply:
+        if not args.backlog.is_file():
+            print(f"no registry at {args.backlog}; nothing to write", file=sys.stderr)
+            return 2
+        refusals = apply_writes(args.backlog, pipeline.drain_writes())
+
+    out = {
+        "scheduled": [i.slug for i in running],
+        "batch": [i.slug for i in batch],
+        "stage": args.stage,
+        "applied": args.apply,
+        # Returned, never raised: one illegal transition must not abort the others, and
+        # a refusal nobody printed is a transition that silently did not happen.
+        "refusals": refusals,
+    }
+    if args.json:
+        print(json.dumps(out, indent=2, ensure_ascii=False))
+    else:
+        print(f"scheduled {len(running)}: {', '.join(out['scheduled']) or '(none)'}")
+        if args.stage:
+            print(f"batch at {args.stage}: {', '.join(out['batch']) or '(none)'}")
+        for line in refusals:
+            print(f"  REFUSED {line}", file=sys.stderr)
+    return 1 if refusals else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

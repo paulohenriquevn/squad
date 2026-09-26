@@ -87,13 +87,13 @@ Squad runs continuously, 100% autonomously, never requiring human approval for t
 - Each lane receives unit of work and generates code autonomously
 - All commits pushed to origin; lander validates before integrating
 
-**Roteamento (Fleet Router)**
+**Routing (Fleet Router)**
 - Reads work from 3 sources (in priority): Consumer Backlog (approved by PO) → Kit Issues (discovered by sweep) → VERA Proposals (IA-decided)
 - Intelligent dedup: never offers same work twice
 - Intelligent guard: never offers work in-flight
 - Load balancing: lanes are never starved
 
-**Integração (Fleet Lander)**
+**Integration (Fleet Lander)**
 - Tests branch in isolation (suite A)
 - Tests merge in scratch tree (suite B)
 - Refuses with explicit reason or pushes to workspace
@@ -295,7 +295,7 @@ Theo uses **14 AI agents** (Lane 1/2/3, Router, Lander, VERA, Sweep, and support
 ## References
 
 - AIDLC Workflows: https://github.com/awslabs/aidlc-workflows
-- Squad Agent Manifest: `docs/SQUAD_AGENTS.md`
+- Squad Agent Manifest: `docs/SQUAD_AGENTS-HISTORICAL.md` (renamed 2026-09-21 — the name is what a reader sees before the HISTORICAL banner inside it)
 - Squad Fleet Implementation: `mechanisms/fleet/`
 
 ---

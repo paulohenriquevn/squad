@@ -61,21 +61,62 @@ import sys
 # The one owner of every data-root literal. A local copy is what produced six lists in
 # four different orders, and `check_write_containment.py` refuses a second one.
 import sys as _sys_bootstrap
-from pathlib import Path
-from pathlib import Path as _Path_bootstrap
+from pathlib import Path, Path as _Path_bootstrap
 
 for _up in _Path_bootstrap(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _sys_bootstrap.path.insert(0, str(_up))
         break
-from squad.paths import DATA_DIRNAME, LEGACY_RECORDS_ROOTS  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import (  # noqa: E402 — post-bootstrap import
+    DATA_DIRNAME,
+    LEGACY_RECORDS_ROOTS,
+)
 
 #: Phase output directory -> the phase that writes there. A BLOCKED report is named
 #: `{slug}-BLOCKED.md` and lives beside the phase's other artefacts.
+#: Declared phases that write NO halt report, each with why. Named rather than omitted, because
+#: an omission is indistinguishable from an oversight — and this set has now dropped two phases
+#: that way. `test_the_halt_map_covers_every_phase_that_writes_a_record` requires every phase in
+#: `rules/cycle-phases.txt` to be in one list or the other.
+PHASES_WITHOUT_A_HALT_REPORT = {
+    "brainstorm": "writes the four product documents to wiki/product and halts by an UNSIGNED "
+                  "sign-off rather than by a report file",
+    "design": "writes the five drawings to wiki/design; same signature halt as brainstorm",
+    "backlog": "writes the registry itself — a halted item is `blocked_by` in its own block, "
+               "which `select_backlog_item` already reads",
+    "code-quality": "nested-in implement for the VERDICT; a blocking audit reaches the queue "
+                    "through implement's own report",
+    "acceptance": "halts the MILESTONE rather than an item — `cycle-acceptance.md` writes "
+                  "`BLOCKED — there is nothing released to validate`, which no item's queue "
+                  "position depends on",
+    # DECLARED AS A GAP rather than mapped, because the honest answer is that nobody measured it.
+    # `cycle-discover.md:210` promises "an honest BLOCKED report over a false PASS" for its
+    # halt-loop phases and names no directory for it, and inventing one here would be the opposite
+    # of deriving — the defect this entry sits beside was a literal set somebody extended from
+    # memory. Whoever measures where that report lands moves this line into `HALT_DIRS`.
+    "discover": "declares a BLOCKED report in cycle-discover.md and names no directory for it; "
+                "UNMEASURED, and mapping it from a guess is how this set acquired its first two "
+                "omissions",
+}
+
 HALT_DIRS = {
     "implementations": "implement",
     "reviews": "review",
     "releases": "release",
+    # `plans` was missing, so a BLOCKED report from the PLAN phase halted nothing while two
+    # contracts said it did — `cycle-plan.md` ("a BLOCKED report blocks downstream") and
+    # `cycle-maintenance.md` ("SELECT holds the item until the file is gone"). Both true for the
+    # directories above and false for this one. Measured by a consumer with one real file moved
+    # between two directories: in `plans/` it was not found and SELECT re-offered the halted item;
+    # in `maintenance-runs/` the same file, same name, was found and withheld it (#189).
+    #
+    # SECOND omission in this set — see `maintenance-runs` below — which is why
+    # `tests/test_a_halt_in_any_phase_reaches_the_queue.py` now holds the set against
+    # `rules/cycle-phases.txt` rather than against a reader's memory.
+    "plans": "plan",
     # `cycle-maintenance` declares ITEM_BLOCKED and writes to `maintenance-runs/`,
     # and it was missing here — so a BLOCKED report from the cycle that ORCHESTRATES
     # the queue was invisible to the reader of that queue. A consumer measured it
@@ -145,8 +186,15 @@ WITHDRAWN_MARKER = ".withdrawn"
 #:
 #: Matching on the FILENAME rather than constructing a slug, because only the phase that
 #: wrote the artefact knows the words after the number.
+#:
+#: And a THIRD spelling, which carries no id in the filename at all: the title slug that
+#: `plan-write` itself prescribes ("slug derived from the plan title"). Such a record
+#: names its item in its own content, and it was keyed by the bare stem — linked to no
+#: item. Measured on a consumer 2026-09-24: `the-nonce-is-minted-and-unreachable-plan.md`,
+#: 67229 bytes, frontmatter `milestone_id: B-270`, and `--check B-270` answered "no plan
+#: exists yet; run /plan-write to produce it" (#209).
 def records_by_item(records: Path, sub: str, suffix: str) -> dict[str, Path]:
-    """`{item_id: path}` for every `*{suffix}` in `records/{sub}`, both spellings."""
+    """`{item_id: path}` for every `*{suffix}` in `records/{sub}`, all three spellings."""
     directory = records / sub
     if not directory.is_dir():
         return {}
@@ -156,12 +204,38 @@ def records_by_item(records: Path, sub: str, suffix: str) -> dict[str, Path]:
         if not name.endswith(suffix):
             continue
         stem = name[: -len(suffix)]
-        item = _item_of(name)
+        item = _item_of(name) or _item_declared_in(entry)
         if item:
             found.setdefault(item, entry)
         elif stem:
             found.setdefault(stem, entry)
     return found
+
+
+def _item_declared_in(record: Path) -> str:
+    """The item a record whose filename names none declares in its content, or ''.
+
+    Through the alignment gate's `_committed_work_id`, not a local reading, because that
+    gate grades the SAME plan against the item this returns: two readings of "which item
+    is this plan for" would let the selector file a plan under one item while the gate
+    grades it against another — the drift `records_by_item` exists to end. Its order is
+    declarations first (frontmatter `milestone_id`), then exactly one id in the body, and
+    otherwise nothing: several candidates and no declaration are not guessed.
+
+    An ImportError propagates. The two skills ship together, and falling back to a local
+    reading whenever the import fails is how the two filename readers above diverged.
+    """
+    gate_scripts = Path(__file__).resolve().parents[2] / "plan-confidence" / "scripts"
+    if str(gate_scripts) not in sys.path:
+        sys.path.insert(0, str(gate_scripts))
+    from check_alignment_gate import _committed_work_id
+
+    try:
+        content = record.read_text(encoding="utf-8", errors="replace")
+    except OSError as error:
+        raise OSError(f"cannot read record {record} to find the item it declares: "
+                      f"{error}") from error
+    return _committed_work_id(content) or ""
 
 
 def halt_reports(project_root: Path) -> dict[str, Path]:

@@ -10,8 +10,17 @@ This checker is CONDITIONAL: it only enforces the rule when the plan contains
 concurrency signals. Plans whose Baseline Context + Deep Dives + Files-to-edit
 sections are signal-free are unaffected.
 
-Soft cap stable id: `soft_floor_concurrency_tests_missing` (cap 89; sunset
-2026-09-07 — after which promotes to hard cap 70 via ADR).
+Soft cap stable id: `soft_floor_concurrency_tests_missing` (cap 89).
+
+This read "sunset 2026-09-07 — after which promotes to hard cap 70 via ADR". The date
+passed, `run_structural` still applies 89, no ADR exists, and nothing noticed — a
+sunset whose expiry nobody detects is a deadline that silently became permanent, which
+is the shape this kit refuses in a consumer's config and had in its own.
+
+The cap stays at 89 DELIBERATELY: promoting it to 70 changes the verdict for every
+consumer, and that is a policy decision somebody makes, not a date arriving. Stated as
+the current rule rather than as a promise with a date on it, so the next reader is not
+told a promotion happened.
 
 Detection rule:
 
@@ -37,10 +46,24 @@ pollute signal counts.
 from __future__ import annotations
 
 import re
+import sys as _sys
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, Path as _P
 
-FENCED_CODE_RE = re.compile(r"^(```|~~~)[^\n]*\n.*?^\1", re.MULTILINE | re.DOTALL)
+for _up in _P(__file__).resolve().parents:
+    if (_up / "squad" / "markdown.py").is_file():
+        _sys.path.insert(0, str(_up))
+        break
+from squad.markdown import (  # noqa: E402 — post-bootstrap import
+    FENCED_CODE_RE as _FENCED_CODE_OWNER,  # noqa: E402 — post-bootstrap import
+)
+
+#: The ONE fenced-code regex, from `squad.markdown`. Eleven scripts each defined
+#: their own, in two forms that do not mask the same input: five saw only backtick
+#: fences, six also saw `~~~`. A plan whose example block used tildes was masked by
+#: six readers and read as prose by the other five, so the same document scored
+#: differently depending on which checker asked.
+FENCED_CODE_RE = _FENCED_CODE_OWNER
 
 # Section title patterns whose contents are inspected for concurrency signals.
 # Per task, the body of `#### Concurrency tests` is examined for the escape OR
@@ -104,11 +127,73 @@ CONCURRENCY_SIGNALS = (
     r"\bSharedArrayBuffer\b",
 )
 
+def _accepted_signals() -> str:
+    """The signals that make this subsection PASS, rendered for a person to read.
+
+    DERIVED from `RACE_TEST_SIGNALS` plus `ESCAPE_MARKERS` — the two things the decider at
+    `_race_aware` actually accepts — and never restated.
+
+    It derived from `CONCURRENCY_SIGNALS` until 2026-09-23, which is the list that DETECTS
+    whether a task involves concurrency at all (`mutex`, `SharedArrayBuffer`). A reader who
+    added a printed token failed again, because acceptance is decided elsewhere (#175). The
+    two lists share no purpose: 39 detect, 14 accept.
+
+    The irony is worth keeping. The hand-written parenthetical this function replaced named
+    six — "(race/loom/concurrent/parallel/atomic-counter/cancellation)" — and **every one of
+    those six is a `RACE_TEST_SIGNALS` member**. The frozen prose was naming the RIGHT list;
+    the fix that removed the risk of drift pointed the renderer at the wrong constant, and
+    said in this very docstring that it now derived rather than restated. A mechanism built to
+    stop a message from lying made it lie a different way.
+
+    Which is why `test_the_refusal_names_the_list_that_decides.py` does not assert WHICH
+    constant is read. It asserts that every printed token is accepted by the decider, and
+    fails whichever constant a later edit points this at.
+
+    The escape is printed alongside, because there are two ways to pass and a message naming
+    one hides the other: a task with no concurrency passes by saying so.
+    """
+    return " · ".join(sorted({_readable(p) for p in RACE_TEST_SIGNALS + ESCAPE_MARKERS}
+                             - {""}))
+
+
+#: Regex syntax to human text, longest key first so `\s+` is spent before `\s`.
+#:
+#: The first version of this stripper was written for `CONCURRENCY_SIGNALS`, whose members are
+#: nearly all bare `\bword\b`. Pointed at the list that actually decides, it printed
+#: `cancellations+propagat`, `Atomics.w+` and `none[—-–]+single[- ]threaded)` — tokens no reader
+#: can copy into a document. A message naming the right list in an unusable form is not a fix.
+_UNESCAPE = (
+    (r"\s+", " "), (r"\s*", " "), (r"\w+", "<name>"), (r"\b", ""),
+    (r"[- ]", "-"), (r"[—\-–]+", "—"), (r"\(", "("), (r"\)", ")"), (r"\.", "."),
+)
+
+
+def _readable(pattern: str) -> str:
+    """One regex rendered as the text a reader would type.
+
+    An unbalanced `)` survives from `ESCAPE_MARKERS`, whose pattern opens with an escaped
+    paren and closes with a literal one; the pairing is restored rather than stripped, because
+    the escape must be printed EXACTLY as it has to be written to work.
+    """
+    text = pattern
+    for needle, replacement in _UNESCAPE:
+        text = text.replace(needle, replacement)
+    text = text.replace("\\", "").strip()
+    if text.endswith(")") and "(" not in text:
+        text = "(" + text
+    return " ".join(text.split())
+
+
+
 # Acceptable race-aware test signals — these are what the task's
 # `#### Concurrency tests` subsection MUST contain to pass.
 RACE_TEST_SIGNALS = (
     r"\bgo test -race\b",
-    r"\b--race\b",
+    # No leading `\b`: a boundary cannot hold between a space (or the string start) and a
+    # hyphen, both non-word. `\b--race\b` matched only `x--race` and never the real form
+    # `cargo test --race` — a pattern in the ACCEPTANCE list that could not accept the thing
+    # it names. Found by the test asserting every printed token is accepted (#175).
+    r"--race\b",
     r"\bloom::",
     r"\bloom\s+test\b",
     r"\bpytest-asyncio\b",
@@ -260,8 +345,11 @@ def check_concurrency_tests(plan_path: Path) -> ConcurrencyReport:
             failing.append(task_id)
             reasons.append(
                 f"{task_id} `#### Concurrency tests` does not contain an acceptable "
-                "race-aware signal (race/loom/concurrent/parallel/atomic-counter/cancellation) "
-                "nor the explicit '(none — single-threaded)' escape"
+                f"race-aware signal nor the explicit '(none — single-threaded)' escape. "
+                # Rendered from the list the matcher actually uses. It was a frozen
+                # parenthetical naming six signals while the module matched many more,
+                # so the two could drift and a reader grepping the source was right to.
+                f"Accepted signals: {_accepted_signals()}"
             )
 
     return ConcurrencyReport(

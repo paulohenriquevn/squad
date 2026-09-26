@@ -70,15 +70,47 @@ unattributed tick does not launder the rest, and `ALIGNED` by a judge and
 **Invoke the judge when no reviewer is coming** — the unattended loop, a fleet
 session, any run where waiting means the item never moves:
 
+**Two steps, and the first is the one that judges.** `alignment_judge.py` RECORDS a
+verdict; it says so of itself — *"it takes its verdict on the command line. It does
+not read the evidence itself."* Running it with a verdict you reached about your own
+brief is the author signing their own form, which the table above values at nothing.
+
+**Step 1 — convene the reviewer, and hand it the evidence.**
+
+```bash
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/convene_panel.py" \
+  --slug {slug} --phase alignment --json
+```
+
+One seat, not three: this sign-off is four checkboxes ticked by somebody who is not
+the author, and a majority has no meaning over that. The seat names the agent — the
+kit seats `nemesis-claim-auditor`, whose job is the one this needs: take a claim and
+confront it with the evidence.
+
+Spawn that agent and give it the brief AND the evidence the brief cites — the
+discovery, the files, the measurements. It must read what the brief claims to rest
+on, because a reviewer who reads only the brief can confirm that a document is
+internally consistent and nothing else. Ask it for a verdict and the reason.
+
+**Step 2 — record what it decided**, with its model, not yours:
+
 ```bash
 python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/plan-alignment/scripts/alignment_judge.py" \
   .squad/records/alignment/{slug}-alignment.md \
-  --verdict signed --reason "<what the evidence showed>"
+  --model "<the model that reached the verdict>" \
+  --verdict signed --reason "<what THAT agent found in the evidence>"
 ```
 
 It must be able to REFUSE, and refusing must cost the same as signing. A judge
 that has never refused is a judge nobody has tested — pass `--verdict refused`
 and the reason is written into the brief, where the next run reads it.
+
+**A peer session is the other way, and it is not a lesser one.** `peer/<session>
+(verified: …)` is a recognised signature when another agent independently measured
+something about this document. It costs a round trip and depends on a session being
+alive; convening the seat does not. Measured 2026-09-23: one item took five rounds
+of peer messaging, and those rounds found fourteen real defects — the rigour was
+never the problem, the waiting was.
 
 ## Step 0 — Classify the path, out loud
 
@@ -418,7 +450,7 @@ generated page requires nothing.
 
 | Script | Runs it | What it does |
 |---|---|---|
-| `check_criteria_discriminate.py` | on demand, before implementing | runs each acceptance criterion against the tree as it is and refuses the ones that already pass |
+| `check_criteria_discriminate.py` | on demand, before implementing | runs each acceptance criterion against the tree as it is and refuses the ones that already pass; with `--intended`/`--wrong`/`--baseline`, also against the built state, a wrong build and a reconstruction control |
 
 
 ## Not every item needs the whole document
@@ -434,6 +466,8 @@ look at, and none was opened.
 deleting an unreferenced package crossed the same phases as redesigning the data plane.
 
 ```bash
+ECO=$([ -d .claude/skills ] && echo .claude || echo .)
+
 python3 "$ECO/skills/plan-alignment/scripts/classify_alignment_depth.py" . B-NNN
 ```
 
@@ -482,12 +516,26 @@ A criterion that already passes cannot tell a finished item from an unstarted on
 run refuses those, names the ones it could not run, and marks as **undecidable** — never
 as sound — the ones whose bullet does not state what it expects.
 
-**It checks one of three states, and says so.** The full method needs the intended state
-and a deliberately wrong implementation the criterion must reject; the third is what
-catches a criterion measuring a NAME rather than a behaviour. A reviewer's formulation is
-worth keeping: *the minimal artefact that satisfies a criterion says exactly what it is
-sensitive to.* If an empty function body with the right name turns it green, it measures
-the name.
+**By default it checks one of three states, and says so.** The full method needs the
+intended state and a deliberately wrong implementation the criterion must reject; the
+third is what catches a criterion measuring a NAME rather than a behaviour. A reviewer's
+formulation is worth keeping: *the minimal artefact that satisfies a criterion says
+exactly what it is sensitive to.* If an empty function body with the right name turns it
+green, it measures the name.
+
+Supply the other states as directories — the script reads trees and never builds them:
+
+```bash
+python3 "$ECO/skills/plan-alignment/scripts/check_criteria_discriminate.py" \
+  .squad/records/alignment/B-001-alignment.md --repo-root . \
+  --intended ../wt-built --wrong ../wt-right-name-wrong-body --baseline ../wt-base-rebuilt
+```
+
+Each criterion comes back `discriminates`, `passes_before_work`, `fails_when_built`,
+`non_discriminating` (it passes on a wrong build), `undecidable` or `guard`. `--baseline`
+is the reconstruction control: the current tree rebuilt the way the other states were. If
+it answers differently from `--repo-root`, the run exits 2 — "the change moved this"
+cannot be told from "the rebuild is broken".
 
 **It runs commands out of a document.** With a timeout, in the repository root, opt-in,
 never from a hook or a scorer. Read what you are about to run if the brief did not come

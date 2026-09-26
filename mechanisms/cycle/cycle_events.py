@@ -48,6 +48,8 @@ from pathlib import Path as _Path
 _sys.path.insert(0, str(_Path(__file__).resolve().parents[2]))
 
 import argparse
+import contextlib
+import hashlib
 import json
 import math
 import re
@@ -56,9 +58,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from squad import shared_file
 from squad.paths import (
     DATA_DIRNAME,
     LEGACY_RECORDS_ROOTS,
+    RULE_BASES,
     write_records_dir,
 )
 
@@ -72,9 +76,9 @@ PHASE_START = "cycle:phase:start"
 PHASE_END = "cycle:phase:end"
 
 
-_KIT_PARTS = ("skills", "rules", "hooks")
-
-
+#: Assigned twice, identically, until 2026-09-17. Harmless while the two agreed, and the
+#: shape that produces a real defect the moment one of them is edited: the second wins
+#: silently and the reader who changed the first has no way to see why nothing happened.
 _KIT_PARTS = ("skills", "rules", "hooks")
 
 
@@ -103,6 +107,37 @@ def resolve_events_path(project_root: Path) -> Path:
     return write_records_dir(project_root) / EVENTS_FILENAME
 
 
+#: Directories that hold every throwaway tree on the machine. One `.squad` forgotten in
+#: one of them turns every test, smoke run and hand-made `mktemp -d` into one shared
+#: project — and nothing reports it, because recording somewhere IS the success path.
+#:
+#: `/tmp` and `/var/tmp` are named literally because that is where residue accumulates;
+#: `tempfile.gettempdir()` covers a consumer whose `TMPDIR` points elsewhere, and is read
+#: at call time rather than at import so a test can move it.
+# Named to be DETECTED, never written (bandit B108).
+_NAMED_TEMP_ROOTS = ("/tmp", "/var/tmp")  # nosec B108
+
+
+def _is_system_temp_root(candidate: Path) -> bool:
+    """Is this the system temp directory ITSELF, rather than something inside it?
+
+    The distinction is the whole of the rule. `pytest`'s `tmp_path` lives UNDER the temp
+    directory and the install suite builds real projects there, so refusing everything
+    below it would refuse those. `/tmp/.squad` is somebody's leftover;
+    `/tmp/pytest-of-x/test_y0/.squad` is a fixture.
+    """
+    import tempfile
+
+    roots = [*_NAMED_TEMP_ROOTS, tempfile.gettempdir()]
+    for root in roots:
+        try:
+            if candidate.resolve() == Path(root).resolve():
+                return True
+        except OSError:
+            continue
+    return False
+
+
 def project_root_for(work_path: Path) -> Path:
     """The project a phase acted on, derived from the work it touched.
 
@@ -128,6 +163,20 @@ def project_root_for(work_path: Path) -> Path:
         work_path = work_path.parent
     candidates = [work_path, *work_path.parents]
     for candidate in candidates:
+        # The system temp directory is never a project, whatever is sitting in it. Walking
+        # PAST it rather than stopping is deliberate: nothing above `/tmp` qualifies
+        # either, so the loop falls through and the caller gets `work_path` — the
+        # throwaway tree records inside itself, which is what the docstring above promises
+        # for a bare tmpdir and what a stray `.squad` had quietly taken away.
+        if _is_system_temp_root(candidate):
+            continue
+        # The write root is never a project, whatever is under it. It keeps its trail at
+        # `records/`, which is also a legacy root name, so without this `.squad` passed the
+        # legacy test below and a phase handed a path inside it wrote to `.squad/.squad/`
+        # — a stream no reader resolves. Skipping the whole candidate, not just the legacy
+        # test, because once that nested copy exists the write-root test fires on it too.
+        if candidate.name == DATA_DIRNAME:
+            continue
         # The write root first, then the legacy ones a project may not have migrated.
         # This walks UP looking for a project, so it must recognise both — a consumer
         # mid-migration is still one project, not none.
@@ -169,10 +218,20 @@ def _json_safe(value: Any) -> Any:
 
 
 def _append_line(path: Path, line: str) -> None:
-    """Append one line. Isolated so a test can make it fail."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(line + "\n")
+    """Append one line, under the lock. Isolated so a test can make it fail.
+
+    An `O_APPEND` write is atomic only up to PIPE_BUF (4 KiB on Linux) — and beyond the
+    stream's own 8 KiB buffer it is not even one write syscall. An event carrying a long
+    `detail` or a list of reviewers crosses that, and two cycles emitting concurrently
+    then interleave halves of two JSON objects into one line. The stream is append-only
+    and never rewritten, so a torn line is permanent: every later reader skips it, and
+    what it recorded is gone. `squad.shared_file` already owns this serialisation.
+
+    Nesting is safe: `shared_file.locked` is reentrant within a process, so the
+    `--once` path — which holds the lock over its whole read-decide-append span —
+    passes straight through here rather than queueing behind itself.
+    """
+    shared_file.append_line(path, line)
 
 
 def _emit(project_root: Path, event_type: str, cycle: str, slug: str,
@@ -206,14 +265,52 @@ def emit_phase_start(project_root: Path, *, cycle: str, slug: str = "",
 
 
 def emit_phase_end(project_root: Path, *, cycle: str, slug: str = "",
-                   verdict: str | None = None, **extra: Any) -> dict[str, Any] | None:
+                   verdict: str | None = None, artifact: Path | None = None,
+                   **extra: Any) -> dict[str, Any] | None:
     """Record that a cycle phase ended, and what it concluded.
 
     `verdict=None` is written as `null` on purpose. Not every phase computes one,
     and omitting the field would make a verdict-less phase indistinguishable from
     a line whose verdict failed to parse.
+
+    `artifact` is the file the phase judged. Its digest is recorded so a reader can
+    tell a gate rerun on an edited artifact from one rerun on the same bytes — see
+    `unchanged_repeats`.
     """
+    if artifact is not None and Path(artifact).is_file():
+        extra["artifact_sha256"] = hashlib.sha256(Path(artifact).read_bytes()).hexdigest()
     return _emit(project_root, PHASE_END, cycle, slug, verdict=verdict, **extra)
+
+
+#: How many identical verdicts on the same bytes before the CLI says so.
+REPEAT_THRESHOLD = 3
+
+
+def unchanged_repeats(events: list[dict[str, Any]], *, cycle: str, slug: str) -> int:
+    """How many of this phase's latest ends share a verdict AND an artifact digest.
+
+    Measured on a consumer session: four identical gate runs in 36 seconds with no
+    edit between them, and 16 `FAIL_SOFT` for one slug in 12 minutes. Each refusal was
+    honest; nothing said the same bytes had been refused the same way again, which is
+    the point at which rerunning stops being work (#139).
+
+    Only this cycle and slug's ends are compared, newest first; the run stops at the
+    first one that differs. An end with no digest counts as 0: two unknowns are not
+    the same artifact, and calling them equal would report repetition nobody measured.
+    """
+    ends = [e for e in events
+            if e.get("type") == PHASE_END and e.get("cycle") == cycle
+            and str(e.get("slug") or "") == str(slug or "")]
+    if not ends or not ends[-1].get("artifact_sha256"):
+        return 0
+    last = ends[-1]
+    count = 0
+    for event in reversed(ends):
+        if (event.get("verdict") != last.get("verdict")
+                or event.get("artifact_sha256") != last["artifact_sha256"]):
+            break
+        count += 1
+    return count
 
 
 def read_events(project_root: Path) -> list[dict[str, Any]]:
@@ -276,7 +373,8 @@ def declared_verdicts(project_root: Path, phase: str) -> set[str]:
     that carry no `## Verdicts` section. Refusing those would break honest emitters to
     catch a dishonest one.
     """
-    for base in ("rules", ".claude/rules"):
+    # `squad.paths.rules_dir` owns the order; see it for which wins and why.
+    for base in RULE_BASES:
         rule = project_root / base / f"cycle-{phase}.md"
         if not rule.is_file():
             continue
@@ -302,6 +400,9 @@ def main(argv: list[str] | None = None) -> int:
                              "this item and nothing has happened since. For a phase that "
                              "CONCLUDES (implementation complete, plan written, released); "
                              "never for a gate that iterates")
+    parser.add_argument("--artifact", type=Path, default=None,
+                        help="the file this phase judged; its digest lets the stream tell "
+                             "a rerun on an edited artifact from a rerun on the same bytes")
     parser.add_argument("--project-root", type=Path, default=Path.cwd())
     args = parser.parse_args(argv)
 
@@ -375,6 +476,26 @@ def main(argv: list[str] | None = None) -> int:
     # complete, plan written, released — passes `--once`; a gate that iterates does
     # not. Refusing rather than silently skipping, because a caller that emitted twice
     # by accident should learn of it.
+    # The duplicate check reads the stream and the emit below appends to it. Nothing
+    # serialised the two, and concurrent writers of one stream are an explicit feature of
+    # this kit — `mechanisms/fleet` dispatches lanes in parallel and each runs the phase
+    # commands that emit here. Two sessions could both read a stream whose last line was
+    # not yet the other's, and both append. The lock spans read AND append.
+    #
+    # What is NOT changed here: the duplicate test still compares against the LAST
+    # event. Scanning backward for a matching end was the other half of the proposal,
+    # and it contradicts the semantics this file already carries and the suite pins —
+    # "anything since" is how a caller says the phase ran a second time, and
+    # `test_once_allows_the_same_verdict_after_something_else_ran` asserts exactly
+    # that. A backward scan would refuse a legitimate second run.
+    stream = resolve_events_path(root)
+    once_guard = shared_file.locked(stream) if args.once and args.transition == "end" \
+        else contextlib.nullcontext()
+    with once_guard:
+        return _emit_under_guard(args, root)
+
+
+def _emit_under_guard(args: argparse.Namespace, root: Path) -> int:
     if args.once and args.transition == "end":
         previous = read_events(root)
         if previous:
@@ -396,7 +517,13 @@ def main(argv: list[str] | None = None) -> int:
         event = emit_phase_start(root, cycle=args.cycle, slug=args.slug)
     else:
         event = emit_phase_end(root, cycle=args.cycle, slug=args.slug,
-                               verdict=args.verdict)
+                               verdict=args.verdict, artifact=args.artifact)
+        repeats = unchanged_repeats(read_events(root), cycle=args.cycle, slug=args.slug)
+        if event is not None and repeats >= REPEAT_THRESHOLD:
+            print(f"NOTE: `{args.cycle}` ended `{args.verdict}` for {args.slug} "
+                  f"{repeats} times in a row on an unchanged {args.artifact}. Running it "
+                  f"again will answer the same; read what the refusal says it accepts, "
+                  f"or change the artifact.", file=sys.stderr)
 
     if event is None:
         # Fail-open reaches the CLI too: a hook must not turn a write failure

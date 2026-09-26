@@ -61,15 +61,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import sys as _sys_bootstrap
 from pathlib import Path as _Path_bootstrap
 
-from board_issues import digest as issues_digest
-from board_issues import fetch as fetch_issues
+from board_issues import digest as issues_digest, fetch as fetch_issues
 from board_state import build_state, item_detail
 
 for _up in _Path_bootstrap(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _sys_bootstrap.path.insert(0, str(_up))
         break
-from squad.paths import DATA_DIRNAME, LEGACY_RECORDS_ROOTS  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import (  # noqa: E402 — post-bootstrap import
+    DATA_DIRNAME,
+    LEGACY_RECORDS_ROOTS,
+)
 
 POLL_SECONDS = 0.5
 WATCHED = ("BACKLOG.md", *(f"{b}/cycle-events.jsonl"
@@ -259,7 +264,16 @@ def _handler(root: Path, hub: _Hub, token: str | None):
             cookie = self.headers.get("Cookie") or ""
             for part in cookie.split(";"):
                 name, _, value = part.strip().partition("=")
-                if name == "board_token" and secrets.compare_digest(value, token):
+                if name != "board_token":
+                    continue
+                # Compared as BYTES. `compare_digest` with two `str` arguments requires
+                # both to be ASCII-only and raises TypeError otherwise, so a request
+                # carrying `board_token=café` raised inside `do_GET` — the handler
+                # thread logged a traceback and dropped the connection instead of
+                # answering 401. This value comes off the network; a raise is never the
+                # right answer to it, and the bytes comparison stays constant-time.
+                if secrets.compare_digest(value.encode("utf-8", "surrogateescape"),
+                                          token.encode("utf-8")):
                     return True
             return False
 
@@ -393,7 +407,8 @@ def serve(root: Path, port: int, host: str = "127.0.0.1", token: str | None = No
               "(the first read is in flight)", flush=True)
     else:
         print("  tracker: not read (--no-issues)", flush=True)
-    shown = host if host not in ("0.0.0.0", "::") else "<this-host>"
+    # A label, not a bind (bandit B104).
+    shown = host if host not in ("0.0.0.0", "::") else "<this-host>"  # nosec B104
     suffix = f"/?t={token}" if token else "/"
     print(f"  http://{shown}:{port}{suffix}  — Ctrl-C to stop", flush=True)
     if token:

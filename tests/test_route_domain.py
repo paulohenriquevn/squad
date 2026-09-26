@@ -27,12 +27,15 @@ _REPO = Path(__file__).resolve().parents[1]
 _SCRIPT = _REPO / "mechanisms" / "cycle" / "route_domain.py"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # for kit_agents
-from kit_agents import kit_agents  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from kit_agents import kit_agents  # noqa: E402 — post-bootstrap import
 
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "mechanisms" / "cycle"))
 
-from route_domain import (  # noqa: E402
+from route_domain import (  # noqa: E402 — post-bootstrap import
     count_candidate_rows,
     parse_routing_table,
     route,
@@ -199,23 +202,38 @@ def test_empty_table_raises(tmp_path: Path) -> None:
         parse_routing_table(rule)
 
 
-def test_the_shipped_routing_file_parses_to_zero_rows() -> None:
+def test_the_routing_file_a_consumer_is_born_with_parses_to_zero_rows(tmp_path) -> None:
     """The routing file the consumer receives must carry no domain of the kit's.
 
-    It used to be a section template with a placeholder ROW — `_(empty — run …)_`
-    — kept table-shaped so the section still read as a table. The file replaced
-    it: `rules/domain-routing.txt` ships with a header and no data line, which
-    means the same thing without needing a fake row to say it.
+    If it parsed to a domain, every consumer would be born with a ghost that accepts no
+    item and reports success — the defect measured on an adopter in 2026-08-18, where 88
+    items were refused as `unroutable_repo` against a map from another ecosystem.
 
-    Either way the assertion is the one that matters: if the shipped file parsed
-    to a domain, every consumer would be born with a ghost that accepts no item
-    and reports success — the defect measured on an adopter in 2026-08-18, 88
-    items refused as `unroutable_repo` against a map from another ecosystem.
+    THE ASSERTION MOVED WITH THE FILE, 2026-09-21. It used to open
+    `<kit>/rules/domain-routing.txt`, because that is where the kit shipped a placeholder
+    from. `squad.paths` had been writing the table to the project's write root since
+    2026-09-11, so the kit was copying a placeholder into the one directory no writer
+    fills, and recreating it on every reinstall.
+
+    Checking the artifact the CONSUMER receives is the stronger test anyway: the old one
+    held a file in this repository to a property that mattered somewhere else.
     """
-    shipped = PROJECT_ROOT / "rules" / "domain-routing.txt"
-    assert shipped.is_file(), "the kit must ship the routing file, empty"
+    import subprocess
+
+    subprocess.run(["git", "init", "-q", "."], cwd=tmp_path, check=True)
+    done = subprocess.run(
+        ["bash", str(PROJECT_ROOT / "mechanisms" / "distribution" / "install.sh"),
+         str(tmp_path)],
+        capture_output=True, text=True, timeout=600, check=False)
+    assert done.returncode == 0, done.stdout + done.stderr
+
+    sys.path.insert(0, str(PROJECT_ROOT))
+    from squad.paths import write_routing_table
+
+    born_with = write_routing_table(tmp_path)
+    assert born_with.is_file(), "the consumer received no routing table at all"
     with pytest.raises(ValueError, match="no routing row"):
-        parse_routing_table(shipped)
+        parse_routing_table(born_with)
 
 
 def test_a_domain_naming_a_missing_specialist_exits_3(tmp_path, capsys) -> None:
@@ -546,10 +564,10 @@ def test_it_routes_from_a_subdirectory_of_the_project(tmp_path: Path) -> None:
 
     env = {**os.environ, "CLAUDE_PROJECT_DIR": str(project),
            "CLAUDE_PLUGIN_ROOT": str(_REPO)}
-    done = subprocess.run(  # noqa: PLW1510
+    done = subprocess.run(
         [sys.executable, str(_SCRIPT), "my-service", "--json"],
         capture_output=True, text=True, cwd=str(deep), env=env,
-    )
+     check=False)
 
     assert done.returncode == 0, f"{done.stdout}\n{done.stderr}"
     assert json.loads(done.stdout)["routed"] is True
@@ -567,11 +585,11 @@ def test_an_explicit_rule_path_still_wins(tmp_path: Path) -> None:
     (other / "agents" / "infra.md").write_text("# infra\n", encoding="utf-8")
 
     env = {**os.environ, "CLAUDE_PROJECT_DIR": str(project)}
-    done = subprocess.run(  # noqa: PLW1510
+    done = subprocess.run(
         [sys.executable, str(_SCRIPT), "terraform", "--json",
          "--rule", str(other / "rules" / "domain-routing.txt")],
         capture_output=True, text=True, cwd=str(project), env=env,
-    )
+     check=False)
 
     assert done.returncode == 0, f"{done.stdout}\n{done.stderr}"
     assert json.loads(done.stdout)["domain"] == "infra"
@@ -592,13 +610,76 @@ def test_an_explicit_project_root_is_the_only_subject_considered(tmp_path: Path)
     (elsewhere / "agents" / "infra.md").write_text("# infra\n", encoding="utf-8")
 
     env = {**os.environ, "CLAUDE_PROJECT_DIR": str(elsewhere)}
-    done = subprocess.run(  # noqa: PLW1510
+    done = subprocess.run(
         [sys.executable, str(_SCRIPT), "my-service", "--json",
          "--project-root", str(project)],
         capture_output=True, text=True, cwd=str(elsewhere), env=env,
-    )
+     check=False)
 
     assert done.returncode == 0, f"{done.stdout}\n{done.stderr}"
     assert json.loads(done.stdout)["domain"] == "backend", (
         "the named project lost to the environment or the working directory"
     )
+
+
+def test_a_row_missing_a_field_is_named_not_skipped(tmp_path: Path) -> None:
+    """`rules/domain-routing.txt` is hand-edited configuration.
+
+    A row missing its trailing `|` is a plausible edit, and `_rows_from_txt` dropped it
+    with a bare `continue`. The domain then routed nowhere: `route_domain` printed
+    UNROUTED for every repository that row owned, and the cause — one malformed line —
+    appeared in no output. `parse_roster` and `parse_registry` already raise with the
+    line number for exactly this shape.
+    """
+    table = tmp_path / "domain-routing.txt"
+    table.write_text("# a comment\n"
+                     "api | service-a, service-b | agents/api.md\n"
+                     "ui | dashboard\n",  # the trailing field is gone
+                     encoding="utf-8")
+
+    with pytest.raises(ValueError, match="line 3"):
+        parse_routing_table(table)
+
+
+def test_a_row_with_no_domain_is_named(tmp_path: Path) -> None:
+    table = tmp_path / "domain-routing.txt"
+    table.write_text(" | service-a | agents/api.md\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="domain cell is empty"):
+        parse_routing_table(table)
+
+
+def test_a_well_formed_table_still_parses(tmp_path: Path) -> None:
+    """The refusals must be about the malformed row, not about the format."""
+    table = tmp_path / "domain-routing.txt"
+    table.write_text("# header\n\napi | service-a, service-b | agents/api.md\n",
+                     encoding="utf-8")
+
+    parsed = parse_routing_table(table)
+
+    assert parsed["api"]["repos"] == ["service-a", "service-b"]
+
+
+def test_a_fresh_clone_without_specialists_exits_3_and_says_why(tmp_path, capsys) -> None:
+    """`.claude/` is not versioned, so a fresh clone has the table and none of the
+    specialists it names. Routing to a file that is not there was weighed against
+    exiting loudly, and the decision was the exit (docs/ADR/0026). The explanation is
+    the only thing that tells the reader this is the expected shape of a clone rather
+    than a broken table."""
+    from route_domain import main as route_main
+
+    (tmp_path / "rules").mkdir()
+    (tmp_path / "rules" / "cycle-backlog.md").write_text(
+        "## Domain routing\n\n"
+        "| Domain | Repos | Specialist |\n|---|---|---|\n"
+        "| `api` | `some-repo` | `agents/api.md` |\n\n"
+        "## Verdicts\n",
+        encoding="utf-8",
+    )
+
+    code = route_main(["some-repo", "--rule", str(tmp_path / "rules" / "cycle-backlog.md")])
+
+    out = capsys.readouterr().out
+    assert code == 3
+    assert "what a fresh clone looks like" in out
+    assert "/backlog-init" in out

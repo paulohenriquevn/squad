@@ -7,7 +7,10 @@ license = { text = "MIT" }
 authors = [{ name = "cycle-ecosystem" }]
 
 dependencies = [
-    "tree-sitter>=0.25,<0.26",
+    # 0.21 is the last release `tree-sitter-languages` 1.10 can load: with 0.25,
+    # `get_parser` raises `TypeError: __init__() takes exactly 1 argument`
+    # (measured 2026-09-25), and D2 reports "parsed none of the sources".
+    "tree-sitter>=0.21,<0.22",
     "tree-sitter-languages>=1.10,<2.0",
     "requests>=2.32,<3.0",
     "pyyaml>=6.0,<7.0",
@@ -52,3 +55,7 @@ ignore = ["E501"]  # line-length handled by tool.ruff.line-length
 [tool.coverage.run]
 source = ["scripts"]
 omit = ["tests/*", "fixtures/*"]
+
+[tool.ruff.lint.isort]
+# Same as the root pyproject: an aliased name stays in the import it belongs to.
+combine-as-imports = true

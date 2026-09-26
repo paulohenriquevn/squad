@@ -55,7 +55,10 @@ def test_triaged_advances_to_approved_and_not_straight_to_planned():
     be recorded. `approved` is that place.
     """
     content = _backlog(("B-001", "triaged", ""))
-    assert _status(advance(content, "B-001", "approved"), "B-001") == "approved"
+    # The attribution is required on this move since 2026-09-20: it is the one that
+    # MAKES the decision. What this test pins is the transition, not the field.
+    assert _status(advance(content, "B-001", "approved",
+                           approved_by="human/paulo"), "B-001") == "approved"
 
     with pytest.raises(Refused, match="not a legal transition"):
         advance(content, "B-001", "planned")
@@ -79,18 +82,30 @@ def test_planned_is_sent_back_to_approved_not_to_triaged():
     A plan that failed review did not un-decide the work. Sending it to `triaged`
     would discard the approval along with the plan, and someone would have to
     approve the same item twice for one bad draft.
+
+    The reason is passed because a backward move is a withdrawal and
+    `cycle-maintenance.md § Rollback` says it is never silent. What this test pins
+    is the DESTINATION, which the note does not change.
     """
     content = _backlog(("B-001", "planned", ""))
-    assert _status(advance(content, "B-001", "approved"), "B-001") == "approved"
+    sent_back = advance(content, "B-001", "approved",
+                        withdraw_reason="Paulo withdrew the plan: the measurement changed")
+    assert _status(sent_back, "B-001") == "approved"
 
     with pytest.raises(Refused, match="not a legal transition"):
         advance(content, "B-001", "triaged")
 
 
 def test_approved_can_be_sent_back_to_triaged():
-    """Withdrawing the decision itself, before any plan existed, is a real move."""
+    """Withdrawing the decision itself, before any plan existed, is a real move.
+
+    It now carries its reason: the move IS a withdrawal, and the rule has always
+    said a withdrawal is recorded. What this test pins is that the move exists.
+    """
     content = _backlog(("B-001", "approved", ""))
-    assert _status(advance(content, "B-001", "triaged"), "B-001") == "triaged"
+    withdrawn = advance(content, "B-001", "triaged",
+                        withdraw_reason="Paulo reversed the approval: the driver moved")
+    assert _status(withdrawn, "B-001") == "triaged"
 
 
 def test_shipped_is_terminal():
@@ -287,6 +302,9 @@ def test_blocked_by_parsing(raw, expected):
 # Eight items in one install carried `blocked_by` before it was specified, and seven
 # of them named no item at all. These pin that the writer serves that usage.
 
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
 from backlog_status import (  # noqa: E402 — imported here, beside the behaviour it covers; the comment above says which
     blocked_by_raw,
     declares_impediment,
@@ -296,7 +314,7 @@ from backlog_status import (  # noqa: E402 — imported here, beside the behavio
 
 def test_prose_impediments_yield_no_edges_but_still_block():
     """"awaiting the sponsor's decision" is an impediment with nothing to point at."""
-    raw = "decisão do patrocinador, nomeada no próprio código"
+    raw = "the sponsor's decision, named in the code itself"
     assert parse_blocked_by(raw) == []
     assert declares_impediment(raw) is True
 
@@ -377,3 +395,76 @@ def test_an_id_and_a_reason_coexist_in_one_value():
     raw = blocked_by_raw(content[start:end])
     assert parse_blocked_by(raw) == ["B-002"]
     assert "ratify" in raw
+
+
+class TestUnpushedCommits:
+    """`shipped` claims the work is AVAILABLE, so the writer looks at whether it left this disk.
+
+    Asserted over the RETURN VALUE, never the message — the module docstring above says why.
+
+    ## The measurement behind it (2026-09-23)
+
+    A session marked an item `shipped` while the commit closing its last Definition-of-done
+    bullet was still local. The same session had spent the day enforcing that distinction on
+    other items and had written it down three times that morning. `rules/testing.md § 4.1`
+    records why writing a rule makes breaking it MORE likely rather than less: for someone
+    else's work it is a lens you raise; for your own it is something you already believe you
+    satisfy.
+    """
+
+    @staticmethod
+    def _git(cwd, *args):
+        import subprocess
+
+        return subprocess.run(["git", "-C", str(cwd), *args], capture_output=True, text=True, check=False)
+
+    def test_a_directory_that_is_not_a_repository_is_not_measured(self, tmp_path):
+        # `None` rather than 0: an unanswerable question reported as a zero is the exact failure
+        # this check exists to prevent, one layer up.
+        from backlog_status import _unpushed_commits
+
+        assert _unpushed_commits(tmp_path / "BACKLOG.md") is None
+
+    def test_a_repository_with_no_upstream_is_not_measured(self, tmp_path):
+        # A branch with no upstream cannot be ahead OF anything. Saying "0 unpushed" there would
+        # be a claim about a remote that was never consulted.
+        from backlog_status import _unpushed_commits
+
+        self._git(tmp_path, "init", "-q")
+        self._git(tmp_path, "config", "user.email", "t@t.test")
+        self._git(tmp_path, "config", "user.name", "t")
+        (tmp_path / "BACKLOG.md").write_text("## B-001 — x\n\nstatus: raw\n")
+        self._git(tmp_path, "add", "-A")
+        self._git(tmp_path, "commit", "-q", "-m", "first")
+
+        assert _unpushed_commits(tmp_path / "BACKLOG.md") is None
+
+    def test_commits_beyond_the_upstream_are_counted(self, tmp_path):
+        # The case that happened. A clone with an upstream, two commits made after it, and the
+        # count has to be 2 — not 0, which is what "I already handled this" feels like.
+        from backlog_status import _unpushed_commits
+
+        origin = tmp_path / "origin"
+        origin.mkdir()
+        self._git(origin, "init", "-q", "--bare")
+
+        work = tmp_path / "work"
+        work.mkdir()
+        self._git(work, "init", "-q")
+        self._git(work, "config", "user.email", "t@t.test")
+        self._git(work, "config", "user.name", "t")
+        (work / "BACKLOG.md").write_text("## B-001 — x\n\nstatus: raw\n")
+        self._git(work, "add", "-A")
+        self._git(work, "commit", "-q", "-m", "first")
+        self._git(work, "remote", "add", "origin", str(origin))
+        branch = self._git(work, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+        self._git(work, "push", "-q", "-u", "origin", branch)
+
+        assert _unpushed_commits(work / "BACKLOG.md") == 0
+
+        for n in ("second", "third"):
+            (work / f"{n}.txt").write_text(n)
+            self._git(work, "add", "-A")
+            self._git(work, "commit", "-q", "-m", n)
+
+        assert _unpushed_commits(work / "BACKLOG.md") == 2

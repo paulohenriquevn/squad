@@ -31,11 +31,18 @@ import subprocess
 import sys
 from pathlib import Path
 
+for _up in Path(__file__).resolve().parents:
+    if (_up / "squad" / "boundaries.py").is_file():
+        sys.path.insert(0, str(_up))
+        break
+# Below the bootstrap: `squad` is importable only after sys.path is extended.
+from squad.boundaries import STUDY_ZONE  # noqa: E402 — post-bootstrap import
+
 #: The zone, as `rules/reference-provenance.md` § 1 declares it.
 #: `records/references/` was retired on 2026-09-01 with the practice that
 #: filled it; scanning a directory nothing writes to costs a walk and finds
 #: nothing, and listing it here would say the zone is wider than it is.
-ZONE_DIRS = ("study-material",)
+ZONE_DIRS = (STUDY_ZONE,)
 
 # Trees a peer-project clone brings along that are not that project's code.
 ZONE_SKIP_DIRS = frozenset({
@@ -97,16 +104,31 @@ def is_candidate(path: Path) -> bool:
 
 
 def in_zone(rel: str) -> bool:
-    rel = rel.lstrip("./")
+    # `removeprefix("./")`, never `lstrip("./")`. `lstrip` strips a SET of characters,
+    # so it ate the leading dot of every path as well as the slash: once the zone moved
+    # under `.squad/` on 2026-09-21, `.squad/study-material/x` arrived here as
+    # `squad/study-material/x`, matched no zone, and the gate compared a zone file
+    # against itself and reported a SUSPECTED COPY of third-party material by us.
+    #
+    # It was harmless while the zone was top-level and dotless, which is why it stood.
+    rel = rel.removeprefix("./")
     rel = rel.removeprefix(".claude/")
     return any(rel.startswith(z + "/") for z in ZONE_DIRS)
 
 
-def changed_files(repo: Path, explicit: list[str] | None) -> list[Path]:
-    """Files to inspect: explicit list, else what git reports as changed."""
+def changed_files(repo: Path, explicit: list[str] | None) -> tuple[list[Path], int]:
+    """`(files, probes that answered)`. Three git probes, and how many of them worked.
+
+    All three used to `continue` past their failure, so git absent, a `--repo` that is
+    not a repository, or a repository with no HEAD left `rels` empty — and an empty
+    change set is also what a clean tree looks like. The scan then compared nothing
+    against the zone and printed PASS. The count is the difference between "nothing
+    changed" and "nothing could be asked".
+    """
     if explicit:
-        return [repo / f for f in explicit]
+        return [repo / f for f in explicit], 3
     rels: set[str] = set()
+    answered = 0
     for args in (
         ["git", "diff", "--name-only", "HEAD"],
         ["git", "diff", "--name-only", "--cached"],
@@ -118,8 +140,9 @@ def changed_files(repo: Path, explicit: list[str] | None) -> list[Path]:
             ).stdout
         except (subprocess.CalledProcessError, FileNotFoundError):
             continue
+        answered += 1
         rels.update(line for line in out.splitlines() if line.strip())
-    return [repo / r for r in sorted(rels) if not in_zone(r)]
+    return [repo / r for r in sorted(rels) if not in_zone(r)], answered
 
 
 def zone_roots(repo: Path) -> list[Path]:
@@ -178,17 +201,20 @@ def scan(repo: Path, size: int, max_zone_files: int, explicit: list[str] | None)
         "zone_files": 0,
         "zone_scanned": 0,
         "truncated": False,
+        #: How many of the three git probes answered. 0 means the change set is unknown,
+        #: not empty — see `changed_files`.
+        "probes_answered": 3,
     }
     if not roots:
         return [], stats
 
     # THE INDEX FIRST, THE ZONE AFTERWARDS — and the order is the point.
-    # Este script roda em todo Stop, antes do early-exit do hook. Enumerar a
     # This script runs on every Stop, before the hook's early exit. Enumerating
     # the zone before knowing whether there is anything to compare made a session
     # that wrote nothing pay the full walk of thousands of third-party files just
     # to reach "nothing to compare".
-    index = build_index(changed_files(repo, explicit), repo, size)
+    changed, stats["probes_answered"] = changed_files(repo, explicit)
+    index = build_index(changed, repo, size)
     stats["indexed_shingles"] = len(index)
     if not index:
         return [], stats
@@ -231,7 +257,8 @@ def scan(repo: Path, size: int, max_zone_files: int, explicit: list[str] | None)
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--repo", default=".", help="repository root (default: cwd)")
+    ap.add_argument(
+        "--root", "--repo", dest="root", default=".", help="repository root (default: cwd)")
     ap.add_argument("--shingle", type=int, default=DEFAULT_SHINGLE,
                     help=f"consecutive meaningful lines per window (default {DEFAULT_SHINGLE})")
     ap.add_argument("--max-zone-files", type=int, default=DEFAULT_MAX_ZONE_FILES,
@@ -243,7 +270,7 @@ def main() -> int:
     if args.shingle < 2:
         print("ERROR: --shingle must be >= 2", file=sys.stderr)
         return 2
-    repo = Path(args.repo).resolve()
+    repo = Path(args.root).resolve()
     if not repo.is_dir():
         print(f"ERROR: repo not found: {repo}", file=sys.stderr)
         return 2
@@ -253,6 +280,12 @@ def main() -> int:
     if not stats["zone_present"]:
         print("SKIP reference-leakage: study zone absent or empty — nothing to compare against.")
         return 0
+
+    if not stats["probes_answered"]:
+        print("UNCHECKED reference-leakage: none of the three git probes answered, so "
+              "the set of changed files is unknown rather than empty. Nothing was "
+              "compared against the study zone.", file=sys.stderr)
+        return 2
 
     if stats["truncated"]:
         print(

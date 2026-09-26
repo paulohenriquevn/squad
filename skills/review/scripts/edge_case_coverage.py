@@ -7,7 +7,7 @@ Heuristic:
      - Bullets under "## Deep Dives" / "### Deep Dives" section per task
      - Bullets mentioning "empty", "null", "max", "boundary", "race", "concurrent", "timeout"
   2. For each edge case, search tests/ for assertions exercising it (keyword + AST pattern)
-  3. Classify per edge case: covered / partial / missing
+  3. Classify per edge case: covered (a named test exists) / partial (only a keyword hit) / missing
 
 Output: JSON report.
 
@@ -181,6 +181,10 @@ def _overlap(description: str, identifier: str) -> int:
 def classify_coverage(edge_case: dict[str, object], test_dir: Path) -> dict[str, object]:
     """Return: covered / partial / missing per declared case.
 
+    `covered` means the plan named a test and that identifier exists in the tree.
+    `partial` means only the keyword fallback found something — evidence that the words
+    appear, not that this case has a test. `missing` means neither.
+
     Two routes, in order. The plan's own `#### TDD` block names its tests, and an identifier either
     exists in the tree or it does not — no vocabulary is guessed. Only when a task names none does
     the keyword fallback run.
@@ -229,7 +233,13 @@ def classify_coverage(edge_case: dict[str, object], test_dir: Path) -> dict[str,
         "search_keywords": keywords,
         "matching_tests": [str(p) for p in matching_tests[:3]],
         "matching_count": len(matching_tests),
-        "status": "covered" if matching_tests else "missing",
+        # `partial`, not `covered`. A grep hit says SOMETHING in the tree mentions
+        # these words; it does not say this edge case has a test. The named-test route
+        # above proves an identifier exists, and calling both outcomes "covered" told
+        # the reader the two carried the same weight. `partial` was documented in three
+        # places and produced by nothing, so the key sat at 0 on every run — a consumer
+        # counting it to decide whether coverage was genuinely complete read a constant.
+        "status": "partial" if matching_tests else "missing",
     }
 
 
@@ -254,7 +264,17 @@ def main() -> int:
             "covered": 0,
             "partial": 0,
             "missing": 0,
-            "coverage_ratio": 1.0,  # vacuously true
+            # NOT 1.0. "Vacuously true" is what the comment said, and the number went
+            # to `consolidate_findings`, which gates the review verdict on it at 0.80 —
+            # so a plan from which no edge case could be extracted scored better than
+            # one whose cases were extracted and half-covered. `None` is the honest
+            # answer, and the consumer already handles a missing ratio by skipping the
+            # band rather than passing it.
+            "coverage_ratio": None,
+            "confirmed_ratio": None,
+            "unmeasured_because": (
+                "no edge case could be extracted from this plan, so coverage over them "
+                "was not measured. This is not 100% coverage; it is no measurement."),
             "note": "No edge cases extracted from plan (may indicate plan is missing Edge Cases section, OR plan uses different naming convention)",
             "items": [],
         }
@@ -275,7 +295,13 @@ def main() -> int:
         "covered": covered,
         "partial": partial,
         "missing": missing,
-        "coverage_ratio": round(covered / total, 3) if total else 1.0,
+        # Two ratios, because they answer different questions and merging them is how
+        # the weaker evidence disappeared in the first place. `coverage_ratio` keeps
+        # counting partials: it is what `consolidate_findings` gates on at 0.80, and
+        # redefining it here would move a verdict without anyone deciding to.
+        # `confirmed_ratio` is the strict figure — cases with a named test that exists.
+        "coverage_ratio": round((covered + partial) / total, 3) if total else 1.0,
+        "confirmed_ratio": round(covered / total, 3) if total else 1.0,
         "items": classified,
     }
     print(json.dumps(output, indent=2))

@@ -22,7 +22,10 @@ from pathlib import Path
 _SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(_SCRIPTS))
 
-from board_state import stage_on_disk  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from board_state import stage_on_disk  # noqa: E402 — post-bootstrap import
 
 _SPELLINGS = ("B-022-plan.md", "b022-delete-the-unwired-package-plan.md")
 
@@ -41,7 +44,7 @@ def _selector(root: Path) -> dict:
     out = subprocess.run(
         [sys.executable, str(_SCRIPTS / "select_backlog_item.py"),
          str(root / "BACKLOG.md"), "--json"],
-        capture_output=True, text=True, timeout=180).stdout
+        capture_output=True, text=True, timeout=180, check=False).stdout
     return json.loads(out[out.index("{"):])
 
 

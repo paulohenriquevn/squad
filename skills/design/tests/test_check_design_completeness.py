@@ -21,7 +21,10 @@ _SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
-from check_design_completeness import (  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from check_design_completeness import (  # noqa: E402 — post-bootstrap import
     DRAWINGS,
     EXIT,
     MIN_MERMAID_LINES,
@@ -30,6 +33,7 @@ from check_design_completeness import (  # noqa: E402
     check,
     declares_kind,
     mermaid_blocks,
+    render,
     verdict_of,
 )
 
@@ -311,11 +315,11 @@ def test_the_contract_does_not_point_at_the_wrong_generator() -> None:
     skill = (Path(__file__).resolve().parents[1] / "SKILL.md").read_text(encoding="utf-8")
 
     render_section = skill.split("### Step 4")[1].split("### Step 5")[0]
-    assert "import-mermaid" in render_section
-    assert "build_walkthrough.py" in render_section, (
+    assert "import-mermaid" in render_section  # prose-test: the sentence an operator reads IS the deliverable here
+    assert "build_walkthrough.py" in render_section, (  # prose-test: naming the wrong generator is itself the defect
         "the wrong generator must stay NAMED as wrong — removing the mention silently "
         "invites the next author to reach for it")
-    assert "Not `build_walkthrough.py`" in render_section
+    assert "Not `build_walkthrough.py`" in render_section  # prose-test: the warning is the contract, not a proxy for one
 
 
 # ------------------------------------------------------------------ parseability
@@ -366,8 +370,9 @@ def test_the_sop_does_not_send_the_operator_at_a_file_nothing_makes() -> None:
     """
     sop = (Path(__file__).resolve().parents[1] / "SOP.md").read_text(encoding="utf-8")
 
-    assert "walkthrough.html" not in sop
-    assert "import-mermaid" in sop, "the render path must be named where the operator reads"
+    assert "walkthrough.html" not in sop  # prose-test: a path to a file nothing makes
+    assert "import-mermaid" in sop, (  # prose-test: the operator reads this to find the renderer
+        "the render path must be named where the operator reads")
 
 
 # ------------------------------------------------------------------ the panel
@@ -383,17 +388,47 @@ def test_design_is_a_panel_phase() -> None:
     assert phases and "design" in phases[0]
 
 
-def test_the_design_panel_spans_two_model_families() -> None:
+def test_the_design_panel_spans_two_model_families_or_says_why_not() -> None:
     """Correlated models share failure modes: a plausible fabrication that survives one
     tends to survive its siblings. The seat outside the home family is what the panel
-    is for."""
+    is for.
+
+    A project that cannot reach a second provider has two honest options — run no panel,
+    or run one and say what it is worth — and the second requires a DECLARED waiver in
+    `rules/review-panel.txt`, on the layer the installer preserves. A roster that happens
+    to be one family and one that was MEANT to be read identically on disk, so this test
+    reads the declaration rather than counting families and inferring intent. Without the
+    keys, three seats from one family still fails here, in `check_panel_capability.py`
+    and at `Panel.tally()`.
+    """
     panel = (Path(__file__).resolve().parents[3] / "rules" / "review-panel.txt")
-    seats = [ln for ln in panel.read_text(encoding="utf-8").splitlines()
+    text = panel.read_text(encoding="utf-8")
+    seats = [ln for ln in text.splitlines()
              if ln.startswith("reviewer") and "design" in ln.split("|")[0]]
 
     assert len(seats) == 3, seats
-    families = {ln.split("|")[3].strip() for ln in seats}
-    assert len(families) >= 2, families
+    # Column 3 is the PROVIDER (`builtin` for every seat); the family comes from the
+    # MODEL in column 2, and `review_panel.family_of` is what derives it. Reading
+    # column 3 made every roster look like one family — including a roster that spans
+    # two — so the waiver branch below fired for a panel that never needed it.
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "mechanisms" / "cycle"))
+    from review_panel import family_of
+
+    families = {family_of(ln.split("|")[2].strip()) for ln in seats}
+    if len(families) >= 2:
+        return
+
+    waiver = [ln.split("=", 1)[1].strip() for ln in text.splitlines()
+              if ln.startswith("single_family_panel")]
+    reason = [ln.split("=", 1)[1].strip() for ln in text.splitlines()
+              if ln.startswith("single_family_reason")]
+    assert waiver and waiver[0] == "accepted", (
+        f"the design panel is one family ({families}) and nothing declares that as a "
+        f"decision. Add a second family, or declare `single_family_panel = accepted` "
+        f"with `single_family_reason`."
+    )
+    assert reason and reason[0], "a waiver with no reason is not a waiver"
 
 
 def test_the_cycle_separates_the_panel_from_the_signature() -> None:
@@ -427,3 +462,194 @@ def test_an_abstention_is_never_agreement() -> None:
     gr = (Path(__file__).resolve().parents[3] / "rules" / "design-golden-rule.md")
 
     assert "Counted as incomplete, never as agreement" in gr.read_text(encoding="utf-8")
+
+
+# ── an absent optional drawing was reported as a present one ─────────────────
+#
+# `(rep.missing if drawing.mandatory else rep.present).append(...)` put every
+# non-mandatory drawing that does not exist into `present`, and `render` tested
+# `drawing.key in rep.present` — so `system-map`, the one optional drawing, printed
+# `ok  system-map  (derived)` for a file nobody had written.
+
+
+def test_an_absent_optional_drawing_is_not_reported_as_present(tmp_path: Path) -> None:
+    design = tmp_path / ".squad" / "wiki" / "design"
+    design.mkdir(parents=True)
+    for drawing in DRAWINGS:
+        if drawing.mandatory:
+            (design / drawing.filename).write_text(
+                f"# {drawing.key}\n\n```mermaid\ngraph TD\n  a-->b\n```\n", encoding="utf-8")
+
+    report = check(tmp_path)
+
+    optional = [d.key for d in DRAWINGS if not d.mandatory]
+    assert optional, "no optional drawing ships; this test lost its subject"
+    for key in optional:
+        assert key not in report.present, f"{key} does not exist and is reported present"
+        assert key in report.absent_optional, key
+
+
+def test_the_rendered_line_says_absent_rather_than_ok(tmp_path: Path) -> None:
+    design = tmp_path / ".squad" / "wiki" / "design"
+    design.mkdir(parents=True)
+    for drawing in DRAWINGS:
+        if drawing.mandatory:
+            (design / drawing.filename).write_text(
+                f"# {drawing.key}\n\n```mermaid\ngraph TD\n  a-->b\n```\n", encoding="utf-8")
+
+    rendered = render(check(tmp_path))
+
+    optional = next(d for d in DRAWINGS if not d.mandatory)
+    line = next(ln for ln in rendered.splitlines() if optional.key in ln)
+    assert "ok " not in line, f"a drawing nobody wrote reads as done: {line!r}"
+    assert "absent" in line, line
+
+
+# ---------------------------------------------- the gate accepted the wrong signer
+#
+# Measured 2026-09-20 against a complete, covered set of five drawings. The gate
+# failed in BOTH directions at once — it agreed a design the agent that draws them
+# signed, and refused the one a person signed with their route recorded:
+#
+#   <!-- signed-by: daedalus-tech-lead -->                    DESIGN_AGREED  exit 0
+#   <!-- signed-by: human/paulo (approved in session) -->     AWAITING_REVIEW
+#
+# `verdict_of` refused the single prefix `judge/`, which is a denylist of one against
+# an open set of names; and the local `([^\s>]+)` pattern stopped at the first space,
+# so a signature carrying its route captured nothing at all. Both are gone: the gate
+# reads `squad.signoff`, which every other gate in the kit now reads too.
+
+
+def test_the_agent_that_draws_the_design_may_not_agree_it(tmp_path: Path) -> None:
+    """`cycle-design.md`: "the signature claims 'I read this and am willing to say it
+    holds' — a person, and only a person"."""
+    signed = SIGNOFF.replace("- [ ]", "- [x]") + "\n<!-- signed-by: daedalus-tech-lead -->\n"
+
+    rep = check(_project(tmp_path, signoff=signed))
+
+    assert rep.verdict == "AWAITING_REVIEW"
+
+
+def test_a_signature_keeps_the_route_it_was_given(tmp_path: Path) -> None:
+    signed = (SIGNOFF.replace("- [ ]", "- [x]")
+              + "\n<!-- signed-by: human/paulo (approved in session) -->\n")
+
+    rep = check(_project(tmp_path, signoff=signed))
+
+    assert rep.signers == ["human/paulo (approved in session)"]
+    assert rep.verdict == "DESIGN_AGREED"
+
+
+def test_deleting_the_checklist_is_not_ticking_it(tmp_path: Path) -> None:
+    """Zero boxes is zero unticked boxes, and it is not a review."""
+    rep = check(_project(tmp_path, signoff="# Sign-off\n\n## Sign-off\n\n"
+                                           "<!-- signed-by: human/paulo -->\n"))
+
+    assert rep.verdict == "AWAITING_REVIEW"
+
+
+# ------------------------------------------------------------------ coverage
+#
+# `PIECE-1 not in map_body` is a SUBSTRING test, and `PIECE-1` is a substring of
+# `PIECE-10`. Measured 2026-09-20 with eleven pieces and a map naming only PIECE-10
+# and PIECE-11: "11 declared, 3 covered by the map". It fails only in the permissive
+# direction, and it fires on any product with ten or more pieces.
+
+
+def test_a_piece_is_not_covered_by_a_longer_id_that_contains_it(tmp_path: Path) -> None:
+    pieces = "# Pieces\n\n" + "\n".join(
+        f"## PIECE-{i} — thing {i}\n" for i in range(1, 12))
+    files = dict(GOOD)
+    files["system-map.md"] = ("# D5\n```mermaid\nflowchart TB\n"
+                              "    a[PIECE-10 ten]\n    b[PIECE-11 eleven]\n    a --> b\n```\n")
+
+    rep = check(_project(tmp_path, files=files, pieces=pieces))
+
+    assert "PIECE-1" in rep.uncovered, "PIECE-1 is absent from the map; PIECE-10 is not it"
+    assert sorted(rep.uncovered) == sorted(f"PIECE-{i}" for i in range(1, 10))
+
+
+# ------------------------------------------------------------------ the two minors
+
+
+def test_a_question_mark_placeholder_is_a_placeholder(tmp_path: Path) -> None:
+    """`\\b` before `?` needs a word character beside it, and `?` is not one — so
+    `???` sat in the pattern and could not match. Same defect as the product scorer's."""
+    files = dict(GOOD)
+    files["states.md"] = GOOD["states.md"].replace("# D1", "# D1\n\nowner: ???")
+
+    rep = check(_project(tmp_path, files=files))
+
+    assert any(f.code == "placeholder_in_drawing" for f in rep.findings)
+
+
+def test_a_drawing_that_cannot_be_READ_is_not_a_drawing_that_is_ABSENT(tmp_path: Path) -> None:
+    """`_read` swallowed OSError into `""`, so a present-but-unreadable file was
+    reported MISSING — which sends a person to draw what they already have."""
+    project = _project(tmp_path)
+    unreadable = project / ".squad" / "wiki" / "design" / "trust.md"
+    unreadable.chmod(0o000)
+    try:
+        rep = check(project)
+    finally:
+        unreadable.chmod(0o644)
+
+    assert "trust" not in rep.missing, "it is on disk; it could not be opened"
+    assert any(f.code == "drawing_unreadable" for f in rep.findings)
+
+
+# -------------------------------------------- the phase had no way to reach its end
+#
+# Three defects that met in one place, measured 2026-09-20:
+#
+#   1. nothing in the kit writes `design/sign-off.md`. The gate reads it, the SOP says
+#      to sign it, and `/sign` refuses what does not exist: "is neither a path that
+#      exists nor a slug of any document waiting for a signature. Nothing was signed."
+#   2. `$ECO` is used by Step 5 and Step 5b of SKILL.md and assigned nowhere in the
+#      file, so both expand to `/skills/...` and `/mechanisms/...` — absolute paths
+#      from the filesystem root. The two steps affected are "run the gate" and
+#      "convene the panel".
+#   3. G-D8 declares a 2-of-3 panel and nothing in the flow ran `check_panel_approval`.
+#
+# These are prose and template tests. `prompt-text-is-not-behaviour.md` draws the line
+# at wording versus structure: an assigned shell variable, a shipped template file and
+# a named script invocation are structure.
+
+
+def test_the_skill_ships_the_checklist_it_asks_a_person_to_sign() -> None:
+    template = (Path(__file__).resolve().parents[1] / "templates" / "sign-off.template.md")
+
+    assert template.is_file(), (
+        "the gate reads design/sign-off.md and the SOP says to sign it; nothing wrote "
+        "one, so DESIGN_AGREED was unreachable")
+    body = template.read_text(encoding="utf-8")
+    assert "<!-- signed-by: -->" in body, "the unsigned marker a reviewer replaces"
+    assert body.count("- [ ] ") >= 3, "a checklist with nothing to tick is not a gate"
+    assert "- [x]" not in body, "shipped ticked is shipped signed"
+
+
+# `test_every_shell_variable_the_skill_uses_is_one_it_assigned` lived here and read
+# `skills/design/SKILL.md` alone. It caught the defect in this slice and missed it in
+# three others — `plan-alignment`, `release` and `issue-confidence` carried the same
+# unassigned `$ECO`, and the one in `plan-alignment` made `classify_alignment_depth.py`
+# unrunnable: the script `cycle-plan.md` calls "Derived, never chosen". A test scoped to
+# one slice catches the defect in one slice, so it moved to
+# `tests/test_a_skill_assigns_the_variables_it_uses.py`, which reads every SKILL.md.
+
+
+def test_the_flow_runs_the_panel_gate_it_declares() -> None:
+    """G-D8 is declared in `cycle-design.md`'s gate table. A gate nothing invokes is a
+    claim, and `check_panel_approval.py` exists precisely to refuse an absent record."""
+    skill = (Path(__file__).resolve().parents[1] / "SKILL.md").read_text(encoding="utf-8")
+    sop = (Path(__file__).resolve().parents[1] / "SOP.md").read_text(encoding="utf-8")
+
+    # prose-test: the INVOCATION is the subject here, not the wording around it. G-D8
+    # names a script; whether the flow runs it is the question, and a named command in
+    # the procedure is the only place that fact lives. `check_gate_mechanisms.py` asks
+    # the other half — that a declared gate names an enforcer — and passed throughout,
+    # because naming is what it checks.
+    assert "check_panel_approval.py" in skill, (  # prose-test: the invocation IS the subject
+        "SKILL.md convenes the panel and never checks its verdict, so DESIGN_AGREED "
+        "was emitted with no panel record at all")
+    assert "check_panel_approval.py" in sop, (  # prose-test: same invocation, operator side
+        "the operator's procedure skipped the panel gate entirely")

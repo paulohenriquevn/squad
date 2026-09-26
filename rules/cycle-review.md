@@ -1,4 +1,5 @@
 # Cycle: REVIEW
+<!-- rule-id: SQ-CYC-15 -->
 
 Source of Truth for the pre-merge review cycle.
 
@@ -8,8 +9,8 @@ Re-validate quality gates with stricter thresholds before merge. Catches issues 
 
 ## Pre-conditions
 
-- Implementation output exists at `records/implementations/{slug}-implementation.md`.
-- Code-quality audit exists at `records/audits/{slug}-code-quality-*.md` with verdict ∈ {`PASS`, `PASS_WITH_CAVEATS`} — or `FAIL_SOFT` accompanied by an ADR dismissing each soft cap (per `code-quality-golden-rule.md` § 1). `FAIL_HARD` and `INVALID` block this cycle.
+- Implementation output exists at `.squad/records/implementations/{slug}-implementation.md`.
+- Code-quality audit exists at `.squad/records/audits/{slug}-code-quality-*.md` with verdict ∈ {`PASS`, `PASS_WITH_CAVEATS`} — or `FAIL_SOFT` accompanied by an ADR dismissing each soft cap (per `code-quality-golden-rule.md` § 1). `FAIL_HARD` and `INVALID` block this cycle.
 
   **Enforced, not remembered.** `skills/review/scripts/check_upstream_gate.py` reads the newest audit for the slug and emits a BLOCKER when it is missing, unreadable, `FAIL_HARD`/`INVALID`, or `FAIL_SOFT` with any soft cap that no ADR names. `consolidate_findings.py` folds those findings into the same verdict computation as every other finding, so a `/review` verdict cannot be produced without the check having run. Until 2026-08-26 this was prose plus a `test -f` in `SKILL.md`, and the ADR — the artefact that makes a soft cap dismissible — was never looked for: asserting it existed was enough. "Each soft cap" is the strict reading: with two caps and one ADR, the loose reading approves the cap nobody examined as a passenger of the one that was.
 - Working branch has commits ahead of the base branch.
@@ -55,6 +56,21 @@ ARTIFACTS; this extends it to the CODE.
 | Selects | [`mechanisms/cycle/select_auditors.py`](../mechanisms/cycle/select_auditors.py), from the domain [`detect_domain.py`](../skills/review/scripts/detect_domain.py) already derives |
 | **Blocks** | [`mechanisms/gates/check_auditor_coverage.py`](../mechanisms/gates/check_auditor_coverage.py), entering `consolidate_findings.py` as BLOCKER findings |
 | Where plugins are found | [`mechanisms/conventions/installed_plugins.py`](../mechanisms/conventions/installed_plugins.py) |
+| **Premise, asked once** | [`mechanisms/gates/check_plugin_freshness.py`](../mechanisms/gates/check_plugin_freshness.py) — is the installed plugin the one that was committed? |
+
+**An audit runs the CACHE, not the repository.** Claude Code installs a plugin into
+`~/.claude/plugins/cache/…` and records the `gitCommitSha` it was built from;
+`installed_plugins.py` resolves by `installPath`, so what runs is that snapshot. Measured
+2026-09-22 by the session maintaining those plugins, walking the commission → audit → read
+chain for the first time: **17 of 18 installed plugins were behind their repositories**,
+and the contract under test did not exist in the tree that actually ran. The repository was
+right and this kit's reader was right; what executed was neither.
+
+It is asked BEFORE the first item, for `check_merge_autonomy.py`'s reason: discovering it
+per-audit costs the run — the audit completes, the report is written, and only a missing
+field says anything was wrong. `unverifiable` — a source that is not a local directory, an
+entry with no sha, a plugin absent here — is reported apart from `aligned` and is never a
+failure, because treating *I could not ask* as *nothing is wrong* is the defect itself.
 
 **The selection is derived, not chosen.** The reviewing agent does not pick its own
 auditor — the same rule the review panel enforces when it refuses to seat an author,
@@ -113,7 +129,7 @@ for a long time this list said so about none of them. A mechanized gate whose
 rule names no mechanism reads exactly like a gate nobody enforces — so it gets
 re-run by hand, or quietly ignored. The mechanism is now part of the line.
 
-- Failing tests on the working branch — `suite_runners.py`, invoked upstream by
+- Failing tests on the working branch — `suite_runners.py` (run by `run_validation.py`), invoked upstream by
   `run_validation.py` at the end of `/implement`, and again by `ci.yml` on every
   push. **No hook executes the suite**, so a branch that never ran `/implement`
   reaches `/review` with this gate resting on CI alone.
@@ -127,11 +143,12 @@ re-run by hand, or quietly ignored. The mechanism is now part of the line.
   Rule 6) — `stop-validation.py`, which accepts a package `CHANGELOG.md` or a
   `.changeset/` entry as the record.
 
+- A finding that was in the previous review of this slug and is not in this one — `check_finding_continuity.py`, entering `consolidate_findings.py` as HIGH findings. HIGH and not BLOCKER because the checker refuses to rule on intent — *"an honest re-scope and a quiet deletion look identical on disk"* — so the disappearance has to be named and owned through `unregistered_high` rather than judged here. Written on 2026-08-30 to replace a sentence in `SKILL.md` guarded by a test asserting `"delete" in text`, and invoked by nothing until 2026-09-21: a review scores from OPEN findings, so deleting one cost nothing while the mechanised half sat unwired.
 - A required independent audit that did not happen — `check_auditor_coverage.py`, entering `consolidate_findings.py` as BLOCKER findings so the verdict cannot be computed while ignoring it, the shape `check_upstream_gate.py` established. It fires on a report that is missing, one the plugin's own checker rejects, or a plugin this machine does not have. A project that declares no auditor is **not** blocked: that opt-out is a visible edit to a file the installer preserves, never a silence.
 
 ## Output
 
-- `records/reviews/{slug}-review-{YYYY-MM-DD}.md` — consolidated findings with severity matrix.
+- `.squad/records/reviews/{slug}-review-{YYYY-MM-DD}.md` — consolidated findings with severity matrix, opening with a frontmatter declaring the item it covered. `check_record_scope.py` reads that declaration, and it measured why: 2 of 48 reviews named a reviewed range and 3 of 16 audits named a scope, so *"a review that covered seven items and one that covered a single item are indistinguishable from the file"*. The past stays unrecoverable; what the frontmatter stops is the same hole opening again. The report also names every findings file it could NOT parse — an empty findings list and a file that failed to load are different facts, and only the JSON carried that distinction until 2026-09-21.
 - `.squad/records/reviews/review-{slug}-{YYYY-MM-DD}/` — per-agent audit trail. Generated per-item files are output; `agents/` holds the kit's DECLARED specialists, and mixing the two put a run's trail where a reader looks for a roster.
 
 ## Anti-patterns

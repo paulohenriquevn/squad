@@ -24,8 +24,12 @@ _ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_ROOT / "mechanisms" / "cycle"))
 sys.path.insert(0, str(_ROOT))
 
-from promote_to_develop import _reviews_that_drifted  # noqa: E402
-from squad.paths import write_records_dir  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from promote_to_develop import _reviews_that_drifted  # noqa: E402 (post-bootstrap)
+
+from squad.paths import write_records_dir  # noqa: E402 — post-bootstrap import
 
 
 def _project(tmp_path: Path, *records: str) -> Path:
@@ -38,14 +42,14 @@ def _project(tmp_path: Path, *records: str) -> Path:
 
 
 def test_the_count_travels_with_the_answer(tmp_path: Path) -> None:
-    drifted, examined = _reviews_that_drifted(_project(tmp_path))
+    drifted, examined, _why = _reviews_that_drifted(_project(tmp_path))
     assert drifted == []
     assert examined == 0, \
         "an empty sweep is indistinguishable from a clean one without the count"
 
 
 def test_a_record_on_disk_is_counted(tmp_path: Path) -> None:
-    _, examined = _reviews_that_drifted(_project(tmp_path, "B-001-review-2026-09-16.json"))
+    _, examined, _why = _reviews_that_drifted(_project(tmp_path, "B-001-review-2026-09-16.json"))
     assert examined == 1
 
 
@@ -56,10 +60,10 @@ def test_markdown_records_are_not_counted(tmp_path: Path) -> None:
     project = _project(tmp_path)
     (write_records_dir(project, "reviews") / "B-001-review-2026-09-16.md").write_text(
         "# a review\n", encoding="utf-8")
-    _, examined = _reviews_that_drifted(project)
+    _, examined, _why = _reviews_that_drifted(project)
     assert examined == 0
 
 
 def test_a_project_with_no_reviews_directory_answers_zero(tmp_path: Path) -> None:
-    drifted, examined = _reviews_that_drifted(tmp_path)
+    drifted, examined, _why = _reviews_that_drifted(tmp_path)
     assert (drifted, examined) == ([], 0)

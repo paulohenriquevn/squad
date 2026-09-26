@@ -48,6 +48,14 @@ READERS = {
     # waiting on got an answer. It gates on status now (REQUIRES_STATUS), so it
     # decides, so it is pinned like the rest.
     "mechanisms/fleet/pipeline_orchestrator.py": "decides which status a finished stage may write",
+    # Ported from a consumer session 2026-09-21. It fails only for items about to be
+    # planned against, so the status is the whole scope of its refusal: a settled item's
+    # pointers are history and may name a tree that has since moved.
+    "mechanisms/gates/check_evidence_freshness.py": "decides whose dead pointers fail",
+    # Decides which statuses let a sprint CLOSE. A status added to the contract that
+    # means "the registry is finished with this item" has to reach `TERMINAL_STATUSES`,
+    # or a block will refuse to close over an item that is in fact done.
+    "squad/sprint.py": "decides which statuses are terminal for a sprint",
 }
 
 
@@ -286,14 +294,73 @@ def test_no_unenumerated_reader_decides_on_a_status() -> None:
         "tests/test_pipeline_does_not_approve.py",
         # Names statuses only in a comment about queue order.
         "mechanisms/fleet/squad_lead.py",
+        # Fixtures for SELECT's obligation band. It names `triaged` and `raw` to build
+        # the two cases the band must NOT disturb — status still ranks before age inside
+        # it — never to decide what either one means. The meaning is `_RANK`, read from
+        # `SELECTABLE`, which is pinned above.
+        "skills/backlog-review/tests/test_an_incident_does_not_wait_for_its_turn_by_age.py",
+        # Fixtures for the `subject` routing gate. It names `shipped` and `killed` to build
+        # the closed cases the finding must NOT fire on — routing is a question about work
+        # that can still move — and never to decide what either one means. The meaning is
+        # `OPEN_STATUS`, read from the contract and pinned above.
+        "skills/backlog-review/tests/test_an_item_about_the_kit_belongs_to_the_kits_registry.py",
+        # Fixtures for the sprint. They name `shipped` and `killed` to build the terminal
+        # and the still-moving case the close must tell apart; the meaning of both comes
+        # from `TERMINAL_STATUSES`, which is pinned above.
+        "tests/test_a_sprint_is_a_block_with_a_goal_and_a_close.py",
+        # Fixtures for the sprint band in `rank()`. It names `raw` and `triaged` to prove
+        # status still decides INSIDE the band — the band is a band — and never to decide
+        # what either one means. `_RANK` is pinned above.
+        "skills/backlog-review/tests/test_the_queue_honours_the_open_sprint.py",
+        # Asserts the index's bucket MAP, which is where the statuses come from — it names
+        # all six to prove the grouping did not move when the label did. The meaning of
+        # each one is `BUCKETS`, which `test_backlog_index.py` pins against `LEGAL_STATUS`.
+        "tests/test_in_flight_is_not_derived_from_status.py",
+        # Fixtures for the lead-time p50. It names `shipped` and `killed` to build the
+        # delivered and the abandoned case, because `_delivery` counts them apart; the
+        # meaning of both comes from that function, which `test_board_state.py` pins.
+        "skills/backlog-review/tests/test_the_board_computes_lead_time_from_the_date_it_already_had.py",
+        # A killed item's lineage, read forward. It names `killed` and `shipped` because
+        # `LINEAGE_EDGES` maps each field to the status it implies — the map is the
+        # decider and lives in `check_backlog_structure.py`.
+        "skills/backlog-review/tests/test_a_killed_item_says_where_it_went.py",
         # Tests OF the readers. They assert on statuses, they do not route on
         # them, and enumerating them here would pin the pins.
         "skills/backlog-review/tests/test_backlog_index.py",
         "skills/backlog-review/tests/test_check_backlog_structure.py",
+        # Same category: it names statuses to build the blocks a duplicated field is
+        # found in, never to decide what one MEANS.
+        "skills/backlog-review/tests/test_a_second_claim_is_not_an_advance.py",
+        # Tests the transition table itself, so it names most of the chain by
+        # necessity. Pinning it would pin the pins — the same reason its siblings
+        # here are exempted rather than enumerated.
+        "tests/test_a_withdrawal_is_recorded_not_silent.py",
+        "skills/backlog-review/tests/test_an_item_that_says_it_is_closed_is_not_open.py",
+        # Fixtures for the checkbox gate. It names `shipped`/`killed`/`triaged` to BUILD the
+        # four cases — box agrees, box disagrees in each direction, no box at all — never to
+        # decide what a status means; the meaning is `TERMINAL_STATUSES`, read from the contract
+        # by the checker under test.
+        "tests/test_the_checkbox_agrees_with_the_status.py",
+        # Fixtures for the column-activity states. It names statuses to place items in
+        # lanes, never to decide what a status MEANS — the same reason its siblings
+        # above are here rather than pinned.
+        "skills/backlog-review/tests/test_each_column_says_whether_it_is_working.py",
+        # The board's own fixtures. Each names statuses to place items on a page and
+        # none decides what a status MEANS — `test_the_board_reports_delivery` counts
+        # `shipped` and `killed` because the board reports them apart, which is the
+        # contract's own distinction rather than a second reading of it.
+        "skills/backlog-review/tests/test_the_board_names_a_skipped_phase.py",
+        "skills/backlog-review/tests/test_the_board_opens_with_a_verdict.py",
+        "skills/backlog-review/tests/test_the_board_reports_delivery.py",
         "skills/backlog-review/tests/test_squad_boss.py",
         "skills/brainstorm-vision/tests/test_build_agenda.py",
         "tests/test_advance_items.py",
         "tests/test_blocked_by_readers_agree.py",
+        # Tests that `check_backlog_structure._effective_counts` delegates the
+        # derivation to `backlog_status.effective_state`. It asserts on statuses
+        # to build its fixtures; the routing it exercises belongs to the owner,
+        # which IS pinned above.
+        "tests/test_one_owner_decides_the_effective_state.py",
         # Tests OF `backlog-approve`. They assert that a signed brief moves items to
         # `approved` and that `shipped` refuses the same move; the routing decision
         # they exercise belongs to `backlog_status.py`, which IS pinned.
@@ -321,7 +388,9 @@ def test_no_unenumerated_reader_decides_on_a_status() -> None:
         # `--untracked`: `git grep` reads the INDEX, so a reader added and not yet
         # committed is invisible to it. Measured here by mutation — dropping a new
         # file holding two status literals into the tree left this test green.
-        ["git", "grep", "--untracked", "-lE",
+        # `-I`: a binary artifact that happens to carry the status bytes (a review
+        # database, a compiled blob) is not a reader, and judging one is noise.
+        ["git", "grep", "--untracked", "-I", "-lE",
          r'"(raw|triaged|approved|planned|shipped|killed)"'],
         cwd=REPO_ROOT, capture_output=True, text=True,
         check=False,

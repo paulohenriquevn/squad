@@ -91,14 +91,32 @@ import sys as _sys_bootstrap
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from pathlib import Path
-from pathlib import Path as _Path_bootstrap
+from pathlib import Path, Path as _Path_bootstrap
 
 for _up in _Path_bootstrap(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _sys_bootstrap.path.insert(0, str(_up))
         break
-from squad.paths import records_dir  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts.
+# `decision_model` is a sibling: `python3 mechanisms/fleet/squad_lead.py` puts this
+# directory first on `sys.path`, and the test suite adds it for every fleet module.
+from decision_model import (  # noqa: E402 — post-bootstrap import
+    DecisionModelUnavailable,
+    SystemOneClient,
+    choice,
+)
+
+from squad.paths import RULE_BASES, rules_dir  # noqa: E402 — post-bootstrap import
+
+
+class ClaimsUnreadable(RuntimeError):
+    """The decision log could not be replayed into a claim set.
+
+    Distinct from "nothing is claimed", and the distinction is the whole point: an
+    empty claim set is what hands one item to two sessions. `fleet_router.StateUnreadable`
+    is the same refusal one file along.
+    """
+
 
 def _halted_items(project: Path) -> set[str]:
     """Items a phase stopped on, from the ONE reader of those files.
@@ -130,7 +148,7 @@ def _halted_items(project: Path) -> set[str]:
                 _sys_bootstrap.path.insert(0, str(scripts))
             break
     try:
-        from squad_boss import halt_reports  # noqa: PLC0415
+        from squad_boss import halt_reports
     except ImportError:
         return set()
     return set(halt_reports(project))
@@ -141,7 +159,7 @@ def _halted_items(project: Path) -> set[str]:
 FLOW_MARKERS = (
     "blocked_by", "re-select", "re-run the select", "re-rodo o select", "reselect",
     "next item", "próximo item", "proximo item",
-    "record the impediment", "registrar o impedimento", "adicionar blocked_by",
+    "record the impediment", "registrar o impedimento", "adicionar blocked_by",  # english-only: the session prints its menus in the operator's language; the markers must match
     "continue", "continuar", "prosseguir", "skip", "pular",
     # Invoking a cycle command is flow, because the human gates live INSIDE the
     # skills — `/release` waits at its own Step 6, `/idea-to-release` stops at
@@ -174,7 +192,7 @@ CONTENT_MARKERS = (
     # markers must match what it actually prints — a marker list in English alone
     # would classify every Portuguese question as `unknown` and escalate all of them.
     "you take", "você toma", "voce toma", "you decide", "você decide", "voce decide",  # english-only: the session prints its menus in the operator's language; the markers must match
-    "sponsor", "t3", "approve", "aprovar", "aprovação", "aprovacao",
+    "sponsor", "t3", "approve", "aprovar", "aprovação", "aprovacao",  # english-only: the session prints its menus in the operator's language; the markers must match
     "merge", "release", "deploy", "tag", "publish", "publicar",
     "delete", "deletar", "remover", "drop", "revoke", "revogar",
 )
@@ -399,6 +417,56 @@ honest answer is that only a person can move this, say exactly which decision an
 which item."""
 
 
+#: Where the doctrine lives, and the heading that opens it. The typed decision model
+#: is offered exactly the `###` sections under this heading, read from disk each time,
+#: so an envelope edited tomorrow is the menu of rules tomorrow.
+_ENVELOPE = "autonomy-envelope.md"
+_DOCTRINE_HEADING = "## The doctrine"
+_FLOOR_HEADING = "## The floor"
+#: The two doctrine sections whose prescribed action is TEXT to type. A decision model
+#: answers with an option and cannot write that text, so on either of these it steps
+#: aside for the agent. Recognised by name: if the envelope stops naming both, the
+#: model is not asked at all, because a match that silently stopped matching would let
+#: it act on a rule that needs text.
+_RULES_THAT_NEED_TEXT = ("The menu does not offer what the doctrine prescribes",
+                         "Nothing here fits")
+#: The confidence BOTH answers must reach before the lead acts on them. A policy set by
+#: the operator on 2026-09-25, not a calibration: no labelled set of doctrine menus
+#: exists yet. Measured the same day on a menu-shaped state: 0.95-0.96 on a clear case.
+DECISION_THRESHOLD = 0.90
+#: How much of the screen above a menu the model reads. The screen is what makes the
+#: rule identifiable: measured on 2026-09-25 with the real envelope, the rule's
+#: confidence on a scope menu was 0.52 from the menu alone and 0.97 with the screen.
+#: Bounded because the model takes 32k tokens of state and a tmux capture has no end.
+_SCREEN_LINES = 80
+_DOCTRINE_QUESTION = ("Which section of the autonomy envelope's doctrine decides the "
+                      "menu in the state? The doctrine and the floor are in the state.")
+_OPTION_QUESTION = ("Which menu option carries out what that section of the doctrine "
+                    "prescribes? Never an option that switches off a gate, merges, or "
+                    "widens an item already executing.")
+
+
+def _envelope_sections(text: str, heading: str) -> tuple[str, dict[str, str]]:
+    """The block under a `## ` heading, and its `### ` sections by name."""
+    lines = text.splitlines()
+    start = next((i for i, line in enumerate(lines) if line.startswith(heading)), None)
+    if start is None:
+        return "", {}
+    end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("## ")),
+               len(lines))
+    block = lines[start:end]
+    sections: dict[str, list[str]] = {}
+    current = None
+    for line in block[1:]:
+        if line.startswith("### "):
+            current = line[4:].strip()
+            sections[current] = []
+        elif current is not None:
+            sections[current].append(line)
+    return ("\n".join(block).strip(),
+            {name: " ".join(" ".join(body).split())[:300] for name, body in sections.items()})
+
+
 #: The squad agent this watchdog escalates to. It is the facilitator role —
 #: flow and impediments — and the name must match a file `install.sh` copies,
 #: because `claude -p` resolves it from `.claude/agents/{name}.md` on disk.
@@ -458,6 +526,10 @@ class Lead:
     #: answer. Off by default: a daemon that calls a model unattended is a different
     #: thing from a daemon that reads a screen, and the difference should be chosen.
     agents_when_stuck: bool = False
+    #: A typed decision model asked BEFORE the agent on a doctrine menu. None means the
+    #: agent path alone, exactly as before; `main()` builds one when the key is set.
+    decision_model: "SystemOneClient | None" = None
+    decision_threshold: float = DECISION_THRESHOLD
     #: Measured three times, each one correcting the last guess. A one-word question
     #: in a real project exceeded 0.50 and answered at 2.00; the actual menu
     #: consultation — read the envelope, the registry and the stream, then answer —
@@ -565,6 +637,9 @@ class Lead:
         Returns a `choose` decision when it does, and None when it does not — so the
         caller escalates exactly as before. The refusal moved; it did not disappear.
         """
+        chosen, model_note = self._decide_by_decision_model(screen, options, item)
+        if chosen is not None:
+            return chosen, "answered"
         menu = "\n".join(f"{n}. {text}" for n, text in options)
         answer, note = self.ask_agent(
             SQUAD_FACILITATOR, _MENU_PROMPT.format(menu=menu, history=self._prior_rulings(item)))
@@ -572,7 +647,7 @@ class Lead:
             # Never conflated with "no rule covers it". One is the doctrine speaking and
             # the other is nobody speaking, and a log that renders them identically
             # reports a gap in the envelope that does not exist.
-            return None, note
+            return None, f"{model_note}; {note}" if model_note else note
         picked = _OPTION_RE_ANSWER.search(answer)
         rule = _RULE_RE_ANSWER.search(answer)
         if not picked or not rule:
@@ -612,6 +687,72 @@ class Lead:
                              item, option_number=number, typed=instruction), "answered")
         return (Decision("choose", f"envelope decides it — {rule.group(1)}", text, item,
                          option_number=number), "answered")
+
+    def _doctrine(self) -> tuple[str, str, dict[str, str]] | None:
+        """The envelope's doctrine block, its floor block, and its sections by name.
+
+        The project's installed copy first, the kit's own beside this file second —
+        the same order every other reader of a rule file uses.
+        """
+        candidates = []
+        if self.project is not None and (found := rules_dir(self.project)) is not None:
+            candidates.append(found / _ENVELOPE)
+        candidates.append(Path(__file__).resolve().parents[2] / "rules" / _ENVELOPE)
+        for path in candidates:
+            try:
+                text = path.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            doctrine, sections = _envelope_sections(text, _DOCTRINE_HEADING)
+            floor, _ = _envelope_sections(text, _FLOOR_HEADING)
+            return (doctrine, floor, sections) if sections else None
+        return None
+
+    def _decide_by_decision_model(self, screen: str, options: list,
+                                  item: str) -> tuple[Decision | None, str]:
+        """Ask the typed model which doctrine section and which option; act only if sure.
+
+        Returns a `choose` decision, or None and why not — every None falls through to
+        the agent, so this can only ever remove a consultation, never add a refusal.
+        """
+        if self.decision_model is None:
+            return None, ""
+        doctrine = self._doctrine()
+        if doctrine is None:
+            return None, "the decision model was not asked: no doctrine section was readable"
+        doctrine_text, floor_text, sections = doctrine
+        missing = [name for name in _RULES_THAT_NEED_TEXT if name not in sections]
+        if missing:
+            return None, (f"the decision model was not asked: the envelope no longer "
+                          f"names {missing}")
+        model = getattr(self.decision_model, "model", "the decision model")
+        # The screen's tail, because a menu alone rarely says which rule applies and the
+        # lines above it do: see `_SCREEN_LINES`.
+        state = {"screen": "\n".join(screen.splitlines()[-_SCREEN_LINES:]),
+                 "menu": "\n".join(f"{n}. {text}" for n, text in options),
+                 "doctrine": doctrine_text, "floor": floor_text,
+                 "prior_rulings": self._prior_rulings(item)}
+        questions = {"rule": choice(_DOCTRINE_QUESTION, sections),
+                     "option": choice(_OPTION_QUESTION, dict(options))}
+        try:
+            answers = self.decision_model.choices(state, questions)
+        except DecisionModelUnavailable as error:
+            return None, str(error)
+        rule, option = answers["rule"], answers["option"]
+        measured = (f"{model}: rule {rule.confidence:.2f}, "
+                    f"option {option.confidence:.2f}")
+        if min(rule.confidence, option.confidence) < self.decision_threshold:
+            return None, f"{measured}, below {self.decision_threshold:.2f}"
+        if rule.choice in _RULES_THAT_NEED_TEXT:
+            return None, f"{measured}; {rule.choice!r} needs text typed, which it cannot"
+        text = dict(options)[option.choice]
+        lowered = text.lower()
+        if any(f in lowered for f in _RELAXING_FLAGS):
+            return None, f"{measured}; it chose an option that switches off a gate"
+        if any(e in lowered for e in _ESCAPE_OPTIONS):
+            return None, f"{measured}; it chose an option that opens a field it cannot fill"
+        return (Decision("choose", f"envelope decides it — {rule.choice} [{measured}]",
+                         text, item, option_number=option.choice), "answered")
 
     def ask_agent(self, agent: str, question: str) -> tuple[str | None, str]:
         """Run one headless session so an agent can answer what this cannot compute.
@@ -679,8 +820,19 @@ class Lead:
             return None, f"{agent} could not answer: {first[:120]}"
         return answer, "answered"
 
+    #: `_last_verdict` returns this when it could not READ the stream, which is not the
+    #: same answer as "this item has no verdict". Both used to be None, so an unreadable
+    #: event stream made every held item look startable and the lead typed into a session
+    #: for work a blocking verdict was holding.
+    UNREADABLE = "\x00unreadable"
+
     def _last_verdict(self, item: str) -> str | None:
-        """The verdict of the last phase this item ended, or None."""
+        """The verdict of the last phase this item ended, None if there is none.
+
+        Returns `Lead.UNREADABLE` when the stream could not be read at all. `held_reason`
+        treats that as HOLDING the item: an inability to see the verdict is not evidence
+        that there is none, and the safe direction here is to leave the item alone.
+        """
         if self.project is None:
             return None
         tooling = Path(__file__).resolve().parent.parent / "cycle"
@@ -689,11 +841,11 @@ class Lead:
         try:
             from cycle_events import read_events
         except ImportError:
-            return None
+            return self.UNREADABLE
         try:
             events = read_events(self.project)
         except (OSError, ValueError):
-            return None
+            return self.UNREADABLE
         for event in reversed(events):
             if event.get("type") != "cycle:phase:end":
                 continue
@@ -714,6 +866,8 @@ class Lead:
         phrases = _HISTORY.get(self.language, _HISTORY[DEFAULT_LANGUAGE])
         count = self._event_count(item)
         verdict = self._last_verdict(item)
+        if verdict == self.UNREADABLE:
+            verdict = None  # the prompt states history, and "unreadable" is not one
         if count == 0:
             history = phrases["none"].format(item=item)
         else:
@@ -724,22 +878,27 @@ class Lead:
         template = _START_TEMPLATES.get(self.language, _START_TEMPLATES[DEFAULT_LANGUAGE])
         return template.format(item=item, why=why.rstrip(". "), history=history)
 
-    def _blocking_verdicts(self) -> frozenset[str]:
-        """The shared list, read from `rules/blocking-verdicts.txt`.
+    def _blocking_verdicts(self) -> frozenset[str] | None:
+        """The shared list from `rules/blocking-verdicts.txt`, or None when absent.
 
-        Empty when unreadable — which only ever costs a retry, never fabricates a
-        reason to stop.
+        None, not `frozenset()`. An empty set makes `verdict.upper() in blocking` false
+        for every verdict, so a rule file this lead never found read exactly like a rule
+        file that holds nothing — and the lead started an item the rule was holding.
+        `board_state.blocking_verdicts` reaches the same conclusion in the same words;
+        two readers of one rule that disagree about the absent case is the defect this
+        file's neighbours were written to prevent.
         """
         if self.project is None:
-            return frozenset()
-        for relative in ("rules", ".claude/rules"):
+            return None
+        # `squad.paths.rules_dir` owns the order; see it for which wins and why.
+        for relative in RULE_BASES:
             path = self.project / relative / "blocking-verdicts.txt"
             if path.is_file():
                 lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
                 names = {line.split("#", 1)[0].strip().upper() for line in lines}
                 names.discard("")
                 return frozenset(names)
-        return frozenset()
+        return None
 
     def taken_by_another(self, item: str) -> str | None:
         """The other session working this item, if any.
@@ -775,7 +934,18 @@ class Lead:
         if self.interventions.get(item, 0) >= self.max_per_item:
             return f"{item} already started {self.max_per_item} times"
         verdict = self._last_verdict(item)
-        if verdict and verdict.upper() in self._blocking_verdicts():
+        if verdict == self.UNREADABLE:
+            return (f"{item}: the event stream could not be read, so whether a "
+                    f"blocking verdict holds it is unknown. Held, because an inability "
+                    f"to see a verdict is not evidence that there is none")
+        # None means the rule file is absent — no list is configured, so no verdict is
+        # declared blocking. That is a DIFFERENT case from the unreadable event stream
+        # above, and the two get opposite answers on purpose: there, a verdict exists
+        # and this lead cannot see it; here, the project has declared no blocking
+        # verdicts at all. Holding every item on a config file a project never wrote
+        # would stop the fleet over a default.
+        blocking = self._blocking_verdicts() or frozenset()
+        if verdict and verdict.upper() in blocking:
             return (f"{item} last ended `{verdict}`, which holds it; only a "
                     f"person moves this")
         return None
@@ -800,6 +970,32 @@ class Lead:
         return False, f"{item} was started {int(now - when)}s ago and has not moved yet"
 
     # ── choosing what runs next ────────────────────────────────────────────
+    def _selector_path(self) -> Path | None:
+        """Where SELECT lives, asked of `squad.layout` rather than assumed.
+
+        This was a literal `.claude/skills/...` joined to the project root — which is
+        exactly the "bound to one layout" the docstring below argues against, arrived at
+        by a different route. `squad/layout.py` defines three layouts and says the kit is
+        OUTSIDE the project under the plugin install, so there this returned "SELECT is
+        not installed at <project>/.claude/skills/..." on every turn and the lead never
+        selected anything — an inability to look, reported as an absence.
+        """
+        if self.project is None:
+            return None
+        try:
+            from squad.layout import resolve
+        except ImportError:
+            layout = None
+        else:
+            layout = resolve(self.project)
+        roots = [layout.kit_dir] if layout is not None else []
+        roots += [self.project / ".claude", self.project]
+        for root in roots:
+            candidate = root / "skills/backlog-review/scripts/select_backlog_item.py"
+            if candidate.is_file():
+                return candidate
+        return None
+
     def next_item(self) -> tuple[str | None, str]:
         """Ask SELECT what may start. Returns (item or None, the answer's own words).
 
@@ -809,9 +1005,10 @@ class Lead:
         """
         if self.project is None:
             return None, "no project given; the lead cannot ask SELECT"
-        selector = self.project / ".claude/skills/backlog-review/scripts/select_backlog_item.py"
-        if not selector.is_file():
-            return None, f"SELECT is not installed at {selector}"
+        selector = self._selector_path()
+        if selector is None:
+            return None, (f"SELECT is not installed: no kit under {self.project} "
+                          f"in any layout `squad.layout` knows")
         try:
             out = subprocess.run(  # noqa: PLW1510 — returncode is read below
                 [sys.executable, str(selector), str(self.project / "BACKLOG.md"), "--json"],
@@ -833,7 +1030,11 @@ class Lead:
             return None, f"SELECT returned no usable answer ({error})"
         verdict = answer.get("verdict", "")
         if verdict != "ITEM_SELECTED":
-            # BACKLOG_BLOCKED and BACKLOG_EMPTY are both cases only a person clears.
+            # Generic on purpose: any verdict that is not ITEM_SELECTED stops the
+            # lead and is reported verbatim. BACKLOG_BLOCKED, BACKLOG_EMPTY and
+            # BACKLOG_INVALID are all cases only a person clears, and a new one
+            # arrives here already handled rather than falling through as an
+            # unrecognised answer the loop carries on past.
             return None, f"{verdict}: {answer.get('reason', '')}"
         item = answer.get("item_id") or ""
         if not _VALID_ITEM_RE.match(item):
@@ -1303,17 +1504,28 @@ class Fleet:
         fleet = cls()
         if log_path is None or not log_path.is_file():
             return fleet
+        # An unreadable log used to return an EMPTY fleet, and a line that would not
+        # parse was skipped. Both make `holder()` answer None, so `held_reason()` reports
+        # the item as free and the lead hands it to a second session — the exact
+        # collision this class exists to prevent, reached by the class starting empty.
+        # Under-reporting a claim set is never safe; `fleet_router.in_flight` raises for
+        # the same reason and this now matches it.
         try:
             lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
-        except OSError:
-            return fleet
-        for line in lines:
+        except OSError as exc:
+            raise ClaimsUnreadable(
+                f"{log_path} could not be read ({exc}). Refusing to start a fleet whose "
+                f"claims cannot be replayed: an empty claim set hands held work out "
+                f"twice.") from exc
+        for number, line in enumerate(lines, 1):
             if not line.strip():
                 continue
             try:
                 entry = json.loads(line)
-            except json.JSONDecodeError:
-                continue
+            except json.JSONDecodeError as exc:
+                raise ClaimsUnreadable(
+                    f"{log_path}:{number} is not JSON ({exc}). Refusing to report a "
+                    f"claim set from a log with a hole in it.") from exc
             if (entry.get("event") == "start" and entry.get("sent")
                     and entry.get("session") and entry.get("item")):
                 fleet.taken[entry["session"]] = entry["item"]
@@ -1332,7 +1544,13 @@ class Fleet:
         self.taken.pop(session, None)
 
 
-def _log(path: Path | None, session: str, payload: dict) -> None:
+def _log(path: Path | None, session: str, payload: dict) -> bool:
+    """Record one decision. Returns whether it reached the FILE.
+
+    The caller checks the answer when the line is a CLAIM: the log is the
+    fleet's state, not only its human trail, so a `start` line that did not
+    land is an item the next restart hands to a second session.
+    """
     """Append one line. A lead nobody can audit is a lead nobody should trust.
 
     The timestamp is stamped here rather than by the caller, so no decision can reach
@@ -1351,8 +1569,18 @@ def _log(path: Path | None, session: str, payload: dict) -> None:
         try:
             with path.open("a", encoding="utf-8") as handle:
                 handle.write(line + "\n")
-        except OSError:
-            pass
+        except OSError as exc:
+            # The stdout copy above covers the human trail, but this FILE is the fleet's
+            # state: `Fleet.restored` rebuilds which session holds which item by replaying
+            # exactly these lines, and `fleet_idle.py` and `fleet_status.sh` read nothing
+            # else. A `start` line that did not land is a CLAIM that did not land, and the
+            # next restart hands the item to a second session. Swallowed with a bare
+            # `pass`, that was invisible in every output the fleet produces.
+            print(f"squad-lead: could not record the decision in {path}: {exc}. "
+                  f"The claim is not durable; a restart will not see it.",
+                  file=sys.stderr, flush=True)
+            return False
+    return True
 
 
 def _idle_seconds(marker: Path | None) -> float:
@@ -1394,7 +1622,21 @@ def watch_once(lead: Lead, marker: Path | None, log: Path | None, poll: int) -> 
 
 def watch(lead: Lead, marker: Path | None, log: Path | None,
           poll: int, rounds: int | None = None) -> int:
+    """One or more passes over one session.
+
+    `_pace()` sleeps only when another round follows. It used to sleep unconditionally,
+    and `watch_once` — which is `watch(..., rounds=1)` — is what `watch_fleet` calls
+    once PER LANE: so every lane's single turn paid a full poll interval, and one round
+    over six lanes cost six polls plus the loop's own. At the default 30s that is three
+    and a half minutes before a stalled lane is looked at twice, and it gets worse with
+    every lane added. A bounded loop that has finished its rounds has nothing to pace.
+    """
     served = 0
+
+    def _pace() -> None:
+        if rounds is None or served < rounds:
+            time.sleep(poll)
+
     while rounds is None or served < rounds:
         served += 1
         screen = lead.capture()
@@ -1409,12 +1651,12 @@ def watch(lead: Lead, marker: Path | None, log: Path | None,
             lead.reported_stall = False
             # Working. A lead that interrupts a session mid-thought is worse than no
             # lead: it answers a menu the session was about to move past on its own.
-            time.sleep(poll)
+            _pace()
             continue
 
         decision = lead.decide(screen, idle)
         if decision.action == "wait":
-            time.sleep(poll)
+            _pace()
             continue
 
         entry = {"event": decision.action, "item": decision.item,
@@ -1440,7 +1682,15 @@ def watch(lead: Lead, marker: Path | None, log: Path | None,
                 entry["sent"] = False
                 entry["reason"] = ("the session moved between the decision and the "
                                    "keystrokes; not typing into a working session")
-        _log(log, lead.session, entry)
+        recorded = _log(log, lead.session, entry)
+        if not recorded and entry.get("event") == "start" and entry.get("sent"):
+            # The keystrokes landed and the claim did not. Releasing the in-memory claim
+            # would be worse — the session IS working on it — so the fleet stops instead
+            # of running on state it cannot restore.
+            print("squad-lead: a claim could not be recorded; stopping rather than "
+                  "running a fleet whose claims do not survive a restart",
+                  file=sys.stderr, flush=True)
+            return 1
 
         if decision.action == "asked":
             # An answer is not an action. It goes in the log for a person to read, and
@@ -1448,20 +1698,20 @@ def watch(lead: Lead, marker: Path | None, log: Path | None,
             # it just paid an agent to think about.
             lead.reported_stall = True
             lead.stall_reported_at = time.time()
-            time.sleep(poll)
+            _pace()
             continue
 
         if decision.action in ("start", "choose"):
             # The session has work again. The next stall is a new fact.
             lead.reported_stall = False
-            time.sleep(poll)
+            _pace()
             continue
 
         if decision.action == "still_stalled":
             # The heartbeat. Same stall, restated so the log proves the watch is
             # running; the clock restarts so the next one is a heartbeat away.
             lead.stall_reported_at = time.time()
-            time.sleep(poll)
+            _pace()
             continue
 
         if decision.action == "stalled":
@@ -1475,7 +1725,7 @@ def watch(lead: Lead, marker: Path | None, log: Path | None,
             # anything again.
             lead.reported_stall = True
             lead.stall_reported_at = time.time()
-            time.sleep(poll)
+            _pace()
             continue
 
         if decision.action in ("escalate", "exhausted"):
@@ -1493,9 +1743,9 @@ def watch(lead: Lead, marker: Path | None, log: Path | None,
             #
             # `surfaced` is what keeps the log quiet: the same question is raised once.
             lead.surfaced.add(f"{decision.item}|{decision.option}")
-            time.sleep(poll)
+            _pace()
             continue
-        time.sleep(poll)
+        _pace()
     return 0
 
 
@@ -1520,10 +1770,17 @@ def main(argv: list[str] | None = None) -> int:
                         help="when the selector has no actionable answer, spend one "
                              "headless `claude -p` call asking the hermes-scrum-master agent "
                              "what to do. Off by default")
-    parser.add_argument("--agent-budget-usd", type=float, default=40.00,
-                        help="ceiling for ONE agent call (default 6.00). Measured: a "
-                             "real menu consultation cost USD 3.67. To spend less, "
-                             "raise --agent-cooldown rather than lowering this")
+    # The default is READ from the dataclass, and the help INTERPOLATES it. Both were
+    # written by hand and drifted: the help said 6.00 while the code passed 40.00 — and
+    # 6.00 is the number that stopped a fleet on 2026-08-31, which is why the field says
+    # 40.00. An operator reading `--help` saw the ceiling that failed.
+    parser.add_argument("--agent-budget-usd", type=float, default=Lead.agent_budget_usd,
+                        help=f"ceiling for ONE agent call (default "
+                             f"{Lead.agent_budget_usd:.2f}). Measured: a real menu "
+                             f"consultation cost USD 3.67, and a large project exceeded "
+                             f"the earlier 6.00 ceiling — which stopped the fleet over a "
+                             f"number rather than over the work. To spend less, raise "
+                             f"--agent-cooldown rather than lowering this")
     parser.add_argument("--agent-cooldown", type=int, default=1800,
                         help="minimum seconds between asks of the same agent")
     parser.add_argument("--project", type=Path,
@@ -1544,16 +1801,31 @@ def main(argv: list[str] | None = None) -> int:
         print("FATAL: --session named nothing", file=sys.stderr)
         return 1
 
-    fleet = Fleet.restored(args.log) if len(names) > 1 else None
+    try:
+        fleet = Fleet.restored(args.log) if len(names) > 1 else None
+    except ClaimsUnreadable as exc:
+        print(f"FATAL: {exc}", file=sys.stderr)
+        return 1
     if fleet is not None and fleet.taken:
         print(f"==> restored {len(fleet.taken)} claim(s) from the log: "
               + ", ".join(f"{s}={i}" for s, i in sorted(fleet.taken.items())),
+              file=sys.stderr)
+    # On by default when the key is set, and said so either way: the menu, the doctrine
+    # and the item's prior rulings leave the machine on this path.
+    decision_model = SystemOneClient.from_environment()
+    if decision_model is not None:
+        print(f"==> doctrine menus: {decision_model.model} via OpenRouter first "
+              f"(acts at confidence >= {DECISION_THRESHOLD:.2f}), then the agent",
+              file=sys.stderr)
+    else:
+        print("==> doctrine menus: no OPENROUTER_API_KEY, so the agent path alone",
               file=sys.stderr)
     leads, markers = [], {}
     for name in names:
         leads.append(Lead(session=name, project=project, max_per_item=args.max_per_item,
                           idle_seconds=args.idle, stalled_seconds=args.stalled,
                           agents_when_stuck=args.agents_when_stuck,
+                          decision_model=decision_model,
                           agent_budget_usd=args.agent_budget_usd,
                           agent_cooldown=args.agent_cooldown, log_path=args.log,
                           fleet=fleet))

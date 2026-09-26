@@ -32,11 +32,25 @@ Stable identifier for the soft cap: `baseline_context_incomplete`.
 from __future__ import annotations
 
 import re
+import sys as _sys
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, Path as _P
+
+for _up in _P(__file__).resolve().parents:
+    if (_up / "squad" / "markdown.py").is_file():
+        _sys.path.insert(0, str(_up))
+        break
+from squad.markdown import (  # noqa: E402 — post-bootstrap import
+    FENCED_CODE_RE as _FENCED_CODE_OWNER,  # noqa: E402 — post-bootstrap import
+)
 
 TABLE_ROW_RE = re.compile(r"^\|[^|\n]+(?:\|[^|\n]*)+\|\s*$", re.MULTILINE)
-FENCED_CODE_RE = re.compile(r"^(```|~~~)[^\n]*\n.*?^\1", re.MULTILINE | re.DOTALL)
+#: The ONE fenced-code regex, from `squad.markdown`. Eleven scripts each defined
+#: their own, in two forms that do not mask the same input: five saw only backtick
+#: fences, six also saw `~~~`. A plan whose example block used tildes was masked by
+#: six readers and read as prose by the other five, so the same document scored
+#: differently depending on which checker asked.
+FENCED_CODE_RE = _FENCED_CODE_OWNER
 
 # Template example fragments — if any of these appears verbatim in the plan,
 # the section is not yet populated with real data. Kept conservative so a real
@@ -50,6 +64,16 @@ PLACEHOLDER_FRAGMENTS = (
     "<term-2>",
     "<symbol-1>",
 )
+
+#: What a citation of the discovery looks like: the opportunity document named, with at least
+#: one `§` section of it. `plan-template.md` prescribes
+#: `Baseline established by \`{ITEM}-opportunity.md\` § Current state, § Evidence.`
+#:
+#: The `§` is required. Naming the file alone says a document exists; naming its sections says
+#: which established state this plan is standing on, and that is the half a reader needs in
+#: order to check the citation rather than trust it.
+_CITES_DISCOVERY_RE = re.compile(
+    r"-opportunity\.md`?[^\n]*§", re.IGNORECASE)
 
 REQUIRED_SUBSECTIONS = (
     "Files that will be touched",
@@ -197,6 +221,31 @@ def check_baseline_context(plan_path: Path) -> BaselineContextReport:
     missing: list[str] = []
     reasons: list[str] = []
 
+    # A CITATION satisfies this section, and the four subsections are the older form.
+    #
+    # `plan-template.md` was rewritten on 2026-09-22 to say, with a measurement behind it,
+    # "Cite the discovery, do not restate it": 135 lines median here against 503 in the
+    # opportunity that precedes it, the same state written twice by two agents, and half the
+    # defects found across two days were two documents of one item contradicting each other.
+    #
+    # This checker was last touched 2026-09-18 and still required the four subsections — while
+    # its own docstring cites the template as the source of them. So a plan written from the
+    # kit's own template failed the kit's own gate for omitting sections the template had
+    # deliberately removed, and the docstring pointed at a file that no longer contained what
+    # it cited. Measured 2026-09-23: the template has four `###` headings and none of them is
+    # one of these.
+    #
+    # BOTH forms are accepted rather than swapping one for the other. A plan carrying the
+    # subsections established the same state, redundantly but honestly, and failing it now
+    # would break every plan written before the template changed.
+    if _CITES_DISCOVERY_RE.search(section):
+        return BaselineContextReport(
+            section_present=True,
+            missing_subsections=(),
+            is_complete=True,
+            reasons=("baseline cited from the discovery, per plan-template.md § Baseline Context",),
+        )
+
     files_sub = _extract_subsection(section, "Files that will be touched")
     callers_sub = _extract_subsection(section, "Current callers / dependents")
     glossary_sub = _extract_subsection(section, "Domain glossary")
@@ -228,12 +277,14 @@ def check_baseline_context(plan_path: Path) -> BaselineContextReport:
 
     glossary_entries = 0
     glossary_placeholder_hits = 0
+    glossary_is_empty = False
     if glossary_sub is not None:
         glossary_entries = _count_glossary_entries(glossary_sub)
         glossary_placeholder_hits = _count_placeholder_hits(glossary_sub)
         # "(none)" is acceptable per template — explicit empty.
         explicit_none = "(none)" in glossary_sub
         if glossary_entries == 0 and not explicit_none:
+            glossary_is_empty = True
             reasons.append(
                 "'### Domain glossary' has no entries and no '(none)' marker"
             )
@@ -243,11 +294,18 @@ def check_baseline_context(plan_path: Path) -> BaselineContextReport:
                 "template placeholder fragment(s)"
             )
 
+    # `glossary_is_empty` belongs in this conjunction. It was appended to `reasons` and
+    # consulted by nothing, so a plan whose glossary heading was present and empty came
+    # back `is_complete=True` with a reason list saying otherwise — and `run_structural`
+    # reads only the flag, so no soft floor fired while the sub-report explained why one
+    # should have. A report that names a problem and then reports no problem is worse
+    # than one that misses it: the reader who checked the detail is the one misled.
     is_complete = (
         not missing
         and file_table_rows > 0
         and file_table_placeholder_hits == 0
         and glossary_placeholder_hits == 0
+        and not glossary_is_empty
     )
 
     return BaselineContextReport(

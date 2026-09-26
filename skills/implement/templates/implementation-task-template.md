@@ -55,7 +55,7 @@ src/path/to/file.test.ts — RED test added first
 - [ ] **WIRING (a):** static caller — `grep -rl '{symbol}' src/ --exclude='*test*'` returns ≥1 file
 - [ ] **WIRING (b):** integration test — `grep -rl '{symbol}' tests/integration/` returns ≥1 file OR ADR-defer
 - [ ] **WIRING (c):** runtime metric — `.wiring-evidence.json` shows `{metric}: count > 0` OR plan declared no metric for this task
-- [ ] **COMMIT:** `feat({scope}): {description}` (conventional-commits format) with commit body referencing T1.1
+- [ ] **COMMIT:** `feat({scope}): {description}` (conventional-commits format) with commit body carrying `Plan: {slug}` and `T1.1: {reference}`
 
 **Wiring evidence:**
 

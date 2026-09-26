@@ -1,15 +1,28 @@
 # Reference Provenance
+<!-- rule-id: SQ-PRV-01 -->
 
 Source of Truth for how third-party study material is kept OUT of this project.
-`study-material/` holds material we depend on and study — tool documentation,
+`.squad/study-material/` holds material we depend on and study — tool documentation,
 vendor sources, anything read to learn from. It is read-only: we read it, and we
 write our own code. A literal copy carries the original licence into this
 repository, which is a legal problem, not a style one.
 
 ## § 1 — The zone
 
-`study-material/**` (also valid under a `.claude/` prefix). Never versioned —
-`.gitignore` excludes it.
+`.squad/study-material/**`. Never versioned, and since 2026-09-21 that is a property of
+WHERE it sits rather than a rule somebody maintains: `.squad/` is the project's write
+root, ignored whole (`records-location.md`), so nothing under it can reach the index.
+
+**The zone was a top-level `study-material/` until 2026-09-21.** That put third-party
+code in the tree the project versions, and kept it out with a `study-material/**` line
+in `.gitignore` — one line, deletable, between a cloned peer project's licence and this
+repository's history. The legal problem this rule opens with deserves better than a rule
+somebody can remove without noticing. Inside the write root the question does not arise.
+
+The zone is spelled once, in `squad/boundaries.py`, and the three guards read it from
+there. It used to be spelled three times in three shapes, which is the defect that
+module's own docstring records: two hooks knowing one boundary differently is how
+`sed -i` reached a file `Edit` had just refused.
 
 **`records/references/` was retired on 2026-09-01.** It held cloned peer
 projects, which the Cycle's DISCOVER studied. Squad inverted that question on
@@ -17,7 +30,7 @@ purpose — `README.md`: *"Prior art can never be evidence"* — and the same da
 `assess_confidence.py` stopped scoring peer material at all. A directory the
 flow no longer fills is protection nobody collects, so it left the zone.
 
-**If you still hold material there, move it to `study-material/`.** It is no
+**If you still hold material there, move it to `.squad/study-material/`.** It is no
 longer guarded: writes into it are allowed, copies out of it are allowed, and
 the leakage detector does not read it. That is the cost of the retirement, and
 it is stated here rather than discovered later.

@@ -27,26 +27,38 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-ADR_HEADER_RE = re.compile(r"^###\s+(D\d+)\s*[—\-–:]", re.MULTILINE)
+#: Both spellings, because this kit writes both and matched only one.
+#:
+#: `plan-template.md` prescribes `D1, D2, …` and this matched that. The rest of the kit writes
+#: `ADR-N` — `rules/cycle-code-quality.md`, `rules/cycle-rule-schema.md`, `docs/ADR/0025-…` — and
+#: authors followed the majority. Measured 2026-09-23 across one consumer's plans: `### ADR-N`
+#: ninety-six times against `### D1` five.
+#:
+#: What that cost is the whole point. `plan-confidence-golden-rule.md:42` declares
+#: *"ADR without alternatives in Rationale → score ≤ 70"*, and with no ADR matched the cap has no
+#: subject: a plan with one ADR rejecting nothing reported `total_adrs=0,
+#: completeness_ratio=1.0` — a gate reporting itself applied while applying nothing.
+#:
+#: Found by the ORTHOGONAL seat of a plan panel: the reviewer outside the kit's model family
+#: approved the artifact and brought back a defect of the kit that neither same-family seat saw.
+ADR_HEADER_RE = re.compile(r"^###\s+(ADR-\d+|D\d+)\s*[—\-–:]", re.MULTILINE)
 ADRS_SECTION_RE = re.compile(r"^##\s+ADRs?\s*$", re.MULTILINE)
 NEXT_H2_RE = re.compile(r"^##\s+", re.MULTILINE)
 
 # Keywords that indicate alternative-consideration in Rationale (v1.1+ #4 fix: expanded).
+#
+# English only. `rules/english-only.md` says this checker reads English, and six
+# Portuguese phrases survived here after that was written, so a Portuguese rationale
+# satisfied the check while breaking the rule governing the plan it sits in (#216).
 ALTERNATIVE_KEYWORDS = (
     # Direct mentions
-    "alternativa",
     "alternatives",
     "alternative",
-    "rejeitada",
     "rejected",
-    "rejeitar",
     # Comparisons
     "instead of",
     "vs.",
     "vs ",
-    "em vez de",
-    "ao invés de",
-    "ao inves de",
     # Trade-off / decision pattern
     "trade-off",
     "tradeoff",
@@ -72,6 +84,13 @@ class ADRReport:
     #: Decisions that never say what being wrong would cost. Reported by
     #: `run_structural.py` under `sub_reports.adr_completeness`; it was collected
     #: and dropped for as long as this field had no reader.
+    #:
+    #: REPORT-ONLY — it caps nothing, and deliberately so. `rules/plan-confidence-
+    #: golden-rule.md` is the only place a cap is declared, and its table has a row
+    #: for `adr_without_alternatives` and none for this. On a consumer registry of
+    #: 34 plans measured 2026-09-23, all but one were missing it on at least one
+    #: decision, so a cap here would fire on ordinary work — the shape a gate earns
+    #: by being switched off. Read the list; do not build a threshold on it.
     missing_cost_if_wrong: tuple[str, ...] = ()
 
 

@@ -15,7 +15,10 @@ _SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
-from propose_rules import (  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from propose_rules import (  # noqa: E402 — post-bootstrap import
     Graph,
     _dynamic_imports,
     _export_target,
@@ -365,3 +368,36 @@ class TestDynamicImports:
         f = tmp_path / "a.ts"
         f.write_text("import { x } from '@a-typescript-monorepo/agent'\n")
         assert _dynamic_imports(f) == []
+
+
+def test_a_module_whose_imports_were_never_measured_refuses_the_proposal() -> None:
+    """`_add_module` returned in silence on every `go list` failure.
+
+    A module with a build error, a missing dependency or an unavailable toolchain
+    contributed no unit and no edge, and the proposal that followed was a rule set
+    derived from a graph with a hole in it, presented as if the repo had been read. The
+    function's own docstring calls that "the exact failure mode the D5 meta-gate exists
+    to catch".
+    """
+    from propose_rules import Graph, propose
+
+    graph = Graph()
+    graph.units_seen.update({"api", "domain", "infra"})
+    graph.edges[("api", "domain")] = 3
+    graph.unreadable_modules["services/billing"] = "`go list` exited 1: build failed"
+
+    result = propose(graph)
+
+    assert result["status"] == "refused", result
+    assert "services/billing" in result["unreadable_modules"]
+
+
+def test_a_graph_with_every_module_read_still_proposes() -> None:
+    """The refusal must be about the hole, not about proposing."""
+    from propose_rules import Graph, propose
+
+    graph = Graph()
+    graph.units_seen.update({"api", "domain"})
+    graph.edges[("api", "domain")] = 3
+
+    assert propose(graph)["status"] != "refused"

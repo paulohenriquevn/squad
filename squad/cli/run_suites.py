@@ -42,6 +42,14 @@ from squad.cli.report import FINDING, OK, UNMEASURED, Report
 _NOTHING_COLLECTED = 5
 
 
+#: The tab-separated fields `run_slice_tests.sh` writes on a SUITE line:
+#: SUITE, path, rc, passed, failed, collected. The literal 6 appeared only inside the
+#: parser, so the wire format's arity was declared nowhere and a seventh column added to
+#: the runner would make every row silently unparseable — `continue` drops it, and a
+#: dropped row is a suite that reports nothing.
+_TRAILER_FIELDS = 6
+
+
 @dataclass(frozen=True)
 class SuiteRow:
     """One line of the runner's machine-readable trailer."""
@@ -89,7 +97,7 @@ def parse_trailer(output: str) -> list[SuiteRow]:
         if not line.startswith("SUITE\t"):
             continue
         parts = line.split("\t")
-        if len(parts) != 6:
+        if len(parts) != _TRAILER_FIELDS:
             continue
         rows.append(
             SuiteRow(parts[1], int(parts[2]) if parts[2].isdigit() else 2,
@@ -212,9 +220,9 @@ def _changed_paths(root: Path, since: str | None) -> tuple[list[str], str | None
 
     def git(*args: str) -> str | None:
         try:
-            done = subprocess.run(  # noqa: PLW1510
+            done = subprocess.run(
                 ["git", "-C", str(root), *args], capture_output=True, text=True, timeout=30
-            )
+            , check=False)
         except (OSError, subprocess.SubprocessError):
             return None
         return done.stdout if done.returncode == 0 else None
@@ -247,11 +255,14 @@ def _changed_paths(root: Path, since: str | None) -> tuple[list[str], str | None
 def _run(root: Path, only: list[str] | None) -> tuple[str, int]:
     """Invoke the runner. `only` restricts it to named suites via one pytest each."""
     if only is None:
-        done = subprocess.run(  # noqa: PLW1510
+        done = subprocess.run(
             ["bash", str(root / "mechanisms" / "cycle" / "run_slice_tests.sh")],
-            capture_output=True, text=True, cwd=root,
-        )
-        return done.stdout, done.returncode
+            capture_output=True, text=True, cwd=root, check=False)
+        # stdout AND stderr, like the filtered branch below. This captured stdout only,
+        # so the two branches disagreed about what "output" means: a runner that died
+        # before emitting a trailer explained itself on stderr, and the explanation was
+        # dropped — leaving "no trailer" with nothing to say why.
+        return done.stdout + done.stderr, done.returncode
 
     # The SAME wire format the runner emits, so `failing_output` has one shape to read
     # and a filtered run explains a failure exactly as a full run does.
@@ -259,16 +270,16 @@ def _run(root: Path, only: list[str] | None) -> tuple[str, int]:
     trailer: list[str] = []
     worst = 0
     for path in only:
-        done = subprocess.run(  # noqa: PLW1510
+        done = subprocess.run(
             [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "--no-header",
              *path.split()],
             capture_output=True, text=True, cwd=root,
-        )
+         check=False)
         out = done.stdout + done.stderr
         blocks.append(f"::group::pytest {path}\n{out}\n::endgroup::")
-        passed = _first(out, r"(\d+) passed")
-        failed = _first(out, r"(\d+) failed")
-        collected = _first(out, r"collected (\d+)")
+        passed = _last_match(out, r"(\d+) passed")
+        failed = _last_match(out, r"(\d+) failed")
+        collected = _last_match(out, r"collected (\d+)")
         trailer.append(
             f"SUITE\t{path}\t{done.returncode}\t{passed}\t{failed}\t{collected}"
         )
@@ -276,7 +287,15 @@ def _run(root: Path, only: list[str] | None) -> tuple[str, int]:
     return "\n".join([*blocks, *trailer]), worst
 
 
-def _first(text: str, pattern: str) -> str:
+def _last_match(text: str, pattern: str) -> str:
+    """The LAST match, which is the authoritative one for a pytest summary.
+
+    Named `_first` until 2026-09-17 while returning `found[-1]`. The behaviour is right
+    and the name said the opposite: pytest prints its summary line last, so an earlier
+    `N passed` from a nested run or a captured log is not the count that matters. A
+    helper whose name contradicts its body sends the next reader looking for a bug that
+    is not there — or, worse, to "fix" it.
+    """
     import re
 
     found = re.findall(pattern, text)

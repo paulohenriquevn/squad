@@ -1,3 +1,4 @@
+# rule-id: SQ-CFG-07
 # Notification configuration for Squad releases
 # This file is project-owned, not part of the kit. It is preserved across
 # kit updates and holds only the settings this project chose.

@@ -1,3 +1,4 @@
+# rule-id: SQ-THR-01
 # Code-quality baseline — findings that already existed.
 #
 # Authoritative source: rules/code-quality-golden-rule.md § 4.1 (Baseline mechanism).

@@ -1,4 +1,5 @@
 # Dogfood Golden Rule
+<!-- rule-id: SQ-GLD-05 -->
 
 Locked contract that `/honesty-gate` reads to evaluate whether a project may legitimately claim `production-ready` / `v1.0`. **This file is a template — each project edits the marked sections to declare its own anchor scenario.**
 

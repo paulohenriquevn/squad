@@ -37,14 +37,17 @@ import pytest
 _SCRIPTS = Path(__file__).resolve().parents[1] / "skills" / "backlog-review" / "scripts"
 sys.path.insert(0, str(_SCRIPTS))
 
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
 from backlog_status import live_blockers as writer_live_blockers  # noqa: E402
-from check_backlog_structure import (  # noqa: E402
+from check_backlog_structure import (  # noqa: E402 — post-bootstrap import
     Item,
     carries_prose,
     declares_impediment,
     impediment_edges,
 )
-from select_backlog_item import live_blockers  # noqa: E402
+from select_backlog_item import live_blockers  # noqa: E402 — post-bootstrap import
 
 #: Real shapes, taken from a consumer's registry rather than invented. The prose
 #: ones are the majority: when the field was first measured, seven of eight items

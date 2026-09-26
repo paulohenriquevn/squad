@@ -10,7 +10,7 @@ argument-hint: "[bump-level: patch|minor|major] (optional — auto-derived from 
 
 # Release — develop → main with semver tag
 
-Single entry-point for [`cycle-release`](../../rules/cycle-release.md). Automates the release ritual end-to-end, merge included — see [`rules/autonomy-envelope.md`](../../rules/autonomy-envelope.md) floor 2 and the decision behind it, [`.squad/wiki/decisions/merge-is-inside-the-envelope.md`](../../.squad/wiki/decisions/merge-is-inside-the-envelope.md).
+Single entry-point for [`cycle-release`](../../rules/cycle-release.md). Automates the release ritual end-to-end, merge included — see [`rules/autonomy-envelope.md`](../../rules/autonomy-envelope.md) floor 2 and the decision behind it, [`docs/wiki/decisions/merge-is-inside-the-envelope.md`](https://github.com/paulohenriquevn/squad/blob/main/docs/wiki/decisions/merge-is-inside-the-envelope.md).
 
 ## Cycle contract
 
@@ -201,6 +201,8 @@ PR URL is captured and reported.
 verdicts the chain already emitted, and nowhere else:
 
 ```bash
+ECO=$([ -d .claude/skills ] && echo .claude || echo .)
+
 # /review returned READY_TO_MERGE, /code-quality is not FAIL_HARD,
 # and no BLOCKED report stands against this item.
 python3 "$ECO/mechanisms/cycle/cycle_events.py" verdicts --slug "$SLUG"
@@ -244,6 +246,12 @@ MERGE_SHA=$(gh pr view "$PR_NUMBER" --json mergeCommit --jq '.mergeCommit.oid')
 
 # Annotated tag pointing at the merge commit
 git tag -a "v${NEXT_VERSION}" "$MERGE_SHA" -m "Release v${NEXT_VERSION}"
+
+# The tag-cut hard gate, BEFORE the push. A lightweight tag or one cut off the trunk
+# is recoverable while it is local and permanent once it is pushed and a release
+# points at it. Exit 2 means the tag could not be measured — not that it passed.
+python3 "$ECO/mechanisms/gates/check_tag_integrity.py" --tag "v${NEXT_VERSION}" --trunk main || exit 1
+
 git push origin "v${NEXT_VERSION}"
 
 # Publish GitHub release with the rendered notes
@@ -251,7 +259,17 @@ gh release create "v${NEXT_VERSION}" \
   --title "v${NEXT_VERSION}" \
   --notes "$RELEASE_NOTES" \
   --target "$MERGE_SHA"
+
+# Confirm what was just published. The chain used to end at the line above and emit
+# RELEASED — so a draft release, or a `gh` call that failed AFTER the tag was pushed,
+# produced a verdict over an artifact no consumer could fetch. That verdict is what
+# ADVANCE reads to write `shipped`. Exit 2 means it could not be checked.
+python3 "$ECO/mechanisms/gates/check_release_reachable.py" --tag "v${NEXT_VERSION}" || exit 1
 ```
+
+This runs for **every** item, with or without a `milestone_id`. `/acceptance` exercises a
+milestone's declared promises and an off-roadmap item has none — but "did it ship at all"
+has an answer for both, and until 2026-09-21 nothing asked it for either.
 
 ### Step 7.5 — Hand off to `/acceptance` (this cycle does NOT flip the checkbox)
 
@@ -293,7 +311,7 @@ rather than duplicating it. Staying is not the same as being called: **nothing i
 Emit the START of this phase before doing the work:
 
 ```bash
-python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" start \
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" start \
     --cycle release --slug {B-NNN}
 ```
 
@@ -346,9 +364,22 @@ Then record the transition in the stream, which is what a later phase reads:
 
 ```bash
 # PRE_RELEASED for an -rc.N cut; RELEASED only for a final one.
-python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" end \
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" end \
     --cycle release --slug {item-or-milestone} --verdict "${VERDICT:-PRE_RELEASED}"
 ```
+
+Then tell whoever asked to be told:
+
+```bash
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/release/scripts/notify_slack.py" \
+    --repo . --verdict "${VERDICT:-PRE_RELEASED}" --version "v$NEXT_VERSION"
+```
+
+**Inert unless the project opted in, and it never blocks.** The script posts only on
+`RELEASED`, only when `rules/notifications.txt` says `slack_enabled = true`, only when
+the named environment variable holds a webhook — and exits 0 on every other path,
+including failure. Which is why it not being invoked was invisible: `rules/notifications.txt`
+ships, so a consumer could configure a notification that was never going to be sent.
 
 **Emitting `RELEASED` for a pre-release would close work that did not finish.**
 `advance_items.py` reads that token and writes `shipped` into the registry — the one
@@ -375,14 +406,18 @@ Merge commit: {sha}
 Tag: v{NEXT_VERSION}
 GitHub release: {url}
 
-Next: nothing — release is published. Start a new cycle with /plan-write or /plan-grill.
+Next: nothing — release is published. Start a new cycle with /backlog-item, or /plan-write if the item is already measured.
 ```
 
 ## Hard gates (cannot proceed)
 
 1. **`/review` verdict is not `READY_TO_MERGE`** → refuse. Re-run `/review` first.
 2. **The chain must have passed** — merge ONLY a PR whose `/review` returned `READY_TO_MERGE`, whose `/code-quality` is not `FAIL_HARD`, and against whose item no BLOCKED report stands. Merging anything else violates envelope floor 2; moving a threshold to get there violates floor 3. **Never `gh pr merge --admin`** — bypassing branch protection is the same act under a different name.
-3. **Tag must be annotated** (`git tag -a`) — never lightweight tags.
+3. **Tag must be annotated** (`git tag -a`) — never lightweight tags. Checked by
+   `mechanisms/gates/check_tag_integrity.py` in Step 7, before the push, along with
+   whether the commit is contained in the trunk. It does NOT check a signature: the
+   rule used to declare `git tag --verify`, which demands one, and would have refused
+   every tag this procedure produces.
 4. **CHANGELOG [Unreleased] non-empty** — empty releases are forbidden.
 5. **No duplicate version tags** — if `v{X}` already exists, halt.
 6. **This cycle flips no checkbox** — the single-flip invariant is owned by [`cycle-acceptance § Hard gates`](../../rules/cycle-acceptance.md). The gate stays listed here so nobody re-adds a flip to `cycle-release`.

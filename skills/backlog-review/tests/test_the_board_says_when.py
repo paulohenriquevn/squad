@@ -21,7 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from board_state import build_state  # noqa: E402
+from board_state import build_state
 
 
 def _registry(tmp_path: Path, *events: dict) -> Path:
@@ -32,6 +32,24 @@ def _registry(tmp_path: Path, *events: dict) -> Path:
     (records / "cycle-events.jsonl").write_text(
         "".join(json.dumps(e) + "\n" for e in events), encoding="utf-8")
     return tmp_path
+
+
+def _ago(hours: float) -> str:
+    """A stamp relative to NOW.
+
+    The tests below that ask "is this still running" used a FIXED date, and a frozen
+    past is the wrong instrument for a question about the present: `2026-09-16T18:00:00Z`
+    was five days old by 2026-09-21 and these tests asserted the board still called it
+    running. They passed only because nothing consulted the clock — which is exactly why
+    they could not catch a consumer headlining `WORKING B-184` over a start that had
+    died 20 hours earlier.
+
+    The tests about `last_activity` keep their fixed dates on purpose: a historical
+    stamp is the subject there, not a claim about now.
+    """
+    from datetime import datetime, timedelta, timezone
+    return (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat().replace(
+        "+00:00", "Z")
 
 
 def _start(cycle: str, at: str) -> dict:
@@ -56,7 +74,7 @@ def test_a_later_end_closes_an_abandoned_start(tmp_path: Path) -> None:
 
 def test_a_genuinely_open_phase_is_still_running(tmp_path: Path) -> None:
     """The fix must not silence the case the field exists for."""
-    state = build_state(_registry(tmp_path, _start("implement", "2026-09-16T18:00:00Z")))
+    state = build_state(_registry(tmp_path, _start("implement", _ago(1))))
     assert state["running"] == ["B-001"]
     assert state["items"][0]["running_phase"] == "implement"
 
@@ -103,8 +121,8 @@ def test_a_trailing_end_for_an_earlier_phase_does_not_clear_it(tmp_path: Path) -
     """
     state = build_state(_registry(
         tmp_path,
-        _start("implement", "2026-09-16T18:00:00Z"),
-        _end("plan", "2026-09-16T18:05:00Z"),
+        _start("implement", _ago(1)),
+        _end("plan", _ago(0.9)),
     ))
     assert state["running"] == ["B-001"]
     assert state["items"][0]["running_phase"] == "implement"
@@ -114,8 +132,8 @@ def test_an_unknown_cycle_closes_nothing(tmp_path: Path) -> None:
     """A phase outside the chain carries no position, so it is not evidence of order."""
     state = build_state(_registry(
         tmp_path,
-        _start("implement", "2026-09-16T18:00:00Z"),
-        _end("something-else", "2026-09-16T18:05:00Z"),
+        _start("implement", _ago(1)),
+        _end("something-else", _ago(0.9)),
     ))
     assert state["running"] == ["B-001"]
 
@@ -189,7 +207,7 @@ def _commit(root: Path, subject: str, body: str = "") -> None:
 
 
 def test_an_open_phase_is_the_strongest_evidence(tmp_path: Path) -> None:
-    state = build_state(_registry(tmp_path, _start("implement", "2026-09-16T18:00:00Z")))
+    state = build_state(_registry(tmp_path, _start("implement", _ago(1))))
     assert state["working"]["item"] == "B-001"
     assert state["working"]["why"] == "phase_started"
 

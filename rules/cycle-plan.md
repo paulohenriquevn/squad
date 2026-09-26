@@ -1,4 +1,5 @@
 # Cycle: PLAN
+<!-- rule-id: SQ-CYC-13 -->
 
 Source of Truth for the planning cycle.
 
@@ -48,7 +49,7 @@ interview already happened wherever the work actually is.
 
 ```
 /plan-alignment {slug}                       [Phase 0 — grill + draw, scored]
-     ↓ (produces: records/alignment/{slug}-alignment.md + {slug}-walkthrough.html)
+     ↓ (produces: .squad/records/alignment/{slug}-alignment.md + {slug}-walkthrough.html)
      ↓ verdict:
      ↓   ALIGNED          → machine >= 90% AND a non-author reviewer signed → /plan-write
      ↓   AWAITING_REVIEW  → structure done, nobody signed off yet; ask for the review
@@ -56,7 +57,7 @@ interview already happened wherever the work actually is.
      ↓   NEEDS_SPLIT      → split into items that each align on their own
 /plan-write "{one-sentence feature description}"
      ↓ (Step 0 auto-discovers rules/ + skills/*-patterns/ + grill output if present)
-     ↓ (produces: records/plans/{slug}-plan.md)
+     ↓ (produces: .squad/records/plans/{slug}-plan.md)
 /plan-edge-cases {slug}
      ↓ (MUST-FIX absorbed into the plan)
 /deps-audit {slug}
@@ -73,10 +74,10 @@ interview already happened wherever the work actually is.
 | Phase | Input | Output | Hard gate |
 |---|---|---|---|
 | plan-alignment | item + discover evidence | alignment brief + animated walkthrough + an unticked reviewer checklist | `score_alignment.py` reports ALIGNED — machine score >= 90% AND every `## Reviewer sign-off` box ticked by a reviewer **who is not the author**: a person, or `alignment_judge.py` when none is coming. The agent that wrote the brief may never tick one (see [`alignment-threshold.md`](../skills/_kit-rules/alignment-threshold.md) § Amended 2026-09-01). This row said *a human ticked* until 2026-09-08, contradicting the rule it cites and re-freezing every unattended run at `AWAITING_REVIEW` |
-| plan-write | feature description (+ grill output if Phase 0 ran) | plan with Goal, Tasks, Risks, Test Plan, Open Questions | Coverage Matrix present (every Goal claim mapped to ≥ 1 task) |
-| plan-edge-cases | plan | annotated plan with MUST-FIX | every MUST-FIX has owner + acceptance criterion |
-| deps-audit | plan | dependency report with CVE status | no critical CVE on a planned dependency — `check_deps_audit.py`, see below |
-| plan-confidence | plan | score + verdict | INVALID returns to /plan-write |
+| plan-write | feature description (+ grill output if Phase 0 ran) | plan with Goal, Tasks, Risks, Test Plan, Open Questions | Coverage Matrix present — every Goal claim mapped to ≥ 1 task (`check_coverage_matrix.py`, run by `run_structural.py`) |
+| plan-edge-cases | plan | annotated plan with MUST-FIX | every MUST-FIX has owner + acceptance criterion _(not mechanized: judgement — whether an owner is the right owner and whether a criterion actually closes the edge case are the same class of call G3, G4 and G5 are left conversational for. A regex could count that the fields are non-empty and would pass `owner: TBD, criterion: it works`, which is worse than no check: it would read as enforced)_ |
+| deps-audit | plan | dependency report with CVE status | no critical CVE on a planned dependency — `check_deps_audit.py`, run by `run_structural.py`, see below |
+| plan-confidence | plan | score + verdict | the verdict is derived from the checks, never asserted (`run_structural.py`); `INVALID` returns to /plan-write |
 
 **The `deps-audit` gate was, until 2026-08-26, the one gate in this cycle nothing mechanized.**
 Every other hard gate above is checked by a script that can fail the phase; this one held only if a

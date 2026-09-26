@@ -40,6 +40,14 @@ _GATES = _REPO / "mechanisms" / "gates"
 #: its own, and that claim should be hard to make.
 MANUAL_ONLY: dict[str, str] = {}
 
+#: Where a gate may be invoked from, beyond the runners this file walks. A cycle gate
+#: fires at one STEP of one skill — `check_tag_integrity` runs in `skills/release`
+#: Step 7, between cutting the tag and pushing it — and a skill's steps live in its
+#: `SKILL.md`. Reading only `.py` and `.sh` made every such gate look orphaned, which
+#: would have pushed it into MANUAL_ONLY: "nothing runs this" recorded about a gate a
+#: documented step runs on every release.
+_SKILL_PROCEDURES = "skills/**/SKILL.md"
+
 
 #: Match a Python triple-quoted string in its four flavours (plain, r-, b-, u-,
 #: f-) and either quote kind. Non-greedy so nested triple-quotes do not lump.
@@ -104,11 +112,15 @@ def _invokes(text: str, gate: str) -> bool:
     `check_orphan_verdicts` was named in a COMMENT in a sibling gate, and that
     read as coverage until someone looked — so a bare occurrence of the name does
     not count. What counts is the filename, an import, or the name passed as an
-    argument to a runner (`_run_gate(dir, "check_x")`), which is how a dispatcher
-    invokes a gate whose path it builds itself.
+    argument to a runner (`_run_gate(dir, "check_x")` or `_gate_payload(dir,
+    "check_x", ...)`), which is how a dispatcher invokes a gate whose path it builds
+    itself. Both runner spellings are listed, not just the first: when nine wrappers
+    moved from `_run_gate` to `_gate_payload`, six live gates read as orphaned — a
+    detector that only knows yesterday's spelling reports the refactor as a regression.
     """
     return bool(re.search(
-        rf"{gate}\.py|from {gate} import|import {gate}\b|_run_gate\([^)]*[\"']{gate}[\"']",
+        rf"{gate}\.py|from {gate} import|import {gate}\b"
+        rf"|_(?:run_gate|gate_payload)\([^)]*[\"']{gate}[\"']",
         text))
 
 
@@ -121,7 +133,8 @@ def _triggers_for(gate: str) -> list[str]:
     for path in (list((_REPO / "hooks").glob("*.py"))
                  + list((_REPO / "mechanisms").rglob("*.py"))
                  + list((_REPO / "mechanisms").rglob("*.sh"))
-                 + list((_REPO / "skills").rglob("scripts/*.py"))):
+                 + list((_REPO / "skills").rglob("scripts/*.py"))
+                 + list(_REPO.glob(_SKILL_PROCEDURES))):
         if path.stem == gate or "/tests/" in str(path):
             continue
         try:

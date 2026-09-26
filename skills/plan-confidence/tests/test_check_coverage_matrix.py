@@ -4,7 +4,11 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from check_coverage_matrix import (  # noqa: E402
+
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from check_coverage_matrix import (  # noqa: E402 — post-bootstrap import
     CoverageReport,
     check_coverage_matrix,
 )
@@ -57,9 +61,14 @@ def test_coverage_matrix_empty_table_no_orphans(tmp_path: Path) -> None:
     )
     report = check_coverage_matrix(plan)
     assert report.total_gaps == 0
-    # No orphans -> coverage 1.0 (semantic decision per plan algorithm).
+    # The RATIO stays 1.0 — 0 mapped of 0 gaps, arithmetically — and `is_complete` is
+    # False, because the two answer different questions. "100% of nothing" used to
+    # clear `coverage_lt_100`, one of the two caps that force INVALID, so a plan whose
+    # matrix header carried no readable row scored better on coverage than one whose
+    # rows were readable and partly unmapped. A header with nothing under it is not a
+    # plan with no gaps; it is a plan whose gaps nobody could read.
     assert report.coverage_ratio == 1.0
-    assert report.is_complete is True
+    assert report.is_complete is False
 
 
 def test_coverage_matrix_no_section_raises(tmp_path: Path) -> None:

@@ -33,7 +33,7 @@ affect any project using this plugin.
 - **Hooks use `set -euo pipefail`** — fail-fast on any unexpected state.
 - **`validate-command.py`** blocks destructive git operations at the regex level.
 - **`stop-validation.py`** blocks secret file commits (`.env`, `*.pem`, `*.key`).
-- **`boundary-check.py`** enforces read-only access on `study-material/`.
+- **`boundary-check.py`** enforces read-only access on `.squad/study-material/`.
 - **`check_xrefs.py`** validates all internal references exist (anti-hallucination).
 - **`attest_plan.sh`** uses SHA256 for plan tamper detection.
 

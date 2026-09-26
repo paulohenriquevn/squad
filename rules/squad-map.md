@@ -1,4 +1,5 @@
 # The Squad map — every phase, who owns it, and what it reads
+<!-- rule-id: SQ-MAP-01 -->
 
 **The 360º view.** `skills/map.md` answers *which skill do I reach for*; this file
 answers *where am I, who decides this, and what governs it*. The two are
@@ -22,7 +23,7 @@ its executable half — `sq where <name>` resolves a mechanism to a path and an 
 `sq test` runs the suites and names the ones it did not, `sq check` replays what CI
 verifies. It computes no verdict; it is a façade over the mechanisms, which is why it lives
 at the root and in `squad/cli/` rather than as a sixth family under `mechanisms/`
-([the ADR](../.squad/wiki/decisions/the-cli-navigates-mechanisms-compute.md)).
+([the ADR](https://github.com/paulohenriquevn/squad/blob/main/docs/wiki/decisions/the-cli-navigates-mechanisms-compute.md)).
 
 The question that places a file is **not who reads it — it is who owns it**
 (`rules/README.md`). A file a consumer tunes must live where the installer
@@ -31,7 +32,7 @@ preserves it, or the next update destroys their configuration in silence.
 **Where the mechanisms are.** Everything that computes a verdict lives under
 `mechanisms/`, in five families: `gates/` measures the kit against its own
 contracts, `cycle/` is the cycle at runtime (routing, the event stream, status
-transitions, attestation), `fleet/` runs many sessions at once, `dist/` gets the
+transitions, attestation), `fleet/` runs many sessions at once, `distribution/` gets the
 kit into a consumer, and `conventions/` holds where things live and what shape
 they have. The import namespace is flat — a family is a directory, not a package
 — and a file there resolves the repository root as `parents[2]`. The directory
@@ -55,7 +56,7 @@ BRAINSTORM → DESIGN → BACKLOG → DISCOVER → PLAN → IMPLEMENT → CODE-Q
 Everything from BACKLOG down runs unattended, merge included. That is only
 defensible because BRAINSTORM happened — see
 [`rules/autonomy-envelope.md`](autonomy-envelope.md) floor 2 and
-[`.squad/wiki/decisions/merge-is-inside-the-envelope.md`](../.squad/wiki/decisions/merge-is-inside-the-envelope.md).
+[`docs/wiki/decisions/merge-is-inside-the-envelope.md`](https://github.com/paulohenriquevn/squad/blob/main/docs/wiki/decisions/merge-is-inside-the-envelope.md).
 
 **DISCOVER through ACCEPTANCE is closed to human intervention** (2026-09-08). Ten phase
 rules used to end a halt with *escalate to the human*; all ten now return the item to the
@@ -65,10 +66,12 @@ machine, a credential, elapsed time, a system that is not standing — and it re
 through the registry, never by a session standing still. See
 [`autonomy-envelope.md § The autonomous span`](autonomy-envelope.md).
 
-## The four roles, and the seam between them
+## The roles, and the seam between them
 
 They are **mechanism**: each describes a DECISION, not a repository, which is why
-they may be versioned when a domain specialist may not.
+they may be versioned when a domain specialist may not. Fourteen ship today; the
+first four rows are the founding ones, and the paragraph after the table still
+means those four when it says so.
 
 | Agent | Decides | Runs |
 |---|---|---|
@@ -169,7 +172,7 @@ gap as BLOCKER findings, so the verdict cannot be computed while ignoring it.
 | | |
 |---|---|
 | Skills | `/backlog-init` · `/backlog-item` · `/backlog-review` |
-| Rules | [`cycle-backlog.md`](cycle-backlog.md) · [`domain-routing.txt`](domain-routing.txt) — **the project's** |
+| Rules | [`cycle-backlog.md`](cycle-backlog.md) · `.squad/domain-routing.txt` — **the project's**, in the write root rather than under `rules/` |
 | Computes | `detect_domains.py`, `scaffold_specialists.py`, `check_intake_gates.py`, `select_backlog_item.py`, `check_backlog_structure.py`, `backlog_index.py`, `squad_boss.py`, `board_server.py` |
 | Gates | G1 route · G2 dedup · G3 single domain · G4 verifiable DoD · G5 no prior-art · G6/G7 impediment edges. **G1, G2, G6, G7 mechanised; G3, G4, G5 are judgement by decision** |
 
@@ -182,7 +185,7 @@ writes the routing table, and scaffolds one agent file per domain it names.
 |---|---|
 | Skills | `/discover-plan` → `/discover-edge-cases` → `/discover-plan-confidence` → `/discover-execute` → `/discover-confidence` → `/discover-improve` |
 | Rules | [`cycle-discover.md`](cycle-discover.md) · [`discover-opportunity-golden-rule.md`](discover-opportunity-golden-rule.md) · [`skills/_kit-rules/discover-plan-golden-rule.md`](../skills/_kit-rules/discover-plan-golden-rule.md) · [`live-target.txt`](live-target.txt), [`discover-web-allowlist.txt`](discover-web-allowlist.txt) — **the project's** |
-| Computes | `run_measurement_plan_score.py`, `run_opportunity_score.py`, `check_evidence_pointers.py`, `check_measurement_targets.py`, `check_corner_coverage.py`, `check_opportunity_completeness.py`, `check_spec_smells.py` |
+| Computes | `run_measurement_plan_score.py`, `run_opportunity_score.py`, `check_evidence_pointers.py`, `check_measurement_targets.py`, `check_corners_populated.py`, `check_corners_questioned.py`, `check_opportunity_completeness.py`, `check_spec_smells.py` |
 | Modes | `review` · `live-test` · `bug` (hard floor: no failing test, no bug) · `evolve` |
 
 This is where the specialist matters most, and the reason is literal: a reviewer
@@ -303,7 +306,7 @@ agent remembering. Declared in `hooks/hooks.json`.
 | SessionStart | `sessionstart-context.py` | git state, active plan, loop state, **and the compact form of this map** |
 | UserPromptSubmit | `userpromptsubmit-inject.py` | parsimony ladder + a lean pointer to the active plan, SHA256-attested |
 | PreToolUse (Bash) | `validate-command.py` | **blocks** destructive git and commits on the trunk — exit 2 |
-| PreToolUse (Edit/Write) | `boundary-check.py` | **blocks** writes to `study-material/` and into an installed kit |
+| PreToolUse (Edit/Write) | `boundary-check.py` | **blocks** writes to `.squad/study-material/` and into an installed kit |
 | PostToolUse | `post-edit-check.py` · `public-copy-lint.py` · `english-only-check.py` | linting, honest copy, repository language — advisory |
 | Stop | `stop-validation.py` | **blocks**: CHANGELOG and secret-leak are hard gates; TDD is a warning |
 | PreCompact | `precompact-preserve.py` | snapshots plan and progress before compaction |

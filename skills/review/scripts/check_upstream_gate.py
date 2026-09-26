@@ -36,8 +36,7 @@ import sys
 # four different orders, and a reader resolving one order found a directory a writer
 # using another had never filled.
 import sys as _sys_bootstrap
-from pathlib import Path
-from pathlib import Path as _Path_bootstrap
+from pathlib import Path, Path as _Path_bootstrap
 from typing import Any
 
 _here = _Path_bootstrap(__file__).resolve()
@@ -45,7 +44,13 @@ for _up in _here.parents:
     if (_up / "squad" / "paths.py").is_file():
         _sys_bootstrap.path.insert(0, str(_up))
         break
-from squad.paths import records_dir, resolve_knowledge_dir  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import (  # noqa: E402 — post-bootstrap import
+    records_dir,
+    resolve_knowledge_dir,
+)
 
 _VERDICT_RE = re.compile(r"^\*\*Verdict:\*\*\s*(?P<verdict>[A-Z_]+)", re.MULTILINE)
 _SOFT_CAPS_RE = re.compile(r"^\*\*Soft caps triggered:\*\*\s*(?P<caps>.+)$", re.MULTILINE)
@@ -109,14 +114,32 @@ def _dismissal_corpus(project_root: Path, slug: str) -> str:
     return "\n".join(chunks)
 
 
+def _where_it_looked(project_root: Path, slug: str) -> str:
+    """Where the audit was sought — and, when there is nowhere, say THAT instead.
+
+    `records_dir()` returns `None` when the directory is absent, and this evidence
+    interpolated the result straight into the sentence: `looked in None for
+    demo-code-quality-*.md`. That tells nobody where it looked, and it collapses two
+    different facts into one line — the audit is missing from a records directory that
+    exists, and there is no records directory at all. The second is a statement about
+    the TREE this gate was pointed at, which is the shape `check_auditor_coverage`
+    already writes correctly in the same report.
+    """
+    audits = records_dir(project_root, "audits")
+    if audits is None:
+        return (f"no records directory under {project_root} to look in, so the absence "
+                f"of `{slug}-code-quality-*.md` proves nothing about whether the audit "
+                f"ran — this gate was pointed at a tree that carries no records root")
+    return f"looked in {audits} for `{slug}-code-quality-*.md`"
+
+
 def check_upstream_gate(project_root: Path, slug: str) -> list[dict[str, Any]]:
     """Return BLOCKER findings when the `/code-quality` verdict does not admit `/review`."""
     audit = _latest_audit(project_root, slug)
     if audit is None:
         return [_finding(
             f"no /code-quality audit for `{slug}`",
-            f"looked in {records_dir(project_root, 'audits')} for "
-            f"`{slug}-code-quality-*.md`",
+            _where_it_looked(project_root, slug),
             f"run `/code-quality {slug}` STANDALONE before `/review`. 'No audit' here "
             f"means no audit FILE: `run_validation.py` already ran this phase nested and "
             f"passed it `--no-audit-write`, so it returned a verdict and wrote nothing. "
@@ -129,15 +152,15 @@ def check_upstream_gate(project_root: Path, slug: str) -> list[dict[str, Any]]:
         body = audit.read_text(encoding="utf-8", errors="replace")
     except OSError as e:
         return [_finding(f"/code-quality audit unreadable: {e}", str(audit),
-                         "re-run `/code-quality {slug}`")]
+                         f"re-run `/code-quality {slug}`")]
 
     match = _VERDICT_RE.search(body)
     if match is None:
         return [_finding(
             "/code-quality audit unreadable: no `**Verdict:**` line",
             str(audit),
-            "re-run `/code-quality {slug}` — an audit with no verdict is an absent "
-            "verdict, never a favourable one",
+            f"re-run `/code-quality {slug}` — an audit with no verdict is an absent "
+            f"verdict, never a favourable one",
         )]
 
     verdict = match.group("verdict")
@@ -158,7 +181,7 @@ def check_upstream_gate(project_root: Path, slug: str) -> list[dict[str, Any]]:
         return [_finding(
             f"/code-quality verdict is {verdict} but the audit names no soft cap",
             str(audit),
-            "re-run `/code-quality {slug}` — FAIL_SOFT without a named cap cannot be "
+            f"re-run `/code-quality {slug}` — FAIL_SOFT without a named cap cannot be "
             "dismissed by an ADR, because there is nothing to name in it",
         )]
 

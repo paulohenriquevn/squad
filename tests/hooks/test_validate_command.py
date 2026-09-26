@@ -69,11 +69,11 @@ def _run(root: Path, command: str | None, cwd: Path | None = None) -> int:
     cmd = ["bash", str(hook)] if hook.suffix == ".sh" else [sys.executable, str(hook)]
     tool_input = {} if command is None else {"command": command}
     payload = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": tool_input}
-    return subprocess.run(cmd, input=json.dumps(payload), capture_output=True,  # noqa: PLW1510
+    return subprocess.run(cmd, input=json.dumps(payload), capture_output=True,
                           text=True, cwd=cwd or root,
                           env={"PATH": __import__("os").environ["PATH"],
                                "HOME": str(root),
-                               "CLAUDE_PROJECT_DIR": str(root)}).returncode
+                               "CLAUDE_PROJECT_DIR": str(root)}, check=False).returncode
 
 
 #: (command, expected exit, branch HEAD is on). 2 = blocked, 0 = allowed.
@@ -83,7 +83,16 @@ CASES: list[tuple[str, int, str]] = [
     ("git revert abc123", 2, "workspace"),  # git revert is blocked
     ("git push --force origin develop", 2, "workspace"),  # git push --force is blocked
     ("git push -f origin develop", 2, "workspace"),  # git push -f is blocked
-    ("git push --force-with-lease origin develop", 0, "workspace"),  # git push --force-with-lease is allowed
+    # `--force-with-lease` on a PERMANENT branch is blocked. This row read `0` and
+    # pinned the free pass: the hook's own refusal text said "--force-with-lease only
+    # when explicitly authorized" while nothing asked about authorization, and the flag
+    # matched none of FORCE_TOKEN_RE's alternatives. The lease guards against
+    # clobbering a fetch you have not seen; it does not make rewriting develop's
+    # published history safe. git-safety.md § 1: never on main, develop or workspace.
+    ("git push --force-with-lease origin develop", 2, "workspace"),
+    # On a disposable branch it stays allowed — the rule permits it there, and a guard
+    # that refuses everything is a guard people route around.
+    ("git push --force-with-lease origin an-experiment", 0, "workspace"),
     ("git reset --hard HEAD~1", 2, "workspace"),  # git reset --hard is blocked
     ("git reset --soft HEAD~1", 0, "workspace"),  # git reset --soft is allowed
     ("git stash", 0, "workspace"),  # git stash is allowed
@@ -287,3 +296,110 @@ def test_a_cd_earlier_in_the_chain_is_part_of_the_deletion(tmp_path: Path) -> No
     assert _run(root, "cd build && rm -rf *") == 0, \
         "a project-relative cd is not a system root"
     assert _run(root, "cd /etc && ls -la") == 0, "reading there is not deleting there"
+
+
+# ── B-264: a document that QUOTES the command is not an invocation of it ──────
+# The guard already knows this for quoted text — `_QUOTED.sub("", cmd)` strips it,
+# with the comment "nor one that merely mentions the stash". A heredoc body is not
+# quoted, so the same sentence inside one still reads as a command.
+#
+# Measured 2026-09-23: writing the alignment brief FOR this very item was refused,
+# because the prose describing the defect contains the command that causes it. The
+# guard cannot see the hook that really runs it, and does see a sentence about it —
+# both halves of one mismatch between what it inspects and what it means to catch.
+
+
+def test_a_heredoc_body_that_mentions_the_stash_is_not_an_invocation(tmp_path):
+    """Writing prose about the shared stack must not read as touching it."""
+    root = _repo_on(tmp_path, "workspace")
+    _second_worktree(root, tmp_path / "lane")
+
+    command = (
+        "cat > notes.md <<'DOC'\n"
+        "The pre-commit hook runs git stash in a repository with three worktrees.\n"
+        "DOC"
+    )
+    assert _run(root, command) == 0
+
+
+def test_a_real_invocation_beside_a_heredoc_is_still_refused(tmp_path):
+    """The guard that stops matching prose must not stop matching commands.
+
+    Without this, the fix for the case above is indistinguishable from deleting the
+    guard: a test that only asserts the false positive is gone passes just as well
+    when the check was removed entirely.
+    """
+    root = _repo_on(tmp_path, "workspace")
+    _second_worktree(root, tmp_path / "lane")
+
+    command = (
+        "cat > notes.md <<'DOC'\n"
+        "harmless prose\n"
+        "DOC\n"
+        "git stash"
+    )
+    assert _run(root, command) == 2
+
+
+def test_a_heredoc_fed_to_a_shell_is_still_inspected(tmp_path):
+    """`bash <<EOF` EXECUTES its body, so that body is commands and not data.
+
+    This is why the fix cannot simply strip every heredoc: the interpreter case is
+    exactly where the text IS an invocation.
+    """
+    root = _repo_on(tmp_path, "workspace")
+    _second_worktree(root, tmp_path / "lane")
+
+    command = "bash <<'SH'\ngit stash\nSH"
+    assert _run(root, command) == 2
+
+
+# ── B-264: the hook that writes to the shared stack is invisible to this guard ─
+# `working_trees()` refuses a PERSON typing the command under several worktrees.
+# It cannot see `.githooks/pre-commit`, which invokes lint-staged, which pushes to
+# `refs/stash` on EVERY commit — measured 2026-09-23: two orphaned backup entries
+# sat on the stack, so the cleanup had already failed twice unnoticed.
+#
+# So the kit refuses the safe case and permits the dangerous one in silence. The
+# commit itself IS a command this guard sees, which is where the asymmetry closes.
+#
+# A WARNING and never a refusal: refusing commits under several worktrees is the
+# constant obstruction `.githooks/pre-commit` declined in its own docblock, and it
+# would fire on every commit in a fleet that uses worktrees by design.
+
+
+def test_committing_with_several_worktrees_warns_about_the_shared_stack(tmp_path):
+    """The commit is allowed, and the stack it will touch is named."""
+    root = _repo_on(tmp_path, "workspace")
+    _second_worktree(root, tmp_path / "lane")
+
+    hook = _hook()
+    cmd = ["bash", str(hook)] if hook.suffix == ".sh" else [sys.executable, str(hook)]
+    payload = {"hook_event_name": "PreToolUse", "tool_name": "Bash",
+               "tool_input": {"command": "git commit -m 'work'"}}
+    done = subprocess.run(cmd, input=json.dumps(payload), capture_output=True,
+                          text=True, cwd=root, check=False)
+
+    assert done.returncode == 0, "a commit must not be refused over this"
+    assert "stash" in (done.stdout + done.stderr).lower(), (
+        "committing under several worktrees said nothing about the shared stack. "
+        "lint-staged pushes to it on every commit and this guard is the only thing "
+        "that sees the commit at all."
+    )
+
+
+def test_committing_with_one_worktree_stays_silent(tmp_path):
+    """One tree, nobody to swap with — a warning there is noise that trains people to ignore it."""
+    root = _repo_on(tmp_path, "workspace")
+
+    hook = _hook()
+    cmd = ["bash", str(hook)] if hook.suffix == ".sh" else [sys.executable, str(hook)]
+    payload = {"hook_event_name": "PreToolUse", "tool_name": "Bash",
+               "tool_input": {"command": "git commit -m 'work'"}}
+    done = subprocess.run(cmd, input=json.dumps(payload), capture_output=True,
+                          text=True, cwd=root, check=False)
+
+    assert done.returncode == 0
+    assert "stash" not in (done.stdout + done.stderr).lower(), (
+        "a single-worktree commit was warned about a stack nobody else touches"
+    )

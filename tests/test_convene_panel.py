@@ -17,6 +17,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent / "mechanisms" / "cycle"))
 
 from convene_panel import INVALID, OK, UNFILLABLE, UNREADABLE, convene, main
@@ -236,3 +238,44 @@ panel_phases = discover
                / "B-014-discover.assignment.json")
     assert json.loads(written.read_text())["assigned"] == [
         "nemesis", "leo", "judge-codex:judge"]
+
+
+def test_a_slug_that_walks_out_of_the_write_root_is_refused(tmp_path) -> None:
+    """`assignment_path` interpolated two CLI strings into a filename that is mkdir -p'd.
+
+    `--slug ../../escape` left `.squad/records/panels/` and CREATED the directories on
+    the way, so a mechanism whose whole contract is "everything this system writes goes
+    under `.squad/`" wrote outside the tree it owns. The same shape was in `cast_vote`
+    and `critic_round`.
+    """
+    import convene_panel as cp
+
+    from squad.paths import UnsafeSegment
+
+    for bad in ("../escape", "a/b", "..", ""):
+        with pytest.raises(UnsafeSegment):
+            cp.assignment_path(tmp_path, bad, "review")
+        with pytest.raises(UnsafeSegment):
+            cp.assignment_path(tmp_path, "B-014", bad)
+
+
+def test_an_ordinary_slug_still_resolves_under_the_write_root(tmp_path) -> None:
+    """The guard must refuse the escape, not the job."""
+    import convene_panel as cp
+
+    path = cp.assignment_path(tmp_path, "B-014", "review")
+
+    assert path.name == "B-014-review.assignment.json"
+    assert path.resolve().is_relative_to(cp.panels_dir(tmp_path).resolve())
+
+
+def test_the_roster_is_resolved_against_the_kit_not_the_project() -> None:
+    """`install.sh` copies `rules/` into `<target>/.claude/`, so the roster is under the
+    installed kit. `default_panel_path` anchored it at the PROJECT root, where it does
+    not exist in any plugin install — while `check_panel_capability.py` two directories
+    away resolved it from the kit and found it.
+    """
+    import convene_panel as cp
+
+    assert cp.default_panel_path().is_file(), (
+        f"the roster does not resolve: {cp.default_panel_path()}")

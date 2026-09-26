@@ -65,10 +65,10 @@ def _repo(tags: list[str], manifest_version: str | None) -> Path:
 def test_the_base_ignores_ancestry() -> None:
     # The defect itself: tags exist, none is reachable from HEAD.
     root = _repo(["v0.60.0", "v0.64.0"], "0.64.0")
-    described = subprocess.run(  # noqa: PLW1510
+    described = subprocess.run(
         ["git", "describe", "--tags", "--abbrev=0"],
         cwd=root, capture_output=True, text=True,
-    )
+     check=False)
     assert described.returncode != 0 or described.stdout.strip() != "v0.64.0"
 
     assert detect_current_version(root) == "0.64.0"
@@ -145,18 +145,28 @@ def test_a_major_disagreement_is_refused_rather_than_maximised() -> None:
         assert "MAJOR" in str(refused.value), (tags, manifest)
 
 
-def test_no_semver_tag_and_no_manifest_refuses_rather_than_guessing_zero() -> None:
+def test_no_usable_tag_and_no_manifest_refuses_rather_than_guessing_zero() -> None:
     """F-2 — the fallback reintroduced the defect this script exists to close.
 
-    A repository whose tags are all pre-release, with no manifest, returned `0.0.0` — a base BELOW
+    A repository with no readable version source, and no manifest, returned `0.0.0` — a base BELOW
     everything published, which is exactly what B-043 is about. The skipped-tag count was computed
     and then dropped on the floor, so the caller saw a confident answer.
+
+    THE CASE CHANGED, THE PROPERTY DID NOT. This test used to build its "no usable tag" repository
+    out of `v1.0.0-rc.1`, and in doing so it pinned the defect that
+    `test_the_rc_series_advances.py` now refuses: an rc IS a version this chain cuts, and refusing
+    a repository made of them stopped every project that had only ever cut pre-releases. The
+    unreadable tag here is `-beta.1` — valid semver the kit does not cut and cannot order — which
+    is what this refusal was always meant to be about.
     """
     import pytest
 
-    root = _repo(["v1.0.0-rc.1"], None)
+    root = _repo(["v1.0.0-beta.1"], None)
     with pytest.raises(SystemExit) as refused:
         detect_current_version(root)
     message = str(refused.value)
-    assert "no semver tag" in message
+    assert "no semver tag and no manifest version" in message
     assert "skipped" in message
+    assert "not semver" not in message, (
+        "`1.0.0-beta.1` is valid semver; the kit simply does not cut it"
+    )
