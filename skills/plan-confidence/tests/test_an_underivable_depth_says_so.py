@@ -34,10 +34,9 @@ from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(_ROOT / "skills" / "plan-confidence" / "scripts"))
-sys.path.insert(0, str(_ROOT / "tests"))
 
+from alignment_gate_fixtures import _brief, _complete_brief, _plan  # noqa: E402
 from check_alignment_gate import check_alignment_gate  # noqa: E402
-from test_check_alignment_gate import _brief, _complete_brief, _plan  # noqa: E402
 
 
 def _tree(tmp_path: Path, *, registry: bool) -> Path:

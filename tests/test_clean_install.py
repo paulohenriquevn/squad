@@ -478,6 +478,28 @@ def test_a_project_specialist_survives_a_reinstall(versioned_kit, tmp_path):
 _SUITES_FROM_THE_INSTALL = ("squad/tests", "skills/discover-confidence/tests")
 
 
+def test_every_installed_slice_collects(installed):
+    """Running two suites from the install left twenty-eight unexercised there, and one
+    of them imported a helper from the kit's ROOT `tests/`, which does not ship. It
+    passed here and failed at collection in a consumer (2026-09-26, `plan-confidence`,
+    `ModuleNotFoundError: test_check_alignment_gate`). Collecting every slice costs
+    seconds and catches the whole class: an import that only resolves inside this repo.
+    """
+    target, proc = installed
+    assert proc.returncode == 0, proc.stderr
+    kit = target / ".claude"
+    broken = []
+    for suite in sorted((kit / "skills").glob("*/tests")):
+        run = subprocess.run(
+            [sys.executable, "-m", "pytest", str(suite.relative_to(kit)), "--collect-only",
+             "-q", "-p", "no:cacheprovider"],
+            cwd=str(kit), capture_output=True, text=True, timeout=300, check=False)
+        if run.returncode != 0:
+            errors = [ln for ln in run.stdout.splitlines() if "Error" in ln][:3]
+            broken.append(f"{suite.relative_to(kit)}: " + " | ".join(errors))
+    assert not broken, "slices that do not even collect from the install:\n" + "\n".join(broken)
+
+
 def test_the_suite_passes_from_the_install_too(installed):
     """Five tests passed here and failed in an install on 2026-09-16, same code.
 
