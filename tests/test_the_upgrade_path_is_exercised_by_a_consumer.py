@@ -49,7 +49,11 @@ def _git(*args: str, cwd: Path = _ROOT) -> str:
 @pytest.fixture(scope="module")
 def old_kit(tmp_path_factory) -> Path:
     """An older revision of this kit, materialised as a real checkout."""
-    base = _git("rev-parse", f"HEAD~{_DEPTH}")
+    # Non-merge commits by date, not `HEAD~N`. On a `pull_request` run CI checks out a
+    # synthetic merge whose FIRST parent is the base branch, so `HEAD~12` walked
+    # `develop` back to 2026-09-16 — before the installer recorded `kit-commit` — and
+    # this module failed on every CI Python while passing on every local run.
+    base = _git("rev-list", "--no-merges", "--max-count=1", f"--skip={_DEPTH}", "HEAD")
     if not base:
         pytest.skip(f"history is shallower than {_DEPTH} commits")
     where = tmp_path_factory.mktemp("old-kit") / "kit"
